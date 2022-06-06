@@ -4,11 +4,12 @@ import copy
 import numpy as np
 import torch
 import torchvision
+import json
 
 import dataset
 import metadata
 
-MAX_EPOCHS = 200
+MAX_EPOCHS = 1000
 
 
 def setup(args):
@@ -37,8 +38,6 @@ def train_epoch(model, dataloader, optimizer, criterion, epoch, train_stats):
     model.train()
     scaler = torch.cuda.amp.GradScaler()
 
-
-
     batch_count = len(dataloader)
     start_time = time.time()
 
@@ -51,6 +50,7 @@ def train_epoch(model, dataloader, optimizer, criterion, epoch, train_stats):
         # FP16 training
         with torch.cuda.amp.autocast():
             outputs = model(inputs)
+            # TODO get the second to last activations as well
             pred = torch.argmax(outputs, dim=-1)
             accuracy = torch.sum(pred == labels)/len(pred)
             loss = criterion(outputs, labels)
@@ -100,6 +100,7 @@ def eval_model(model, dataloader, criterion, epoch, train_stats, split_name):
 
             with torch.cuda.amp.autocast():
                 outputs = model(inputs)
+                # TODO get the second to last activations as well
                 pred = torch.argmax(outputs, dim=-1)
                 accuracy = torch.sum(pred == labels) / len(pred)
                 loss = criterion(outputs, labels)
@@ -117,6 +118,11 @@ def eval_model(model, dataloader, criterion, epoch, train_stats, split_name):
 
 def train(args):
     model, train_loader, val_loader, test_loader = setup(args)
+
+    # write the arg configuration to disk
+    dvals = vars(args)
+    with open(os.path.join(args.output_filepath, 'config.json'), 'w') as fh:
+        json.dump(dvals, fh, ensure_ascii=True, indent=2)
 
     train_start_time = time.time()
 
@@ -141,7 +147,12 @@ def train(args):
     while not done:
         print("Epoch: {}".format(epoch))
         print("  training")
+        # TODO capture and return the full training dataset output layer (pre-softmax) and the labels
         train_epoch(model, train_loader, optimizer, criterion, epoch, train_stats)
+
+        # TODO write function which buckets the output vectors by their true class label (not predicted label)
+
+        # TODO GMM goes here
 
         print("  evaluating test data")
         eval_model(model, val_loader, criterion, epoch, train_stats, 'val')
