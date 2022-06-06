@@ -19,6 +19,8 @@ def setup(args):
         model = torchvision.models.resnet18(pretrained=False, num_classes=10)
     if args.arch == 'resnet34':
         model = torchvision.models.resnet34(pretrained=False, num_classes=10)
+    if args.arch == 'resnext50_32x4d':
+        model = torchvision.models.resnext50_32x4d(pretrained=False, num_classes=10)
 
     if model is None:
         raise RuntimeError("Unsupported model architecture selection: {}.".format(args.arch))
