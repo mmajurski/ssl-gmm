@@ -95,6 +95,8 @@ def eval_model(model, dataloader, criterion, epoch, train_stats, split_name):
     start_time = time.time()
     model.eval()
 
+    logits = list()
+
     with torch.no_grad():
         for batch_idx, tensor_dict in enumerate(dataloader):
             inputs = tensor_dict[0].cuda()
@@ -102,6 +104,8 @@ def eval_model(model, dataloader, criterion, epoch, train_stats, split_name):
 
             with torch.cuda.amp.autocast():
                 outputs = model(inputs)
+                # TODO handle unpacking any batch size elements
+                #logits.extend(outputs)
                 # TODO get the second to last activations as well
                 pred = torch.argmax(outputs, dim=-1)
                 accuracy = torch.sum(pred == labels) / len(pred)
@@ -116,6 +120,9 @@ def eval_model(model, dataloader, criterion, epoch, train_stats, split_name):
     train_stats.add(epoch, '{}_wall_time'.format(split_name), wall_time)
     train_stats.add(epoch, '{}_loss'.format(split_name), avg_loss)
     train_stats.add(epoch, '{}_accuracy'.format(split_name), avg_accuracy)
+
+    # TODO make sure logits is a list where each element is a 10 element vector (10 is class count)
+    return logits
 
 
 def train(args):

@@ -15,6 +15,11 @@ normal_mean = (0.5, 0.5, 0.5)
 normal_std = (0.5, 0.5, 0.5)
 
 
+# due to pytorch + numpy bug
+# https://tanelp.github.io/posts/a-bug-that-plagues-thousands-of-open-source-ml-projects/
+def worker_init_fn(worker_id):
+    np.random.seed(np.random.get_state()[1][0] + worker_id)
+
 
 class Cifar10(torch.utils.data.Dataset):
     TRANSFORM_TRAIN = torchvision.transforms.Compose([
