@@ -4,11 +4,12 @@ import copy
 import numpy as np
 import torch
 import torchvision
+import json
 
 import dataset
 import metadata
 
-MAX_EPOCHS = 200
+MAX_EPOCHS = 1000
 
 
 def setup(args):
@@ -18,6 +19,8 @@ def setup(args):
         model = torchvision.models.resnet18(pretrained=False, num_classes=10)
     if args.arch == 'resnet34':
         model = torchvision.models.resnet34(pretrained=False, num_classes=10)
+    if args.arch == 'resnext50_32x4d':
+        model = torchvision.models.resnext50_32x4d(pretrained=False, num_classes=10)
 
     if model is None:
         raise RuntimeError("Unsupported model architecture selection: {}.".format(args.arch))
@@ -37,8 +40,6 @@ def train_epoch(model, dataloader, optimizer, criterion, epoch, train_stats):
     model.train()
     scaler = torch.cuda.amp.GradScaler()
 
-
-
     batch_count = len(dataloader)
     start_time = time.time()
 
@@ -51,6 +52,7 @@ def train_epoch(model, dataloader, optimizer, criterion, epoch, train_stats):
         # FP16 training
         with torch.cuda.amp.autocast():
             outputs = model(inputs)
+            # TODO get the second to last activations as well
             pred = torch.argmax(outputs, dim=-1)
             accuracy = torch.sum(pred == labels)/len(pred)
             loss = criterion(outputs, labels)
@@ -100,6 +102,7 @@ def eval_model(model, dataloader, criterion, epoch, train_stats, split_name):
 
             with torch.cuda.amp.autocast():
                 outputs = model(inputs)
+                # TODO get the second to last activations as well
                 pred = torch.argmax(outputs, dim=-1)
                 accuracy = torch.sum(pred == labels) / len(pred)
                 loss = criterion(outputs, labels)
@@ -117,6 +120,11 @@ def eval_model(model, dataloader, criterion, epoch, train_stats, split_name):
 
 def train(args):
     model, train_loader, val_loader, test_loader = setup(args)
+
+    # write the arg configuration to disk
+    dvals = vars(args)
+    with open(os.path.join(args.output_filepath, 'config.json'), 'w') as fh:
+        json.dump(dvals, fh, ensure_ascii=True, indent=2)
 
     train_start_time = time.time()
 
@@ -137,11 +145,18 @@ def train(args):
     done = False
     best_model = model
 
+    num_epochs = args.num_epochs
+
     # train epochs until loss converges
     while not done:
         print("Epoch: {}".format(epoch))
         print("  training")
+        # TODO capture and return the full training dataset output layer (pre-softmax) and the labels
         train_epoch(model, train_loader, optimizer, criterion, epoch, train_stats)
+
+        # TODO write function which buckets the output vectors by their true class label (not predicted label)
+
+        # TODO GMM goes here
 
         print("  evaluating test data")
         eval_model(model, val_loader, criterion, epoch, train_stats, 'val')
@@ -154,27 +169,35 @@ def train(args):
         # write copy of current metadata metrics to disk
         train_stats.export(args.output_filepath)
 
-        # handle early stopping when loss converges
-        val_loss = train_stats.get('val_loss')
-        error_from_best = np.abs(val_loss - np.min(val_loss))
-        error_from_best[error_from_best < np.abs(args.loss_eps)] = 0
-        # if this epoch is with convergence tolerance of the global best, save the weights
-        if error_from_best[epoch] == 0:
-            print('Updating best model with epoch: {} loss: {}, as its less than the best loss plus eps {}.'.format(epoch, val_loss[epoch], args.loss_eps))
+        if num_epochs is not None:
             best_model = copy.deepcopy(model)
             best_epoch = epoch
-
             # update the global metrics with the best epoch
             train_stats.update_global(epoch)
-        best_val_loss_epoch = np.where(error_from_best == 0)[0][0]  # unpack numpy array, select first time since that value has happened
-        if epoch >= (best_val_loss_epoch + args.early_stopping_epoch_count):
-            print("Exiting training loop in epoch: {} - due to early stopping criterion being met".format(epoch))
-            done = True
+        else:
+            # handle early stopping when loss converges
+            val_loss = train_stats.get('val_loss')
+            error_from_best = np.abs(val_loss - np.min(val_loss))
+            error_from_best[error_from_best < np.abs(args.loss_eps)] = 0
+            # if this epoch is with convergence tolerance of the global best, save the weights
+            if error_from_best[epoch] == 0:
+                print('Updating best model with epoch: {} loss: {}, as its less than the best loss plus eps {}.'.format(epoch, val_loss[epoch], args.loss_eps))
+                best_model = copy.deepcopy(model)
+                best_epoch = epoch
+
+                # update the global metrics with the best epoch
+                train_stats.update_global(epoch)
+            best_val_loss_epoch = np.where(error_from_best == 0)[0][0]  # unpack numpy array, select first time since that value has happened
+            if epoch >= (best_val_loss_epoch + args.early_stopping_epoch_count):
+                print("Exiting training loop in epoch: {} - due to early stopping criterion being met".format(epoch))
+                done = True
 
         if not done:
             # only advance epoch if we are not done
             epoch += 1
         # in case something goes wrong, we exit after training a long time ...
+        if num_epochs is not None and epoch >= num_epochs:
+            done = True
         if epoch >= MAX_EPOCHS:
             done = True
 
