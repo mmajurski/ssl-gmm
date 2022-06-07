@@ -163,13 +163,14 @@ def train(args):
 
         # TODO write function which buckets the output vectors by their true class label (not predicted label)
 
-        # TODO GMM goes here
-
         print("  evaluating test data")
-        eval_model(model, val_loader, criterion, epoch, train_stats, 'val')
+        logits = eval_model(model, val_loader, criterion, epoch, train_stats, 'val')
 
         train_stats.add_global('training_wall_time', sum(train_stats.get('train_wall_time')))
         train_stats.add_global('val_wall_time', sum(train_stats.get('val_wall_time')))
+
+        # TODO (Rushabh) Build (init) GMM
+        # TODO (Rushabh) insert GMM update here
 
         # update the number of epochs trained
         train_stats.add_global('num_epochs_trained', epoch)
