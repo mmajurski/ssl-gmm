@@ -4,6 +4,7 @@ import os
 
 OUTPUT_DIR = 'data'
 
+# TODO (majurski), merge with metadata
 class GMMLogger():
 
     def __init__(self,desc = None):

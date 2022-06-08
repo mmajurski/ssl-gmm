@@ -8,6 +8,7 @@ import json
 
 import dataset
 import metadata
+import mmm
 
 MAX_EPOCHS = 1000
 
@@ -15,21 +16,26 @@ MAX_EPOCHS = 1000
 def setup(args):
     # load stock models from https://pytorch.org/vision/stable/models.html
     model = None
-    if args.arch == 'resnet18':
-        model = torchvision.models.resnet18(pretrained=False, num_classes=10)
-    if args.arch == 'resnet34':
-        model = torchvision.models.resnet34(pretrained=False, num_classes=10)
-    if args.arch == 'resnext50_32x4d':
-        model = torchvision.models.resnext50_32x4d(pretrained=False, num_classes=10)
+    if args.starting_model is not None:
+        # warning, this over rides the args.arch selection
+        model = torch.load(args.starting_model)
+    else:
+        if args.arch == 'resnet18':
+            model = torchvision.models.resnet18(pretrained=False, num_classes=10)
+        if args.arch == 'resnet34':
+            model = torchvision.models.resnet34(pretrained=False, num_classes=10)
+        if args.arch == 'resnext50_32x4d':
+            model = torchvision.models.resnext50_32x4d(pretrained=False, num_classes=10)
 
     if model is None:
         raise RuntimeError("Unsupported model architecture selection: {}.".format(args.arch))
 
     # setup and load CIFAR10
-    train_loader, val_loader, test_loader = dataset.get_cifar10(args)
+    train_loader, val_loader, test_loader = dataset.get_cifar10(args, subset=args.debug)
 
     # wrap the model into a single node DataParallel
-    model = torch.nn.DataParallel(model)
+    if not isinstance(model, torch.nn.DataParallel):
+        model = torch.nn.DataParallel(model)
 
     return model, train_loader, val_loader, test_loader
 
@@ -95,8 +101,8 @@ def eval_model(model, dataloader, criterion, epoch, train_stats, split_name):
     start_time = time.time()
     model.eval()
 
-    logits = list()
-
+    dataset_logits = list()
+    dataset_labels = list()
     with torch.no_grad():
         for batch_idx, tensor_dict in enumerate(dataloader):
             inputs = tensor_dict[0].cuda()
@@ -104,8 +110,8 @@ def eval_model(model, dataloader, criterion, epoch, train_stats, split_name):
 
             with torch.cuda.amp.autocast():
                 outputs = model(inputs)
-                # TODO handle unpacking any batch size elements
-                #logits.extend(outputs)
+                dataset_logits.append(outputs.detach().cpu())
+                dataset_labels.append(labels.detach().cpu())
                 # TODO get the second to last activations as well
                 pred = torch.argmax(outputs, dim=-1)
                 accuracy = torch.sum(pred == labels) / len(pred)
@@ -121,8 +127,60 @@ def eval_model(model, dataloader, criterion, epoch, train_stats, split_name):
     train_stats.add(epoch, '{}_loss'.format(split_name), avg_loss)
     train_stats.add(epoch, '{}_accuracy'.format(split_name), avg_accuracy)
 
-    # TODO make sure logits is a list where each element is a 10 element vector (10 is class count)
-    return logits
+    # join together the individual batches of numpy logit data
+    dataset_logits = torch.cat(dataset_logits)
+    dataset_labels = torch.cat(dataset_labels)
+    unique_class_labels = torch.unique(dataset_labels)
+
+    bucketed_dataset_logits = list()
+    for i in range(len(unique_class_labels)):
+        c = unique_class_labels[i]
+        bucketed_dataset_logits.append(dataset_logits[dataset_labels == c])
+
+    return dataset_logits, bucketed_dataset_logits, unique_class_labels
+
+
+def eval_model_gmm(model, dataloader, gmm_list):
+
+    batch_count = len(dataloader)
+    model.eval()
+
+    gmm_preds = list()
+    softmax_preds = list()
+    gmm_accuracy = list()
+    softmax_accuracy = list()
+    with torch.no_grad():
+        for batch_idx, tensor_dict in enumerate(dataloader):
+            inputs = tensor_dict[0].cuda()
+            labels = tensor_dict[1].cuda()
+
+            with torch.cuda.amp.autocast():
+                outputs = model(inputs)
+                pred = torch.argmax(outputs, dim=-1)
+                softmax_preds.append(pred)
+                accuracy = torch.sum(pred == labels) / len(pred)
+                softmax_accuracy.append(accuracy)
+
+
+def compute_class_prevalance(dataloader):
+    label_list = list()
+    with torch.no_grad():
+        for batch_idx, tensor_dict in enumerate(dataloader):
+            #inputs = tensor_dict[0].cuda()
+            labels = tensor_dict[1].cuda()
+
+            label_list.append(labels.detach().cpu().numpy())
+
+    label_list = np.concatenate(label_list).reshape(-1)
+    unique_labels = np.unique(label_list)
+    N = len(label_list)
+    for i in range(len(unique_labels)):
+        c = unique_labels[i]
+        count = label_list == c
+
+    # TODO needs to be completed for the GMM based prediction
+
+
 
 
 def train(args):
@@ -163,13 +221,31 @@ def train(args):
 
         # TODO write function which buckets the output vectors by their true class label (not predicted label)
 
-        print("  evaluating test data")
-        logits = eval_model(model, val_loader, criterion, epoch, train_stats, 'val')
+        print("  evaluating validation data")
+        dataset_logits, class_bucketed_dataset_logits, unique_class_labels = eval_model(model, val_loader, criterion, epoch, train_stats, 'val')
+        # dataset_logits is N x num_classes, where N is the number of examples in the dataset
 
         train_stats.add_global('training_wall_time', sum(train_stats.get('train_wall_time')))
         train_stats.add_global('val_wall_time', sum(train_stats.get('val_wall_time')))
 
         # TODO (Rushabh) Build (init) GMM
+        gmm_models = list()
+        for i in range(len(unique_class_labels)):
+            class_c_logits = class_bucketed_dataset_logits[i]
+            # GMM(dataset, num_clusters, tolerance=0, num_iterations=100)
+            start_time = time.time()
+            gmm = mmm.GMM(class_c_logits, num_clusters=1, tolerance=1e-4, num_iterations=50)
+            gmm.convergence()
+            while np.any(np.isnan(gmm.cov.detach().cpu().numpy())):
+                gmm = mmm.GMM(class_c_logits, num_clusters=1, tolerance=1e-4, num_iterations=50)
+                gmm.convergence()
+            elapsed_time = time.time() - start_time
+            print("Build GMM took: {}s".format(elapsed_time))
+            gmm_models.append(gmm)
+
+        eval_model_gmm(model, val_loader, gmm_models)
+
+
         # TODO (Rushabh) insert GMM update here
 
         # update the number of epochs trained

@@ -17,7 +17,7 @@ def worker_init_fn(worker_id):
     np.random.seed(np.random.get_state()[1][0] + worker_id)
 
 
-def get_cifar10(args, lcl_fldr='./data'):
+def get_cifar10(args, lcl_fldr='./data', subset=False):
     transform_train = torchvision.transforms.Compose([
         torchvision.transforms.RandomHorizontalFlip(),
         torchvision.transforms.RandomCrop(size=32,
@@ -33,12 +33,18 @@ def get_cifar10(args, lcl_fldr='./data'):
 
     train_dataset = torchvision.datasets.CIFAR10(lcl_fldr, train=True, download=True, transform=transform_train)
 
+    if subset:
+        train_size = int(0.1 * len(train_dataset))
+        val_size = len(train_dataset) - train_size
+        train_dataset, _ = train_dataset, val_dataset = torch.utils.data.random_split(train_dataset, [train_size, val_size])
+
     # use 90% of the train for train, and 10% for val
     train_size = int(0.9 * len(train_dataset))
     val_size = len(train_dataset) - train_size
     train_dataset, val_dataset = torch.utils.data.random_split(train_dataset, [train_size, val_size])
 
     train_loader = torch.utils.data.DataLoader(train_dataset, batch_size=args.batch_size, shuffle=True, num_workers=args.num_workers, worker_init_fn=worker_init_fn)
+
     val_loader = torch.utils.data.DataLoader(val_dataset, batch_size=args.batch_size, shuffle=True, num_workers=args.num_workers, worker_init_fn=worker_init_fn)
 
 

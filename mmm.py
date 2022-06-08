@@ -1,7 +1,6 @@
 import numpy as np
 import math
 import torch
-from tqdm import tqdm
 from logger import GMMLogger
 
 class GMM:
@@ -44,6 +43,7 @@ class GMM:
         x_cov = ((x_norm.t() @ x_norm) / (self.N - 1)).double()
 
         self.cov = self.k * [x_cov]
+        self.numpy_cov = None
         # self.cov = torch.ones((self.d, self.d))
 
         # for inverse of covariance_matrices
@@ -197,15 +197,28 @@ class GMM:
                 mu_updated[i] += data.double() * posteriors[j, i]
             #mu_updated[i] /= norm[i]
         
-        mu_updated = torch.div(mu_updated.t(), norm).t() # (k, d)
-
+        #mu_updated = torch.div(mu_updated.t(), norm).t() # (k, d)
+        mu_updated = torch.transpose(mu_updated, 0, 1)
+        mu_updated = torch.div(mu_updated, norm)
+        mu_updated = torch.transpose(mu_updated, 0, 1)  # (k, d)
 
         for i in range(self.k):
             for j, data in enumerate(self.X):
-                cov_updated[i] += ((data.double() - mu_updated[i]).view(self.d, 1) @
-                                   (data.double() - mu_updated[i]).view(1, self.d)) \
-                                  * posteriors[j, i]
-            cov_updated[i] = torch.clamp((cov_updated[i] / (norm[i])), min=min_var) # (d, d)
+                a = (data.double() - mu_updated[i]).view(self.d, 1)
+                b = (data.double() - mu_updated[i]).view(1, self.d)
+                c = torch.matmul(a, b)
+                d = c * posteriors[j, i]
+                cov_updated[i] += d
+
+                # https://stackoverflow.com/questions/53370003/pytorch-mapping-operators-to-functions
+                # cov_updated[i] += ((data.double() - mu_updated[i]).view(self.d, 1) @
+                #                    (data.double() - mu_updated[i]).view(1, self.d)) \
+                #                   * posteriors[j, i]
+
+            cov_updated[i] = cov_updated[i] / norm[i]
+            cov_updated[i] = torch.clamp(cov_updated[i], min=min_var)  # (d,d)
+            # cov_updated[i] = torch.clamp((cov_updated[i] / (norm[i])), min=min_var) # (d, d)
+
             self.priors[i] = norm[i] / self.N #(k)
 
         
@@ -231,7 +244,7 @@ class GMM:
         :return mu: type: torch.Tensor (cluster,features)
         :return cov: type: torch.Tensor (cluster,features,features)
         '''
-        for _ in tqdm(range(epochs)):
+        for _ in range(epochs):
             ret_val = self.run_epoch()
             #if converged then stop
             if ret_val is None:
@@ -250,5 +263,6 @@ class GMM:
             return None
         mu_updated, cov_updated = self.m_step(posteriors)
         self.mu, self.cov = mu_updated, cov_updated
+        self.numpy_cov = self.cov.detach().cpu().numpy()
         self.cur_epoch += 1
         return True #upon successful completion of epoch
