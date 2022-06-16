@@ -149,6 +149,7 @@ def eval_model_gmm(model, dataloader, gmm_list):
     softmax_preds = list()
     gmm_accuracy = list()
     softmax_accuracy = list()
+    class_preval = compute_class_prevalance(dataloader)
     with torch.no_grad():
         for batch_idx, tensor_dict in enumerate(dataloader):
             inputs = tensor_dict[0].cuda()
@@ -174,13 +175,14 @@ def compute_class_prevalance(dataloader):
     label_list = np.concatenate(label_list).reshape(-1)
     unique_labels = np.unique(label_list)
     N = len(label_list)
+    class_preval = {}
     for i in range(len(unique_labels)):
         c = unique_labels[i]
-        count = label_list == c
+        count = np.sum(label_list == c)
+        class_preval[c] = count/N
 
-    # TODO needs to be completed for the GMM based prediction
-
-
+    # print(class_preval)
+    return class_preval
 
 
 def train(args):
