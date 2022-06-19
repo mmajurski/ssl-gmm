@@ -150,6 +150,7 @@ def eval_model_gmm(model, dataloader, gmm_list):
     gmm_accuracy = list()
     softmax_accuracy = list()
     class_preval = compute_class_prevalance(dataloader)
+    class_preval = torch.tensor(list(class_preval.values()))
     with torch.no_grad():
         for batch_idx, tensor_dict in enumerate(dataloader):
             inputs = tensor_dict[0].cuda()
@@ -161,6 +162,35 @@ def eval_model_gmm(model, dataloader, gmm_list):
                 softmax_preds.append(pred)
                 accuracy = torch.sum(pred == labels) / len(pred)
                 softmax_accuracy.append(accuracy)
+
+                # passing the logits acquired before the softmax to gmm as inputs
+                gmm_inputs = outputs.detach().cpu()
+
+                # create mu_list and cov_list
+                mu_list = torch.cat([i.mu for i in gmm_list])
+                cov_list = torch.cat([i.cov for i in gmm_list])
+
+                # using single object and list of mu and cov to do the computations faster as the only class variable
+                # used is dimension which will be same for all gmms making it safe to do so
+                gmm_probs = gmm_list[0].predict_probs(gmm_inputs, mu_list, cov_list)  # N*K
+                gmm_probs_sum = torch.sum(gmm_probs, 1)  # N*1
+
+
+                # TODO (JD) confirm the sequence of k is same for gmm_probs and class_preval
+                # (one is done with np.unique one with torch.unique)
+
+                numerator = gmm_probs * class_preval
+                gmm_outputs_t = torch.t(numerator) / gmm_probs_sum
+                gmm_outputs = torch.t(gmm_outputs_t)
+
+                gmm_pred = torch.argmax(gmm_outputs, dim=-1)
+                gmm_preds.append(gmm_pred)
+                labels_cpu = labels.detach().cpu()
+                accuracy_g = torch.sum(gmm_pred == labels_cpu) / len(gmm_pred)
+                gmm_accuracy.append(accuracy_g)
+
+        print(softmax_preds, softmax_accuracy, gmm_pred, gmm_accuracy)
+        return softmax_preds, softmax_accuracy, gmm_pred, gmm_accuracy
 
 
 def compute_class_prevalance(dataloader):
@@ -245,7 +275,8 @@ def train(args):
             print("Build GMM took: {}s".format(elapsed_time))
             gmm_models.append(gmm)
 
-        eval_model_gmm(model, val_loader, gmm_models)
+        softmax_preds, softmax_accuracy, gmm_pred, gmm_accuracy = eval_model_gmm(model, val_loader, gmm_models)
+        print("out of eval_model_gmm")
 
 
         # TODO (Rushabh) insert GMM update here
