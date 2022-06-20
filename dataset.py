@@ -36,7 +36,7 @@ def get_cifar10(args, lcl_fldr='./data', subset=False):
     if subset:
         train_size = int(0.1 * len(train_dataset))
         val_size = len(train_dataset) - train_size
-        train_dataset, _ = train_dataset, val_dataset = torch.utils.data.random_split(train_dataset, [train_size, val_size])
+        train_dataset, _ = torch.utils.data.random_split(train_dataset, [train_size, val_size])
 
     # use 90% of the train for train, and 10% for val
     train_size = int(0.9 * len(train_dataset))

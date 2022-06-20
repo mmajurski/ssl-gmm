@@ -6,12 +6,13 @@ import torch
 import torchvision
 import json
 
-import dataset
+
+import cifar_datasets
 import metadata
 import mmm
 
 MAX_EPOCHS = 1000
-GMM_ENABLED = True
+GMM_ENABLED = False
 
 
 def setup(args):
@@ -32,11 +33,18 @@ def setup(args):
         raise RuntimeError("Unsupported model architecture selection: {}.".format(args.arch))
 
     # setup and load CIFAR10
-    train_loader, val_loader, test_loader = dataset.get_cifar10(args, subset=args.debug)
+    train_dataset = cifar_datasets.Cifar10(transforms=cifar_datasets.Cifar10.TRANSFORM_TRAIN, train=True, subset=args.debug)
+    train_dataset, val_dataset = train_dataset.train_val_split(val_fraction=0.2)
 
-    # wrap the model into a single node DataParallel
-    if not isinstance(model, torch.nn.DataParallel):
-        model = torch.nn.DataParallel(model)
+    test_dataset = cifar_datasets.Cifar10(transforms=cifar_datasets.Cifar10.TRANSFORM_TEST, train=False)
+
+    train_loader = torch.utils.data.DataLoader(train_dataset, batch_size=args.batch_size, shuffle=True, num_workers=args.num_workers, worker_init_fn=cifar_datasets.worker_init_fn)
+    val_loader = torch.utils.data.DataLoader(val_dataset, batch_size=args.batch_size, shuffle=True, num_workers=args.num_workers, worker_init_fn=cifar_datasets.worker_init_fn)
+    test_loader = torch.utils.data.DataLoader(test_dataset, batch_size=args.batch_size, shuffle=True, num_workers=args.num_workers, worker_init_fn=cifar_datasets.worker_init_fn)
+
+    # # wrap the model into a single node DataParallel
+    # if not isinstance(model, torch.nn.DataParallel):
+    #     model = torch.nn.DataParallel(model)
 
     return model, train_loader, val_loader, test_loader
 
