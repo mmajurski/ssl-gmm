@@ -1,16 +1,29 @@
 import os
 import numpy as np
 import argparse
+import copy
 
 import train
 
 
-N = 200
+def find_starting_model(ofp):
+    start_n = 0
+    fn = "id-{:08}".format(start_n)
+    fp = os.path.join(ofp, fn)
+    while os.path.exists(fp):
+        start_n += 1
+        fn = "id-{:08}".format(start_n)
+        fp = os.path.join(ofp, fn)
+    return start_n
+
+
+N = 500
 best_model_stats = None
-
-
 ofp = './models'
-for n in range(N):
+
+start_n = find_starting_model(ofp)
+
+for n in range(start_n, N):
     fn = "id-{:08}".format(n)
     fp = os.path.join(ofp, fn)
 
@@ -48,7 +61,10 @@ for n in range(N):
         best_model_stats = stats
     else:
         if stats['test_accuracy'] > best_model_stats['test_accuracy']:
-            best_model_stats = stats
+            best_model_stats = copy.deepcopy(stats)
             print("New Best Model Found:")
             print(args)
             print(best_model_stats)
+
+            stats.add_global('id', fn)
+            stats.export(os.path.join(ofp, 'best_stats.json'))
