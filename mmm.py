@@ -3,6 +3,7 @@ import math
 import torch
 from logger import GMMLogger
 
+
 class GMM:
     def __init__(self, dataset, num_clusters, tolerance=0, num_iterations=100):
         '''

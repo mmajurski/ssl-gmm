@@ -11,7 +11,7 @@ import metadata
 import mmm
 
 MAX_EPOCHS = 1000
-GMM_ENABLED = False
+GMM_ENABLED = True
 
 
 def setup(args):
@@ -163,9 +163,9 @@ def eval_model_gmm(model, dataloader, gmm_list):
             with torch.cuda.amp.autocast():
                 outputs = model(inputs)
                 pred = torch.argmax(outputs, dim=-1)
-                softmax_preds.append(pred)
+                softmax_preds.append(pred.reshape(-1))
                 accuracy = torch.sum(pred == labels) / len(pred)
-                softmax_accuracy.append(accuracy)
+                softmax_accuracy.append(accuracy.reshape(-1))
 
                 # passing the logits acquired before the softmax to gmm as inputs
                 gmm_inputs = outputs.detach().cpu()
@@ -188,12 +188,17 @@ def eval_model_gmm(model, dataloader, gmm_list):
                 gmm_outputs = torch.transpose(gmm_outputs_t,0,1)
 
                 gmm_pred = torch.argmax(gmm_outputs, dim=-1)
-                gmm_preds.append(gmm_pred)
+                gmm_preds.append(gmm_pred.reshape(-1))
                 labels_cpu = labels.detach().cpu()
                 accuracy_g = torch.sum(gmm_pred == labels_cpu) / len(gmm_pred)
-                gmm_accuracy.append(accuracy_g)
+                gmm_accuracy.append(accuracy_g.reshape(-1))
 
-        return softmax_preds, softmax_accuracy, gmm_pred, gmm_accuracy
+        gmm_accuracy = torch.mean(torch.cat(gmm_accuracy, dim=-1))
+        softmax_accuracy = torch.mean(torch.cat(softmax_accuracy, dim=-1))
+        gmm_preds = torch.mean(torch.cat(gmm_preds, dim=-1))
+        softmax_preds = torch.mean(torch.cat(softmax_preds, dim=-1))
+
+        return softmax_preds, softmax_accuracy, gmm_preds, gmm_accuracy
 
 
 def compute_class_prevalance(dataloader):
@@ -265,7 +270,7 @@ def train(args):
         train_stats.add_global('training_wall_time', sum(train_stats.get('train_wall_time')))
         train_stats.add_global('val_wall_time', sum(train_stats.get('val_wall_time')))
 
-        if GMM_ENABLED:
+        if GMM_ENABLED:  # and epoch > 10:
             print(" gmm work starts")
             gmm_models = list()
             for i in range(len(unique_class_labels)):
@@ -281,6 +286,7 @@ def train(args):
                 elapsed_time = time.time() - start_time
                 print("Build GMM took: {}s".format(elapsed_time))
                 gmm_models.append(gmm)
+                train_stats.add(epoch, 'class_{}_gmm_log_likelihood'.format(unique_class_labels[i]), gmm.ll_prev)
 
             print(unique_class_labels)
             softmax_preds, softmax_accuracy, gmm_preds, gmm_accuracy = eval_model_gmm(model, val_loader, gmm_models)

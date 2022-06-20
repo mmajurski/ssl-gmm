@@ -6,26 +6,17 @@ import copy
 import train
 
 
-def find_starting_model(ofp):
-    start_n = 0
-    fn = "id-{:08}".format(start_n)
-    fp = os.path.join(ofp, fn)
-    while os.path.exists(fp):
-        start_n += 1
-        fn = "id-{:08}".format(start_n)
-        fp = os.path.join(ofp, fn)
-    return start_n
 
-
-N = 500
+N = 1000
 best_model_stats = None
 ofp = './models'
 
-start_n = find_starting_model(ofp)
-
-for n in range(start_n, N):
+for n in range(0, N):
     fn = "id-{:08}".format(n)
     fp = os.path.join(ofp, fn)
+
+    if os.path.exists(fp):
+        continue
 
     epoch = np.random.randint(100, 500)
     loss_eps = None
