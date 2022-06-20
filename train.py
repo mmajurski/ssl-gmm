@@ -150,6 +150,7 @@ def eval_model_gmm(model, dataloader, gmm_list):
     gmm_accuracy = list()
     softmax_accuracy = list()
     class_preval = compute_class_prevalance(dataloader)
+    print(class_preval)
     class_preval = torch.tensor(list(class_preval.values()))
     with torch.no_grad():
         for batch_idx, tensor_dict in enumerate(dataloader):
@@ -180,8 +181,8 @@ def eval_model_gmm(model, dataloader, gmm_list):
                 # (one is done with np.unique one with torch.unique)
 
                 numerator = gmm_probs * class_preval
-                gmm_outputs_t = torch.t(numerator) / gmm_probs_sum
-                gmm_outputs = torch.t(gmm_outputs_t)
+                gmm_outputs_t = torch.transpose(numerator,0,1) / gmm_probs_sum
+                gmm_outputs = torch.transpose(gmm_outputs_t,0,1)
 
                 gmm_pred = torch.argmax(gmm_outputs, dim=-1)
                 gmm_preds.append(gmm_pred)
@@ -189,7 +190,6 @@ def eval_model_gmm(model, dataloader, gmm_list):
                 accuracy_g = torch.sum(gmm_pred == labels_cpu) / len(gmm_pred)
                 gmm_accuracy.append(accuracy_g)
 
-        print(softmax_preds, softmax_accuracy, gmm_pred, gmm_accuracy)
         return softmax_preds, softmax_accuracy, gmm_pred, gmm_accuracy
 
 
@@ -211,7 +211,6 @@ def compute_class_prevalance(dataloader):
         count = np.sum(label_list == c)
         class_preval[c] = count/N
 
-    # print(class_preval)
     return class_preval
 
 
@@ -260,7 +259,7 @@ def train(args):
         train_stats.add_global('training_wall_time', sum(train_stats.get('train_wall_time')))
         train_stats.add_global('val_wall_time', sum(train_stats.get('val_wall_time')))
 
-        # TODO (Rushabh) Build (init) GMM
+        print(" gmm work starts")
         gmm_models = list()
         for i in range(len(unique_class_labels)):
             class_c_logits = class_bucketed_dataset_logits[i]
@@ -271,15 +270,16 @@ def train(args):
             while np.any(np.isnan(gmm.cov.detach().cpu().numpy())):
                 gmm = mmm.GMM(class_c_logits, num_clusters=1, tolerance=1e-4, num_iterations=50)
                 gmm.convergence()
+            else:
+                gmm.logger.export()
             elapsed_time = time.time() - start_time
             print("Build GMM took: {}s".format(elapsed_time))
             gmm_models.append(gmm)
 
-        softmax_preds, softmax_accuracy, gmm_pred, gmm_accuracy = eval_model_gmm(model, val_loader, gmm_models)
-        print("out of eval_model_gmm")
-
-
-        # TODO (Rushabh) insert GMM update here
+        print(unique_class_labels)
+        softmax_preds, softmax_accuracy, gmm_preds, gmm_accuracy = eval_model_gmm(model, val_loader, gmm_models)
+        print("Softmax Accuracy: {}".format(softmax_accuracy))
+        print("GMM Accuracy: {}".format(gmm_accuracy))
 
         # update the number of epochs trained
         train_stats.add_global('num_epochs_trained', epoch)

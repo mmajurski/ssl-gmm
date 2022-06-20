@@ -235,7 +235,7 @@ class GMM:
             #if converged then stop
             if ret_val is None:
                 break
-        self.logger.export()    
+        #self.logger.export()
         return self.mu, self.cov
 
     def run(self, epochs):
