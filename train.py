@@ -294,7 +294,7 @@ def train(args):
                 elapsed_time = time.time() - start_time
                 print("Build GMM took: {}s".format(elapsed_time))
                 gmm_models.append(gmm)
-                train_stats.add(epoch, 'class_{}_gmm_log_likelihood'.format(unique_class_labels[i]), gmm.ll_prev)
+                train_stats.add(epoch, 'class_{}_gmm_log_likelihood'.format(unique_class_labels[i]), gmm.log_likelihood)
 
             print(unique_class_labels)
             softmax_preds, softmax_accuracy, gmm_preds, gmm_accuracy = eval_model_gmm(model, val_loader, gmm_models)
