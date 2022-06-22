@@ -5,13 +5,14 @@ from logger import GMMLogger
 
 
 class GMM:
-    def __init__(self, dataset, num_clusters, tolerance=0, num_iterations=100):
+    def __init__(self, dataset, num_clusters, tolerance=0, num_iterations=100, early_stopping_count=10):
         """
         :param dataset: type: torch.Tensor
         :param num_clusters: type: int
         :param tolerance: if non-zero check for convergence with the given tolerance,
             otherwise do not check for convergence, type: float
         :param num_iterations: number of times to iterate EM, type: int
+        :param early_stopping_count: number of epochs to check before stopping after best epoch, type: int
         mu: mean vector for each cluster. Select k points from the dataset
             to initialize mean vectors,
             type: list of tensors k*torch.Tensor(features)
@@ -34,9 +35,12 @@ class GMM:
         self.max_epochs = num_iterations
         self.cur_epoch = 0
         self.log_likelihood = 0
+        self.best_epoch = -1
+        self.early_stopping_count = early_stopping_count
 
         # chooses k random indices out of N
         self.mu = self.X[torch.from_numpy(np.random.choice(self.N, self.k, replace=False)).long()].double()
+        self.best_mu = self.mu
 
         # sets mixture covariance matrix to initialize cov_mat of each cluster
         x_norm = self.X - torch.mean(self.X, 0).double()
@@ -44,6 +48,8 @@ class GMM:
         x_cov = ((x_norm.t() @ x_norm) / (self.N - 1)).double()
 
         self.cov = self.k * [x_cov]
+        self.best_cov = self.cov
+
         self.numpy_cov = None
         # self.cov = torch.ones((self.d, self.d))
 
@@ -156,17 +162,35 @@ class GMM:
         # normalized posteriors
         posteriors = torch.div(posteriors.t(), norm_vec).t()
 
+        # calculating log_likelihood
+        self.log_likelihood = torch.sum(torch.log(norm_vec)).item()
+
         # logging
         self.logger.add_epoch_data("means", self.mu.tolist())
         self.logger.add_epoch_data("covariance_mats", list([mat.tolist() for mat in self.cov]))
         self.logger.add_epoch_data("priors", self.priors.tolist())
+        self.logger.add_epoch_data('log_likelihood', self.log_likelihood)
 
         # handling early stopping
         if self.early_stopping:
-            ll_new = torch.sum(torch.log(norm_vec)).item()
-            if abs(ll_new - self.log_likelihood) <= self.tolerance:
+            log_likelihood = self.logger.get('log_likelihood')
+            error_from_best = np.abs(log_likelihood - np.min(log_likelihood))
+            error_from_best[error_from_best < np.abs(self.tolerance)] = 0
+
+            # if this epoch is with convergence tolerance of the global best, save the weights
+            if error_from_best[self.cur_epoch] == 0:
+                print('Updating best model with epoch: {} loss: {}, as its less than the best loss plus eps {}.'
+                      .format(self.cur_epoch, log_likelihood[self.cur_epoch], self.tolerance))
+
+                self.best_mu = self.mu
+                self.best_cov = self.cov
+                self.best_epoch = self.cur_epoch
+
+            best_val_loss_epoch = np.where(error_from_best == 0)[0][0]
+
+            if self.cur_epoch >= (best_val_loss_epoch + self.early_stopping_count):
+                print("Exiting training loop in epoch: {} - due to early stopping criterion being met".format(self.cur_epoch))
                 return None
-            self.log_likelihood = ll_new
 
         # exit()
         return posteriors
@@ -230,7 +254,7 @@ class GMM:
             ret_val = self.run_epoch()
             # if converged then stop
             if ret_val is None:
-                break
+                return self.best_mu, self.best_cov
         # self.logger.export()
         return self.mu, self.cov
 
@@ -244,7 +268,7 @@ class GMM:
             ret_val = self.run_epoch()
             # if converged then stop
             if ret_val is None:
-                break
+                return self.best_mu, self.best_cov
         return self.mu, self.cov
 
     def run_epoch(self):
