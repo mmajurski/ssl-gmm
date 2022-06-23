@@ -12,7 +12,7 @@ import metadata
 import mmm
 
 MAX_EPOCHS = 1000
-GMM_ENABLED = False
+GMM_ENABLED = True
 
 
 def setup(args):

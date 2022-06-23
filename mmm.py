@@ -151,13 +151,19 @@ class GMM:
 
             # calculate likelihoods
             for i, data in enumerate(X_mr):
+                # TODO: likelihoods are coming up nan, fix that
                 self.likelihoods[i, j] = self.log_pdf(data, j).exp_().double()
 
         # posteriors based on likelihoods and priors
+
+        # NOTE: posteriors are coming up as all 1s and then normalizing them makes everything nan
+        # NOTE: or posteriors seem normal and then normalizing makes them all 1s, reason explained below
         posteriors = torch.mul(self.likelihoods, self.priors)
 
         # normalization vector
         norm_vec = torch.sum(posteriors, 1)
+
+        ############ IMP_NOTE: when dealing with single class: norm_vec is same as posteriors and dividing posteriors with norm vector always results in 1 ##############
 
         # normalized posteriors
         posteriors = torch.div(posteriors.t(), norm_vec).t()
@@ -174,7 +180,7 @@ class GMM:
         # handling early stopping
         if self.early_stopping:
             log_likelihood = self.logger.get('log_likelihood')
-            error_from_best = np.abs(log_likelihood - np.min(log_likelihood))
+            error_from_best = np.abs(np.max(log_likelihood) - log_likelihood)
             error_from_best[error_from_best < np.abs(self.tolerance)] = 0
 
             # if this epoch is with convergence tolerance of the global best, save the weights
