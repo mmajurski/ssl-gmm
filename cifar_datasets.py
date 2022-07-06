@@ -7,6 +7,9 @@ import torch
 import torchvision
 import logging
 
+
+logger = logging.getLogger()
+
 cifar10_mean = (0.4914, 0.4822, 0.4465)
 cifar10_std = (0.2471, 0.2435, 0.2616)
 cifar100_mean = (0.5071, 0.4867, 0.4408)
@@ -49,7 +52,7 @@ class Cifar10(torch.utils.data.Dataset):
             val_size = len(self._dataset) - train_size
             self._dataset, _ = torch.utils.data.random_split(self._dataset, [train_size, val_size])
 
-    def train_val_split(self, val_fraction: float = 0.2):
+    def train_val_split(self, val_fraction: float = 0.1):
         train_fraction = 1.0 - val_fraction
         if train_fraction <= 0.0:
             raise RuntimeError("Train fraction too small. {}% of the data was allocated to training split, {}% to validation split.".format(int(train_fraction * 100), int(val_fraction * 100)))
@@ -97,7 +100,7 @@ class Cifar100(torch.utils.data.Dataset):
             val_size = len(self._dataset) - train_size
             self._dataset, _ = torch.utils.data.random_split(self._dataset, [train_size, val_size])
 
-    def train_val_split(self, val_fraction: float = 0.2):
+    def train_val_split(self, val_fraction: float = 0.1):
         train_fraction = 1.0 - val_fraction
         if train_fraction <= 0.0:
             raise RuntimeError("Train fraction too small. {}% of the data was allocated to training split, {}% to validation split.".format(int(train_fraction * 100), int(val_fraction * 100)))

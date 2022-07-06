@@ -5,14 +5,17 @@ import numpy as np
 import torch
 import torchvision
 import json
-
+import logging
 
 import cifar_datasets
 import metadata
 import mmm
+import lr_scheduler
 
 MAX_EPOCHS = 1000
 GMM_ENABLED = False
+
+logger = logging.getLogger()
 
 
 def setup(args):
@@ -28,13 +31,15 @@ def setup(args):
             model = torchvision.models.resnet34(pretrained=False, num_classes=10)
         if args.arch == 'resnext50_32x4d':
             model = torchvision.models.resnext50_32x4d(pretrained=False, num_classes=10)
+        if args.arch == 'wide_resnet50_2':
+            model = torchvision.models.wide_resnet50_2(pretrained=False, num_classes=10)
 
     if model is None:
         raise RuntimeError("Unsupported model architecture selection: {}.".format(args.arch))
 
     # setup and load CIFAR10
     train_dataset = cifar_datasets.Cifar10(transforms=cifar_datasets.Cifar10.TRANSFORM_TRAIN, train=True, subset=args.debug)
-    train_dataset, val_dataset = train_dataset.train_val_split(val_fraction=0.2)
+    train_dataset, val_dataset = train_dataset.train_val_split(val_fraction=args.val_fraction)
 
     test_dataset = cifar_datasets.Cifar10(transforms=cifar_datasets.Cifar10.TRANSFORM_TEST, train=False)
 
@@ -49,7 +54,7 @@ def setup(args):
     return model, train_loader, val_loader, test_loader
 
 
-def train_epoch(model, dataloader, optimizer, criterion, epoch, train_stats):
+def train_epoch(model, dataloader, optimizer, criterion, scheduler, epoch, train_stats):
     avg_loss = 0
     avg_accuracy = 0
     model.train()
@@ -83,9 +88,11 @@ def train_epoch(model, dataloader, optimizer, criterion, epoch, train_stats):
         if not np.isnan(loss.detach().cpu().numpy()):
             avg_loss += loss.item()
             avg_accuracy += accuracy.item()
+            if scheduler is not None:
+                scheduler.step()
 
         if batch_idx % 100 == 0:
-            print('  batch {}/{}  loss: {:8.8g}'.format(batch_idx, batch_count, loss.item()))
+            logger.info('  batch {}/{}  loss: {:8.8g}'.format(batch_idx, batch_count, loss.item()))
 
     avg_loss /= batch_count
     avg_accuracy /= batch_count
@@ -161,7 +168,7 @@ def eval_model_gmm(model, dataloader, gmm_list):
     gmm_accuracy = list()
     softmax_accuracy = list()
     class_preval = compute_class_prevalance(dataloader)
-    print(class_preval)
+    logger.info(class_preval)
     class_preval = torch.tensor(list(class_preval.values()))
     with torch.no_grad():
         for batch_idx, tensor_dict in enumerate(dataloader):
@@ -234,6 +241,12 @@ def train(args):
     if not os.path.exists(args.output_filepath):
         os.makedirs(args.output_filepath)
 
+    logging.basicConfig(level=logging.INFO,
+                        format="%(asctime)s [%(levelname)s] [%(filename)s:%(lineno)d] %(message)s",
+                        filename=os.path.join(args.output_filepath, 'log.txt'))
+
+    logging.getLogger().addHandler(logging.StreamHandler())
+
     model, train_loader, val_loader, test_loader = setup(args)
 
     # write the arg configuration to disk
@@ -246,40 +259,52 @@ def train(args):
     # Move model to device
     model.cuda()
 
+    def lr_reduction_callback():
+        logger.info("Learning rate reduced due to plateau")
+
     # Setup loss criteria
     criterion = torch.nn.CrossEntropyLoss()
 
     # Setup optimizer
     optimizer = torch.optim.AdamW(model.parameters(), lr=args.learning_rate)#, weight_decay=5e-4)
+    # setup LR reduction on plateau
+    plateau_scheduler = lr_scheduler.ReduceLROnPlateau(optimizer, mode='min', factor=0.1, patience=args.patience, threshold=args.loss_eps, max_num_lr_reductions=3, lr_reduction_callback=lr_reduction_callback)
+
+    cyclic_scheduler = torch.optim.lr_scheduler.CyclicLR(optimizer, base_lr=args.learning_rate/args.cycle_factor, max_lr=args.learning_rate*args.cycle_factor, step_size_up=int(len(train_loader) / 2), cycle_momentum=False)
 
     # setup the metadata capture object
     train_stats = metadata.TrainingStats()
 
-    epoch = 0
+    epoch = -1
     best_epoch = 0
-    done = False
     best_model = model
 
-    num_epochs = args.num_epochs
-
     # train epochs until loss converges
-    while not done:
-        print("Epoch: {}".format(epoch))
-        print("  training")
+    while not plateau_scheduler.is_done():
+        # ensure we don't loop forever
+        if epoch >= MAX_EPOCHS:
+            break
+        epoch += 1
+        logger.info("Epoch: {}".format(epoch))
+        logger.info("  training")
         # TODO capture and return the full training dataset output layer (pre-softmax) and the labels
-        train_epoch(model, train_loader, optimizer, criterion, epoch, train_stats)
+        train_epoch(model, train_loader, optimizer, criterion, cyclic_scheduler, epoch, train_stats)
 
         # TODO write function which buckets the output vectors by their true class label (not predicted label)
 
-        print("  evaluating validation data")
+        logger.info("  evaluating validation data")
         dataset_logits, class_bucketed_dataset_logits, unique_class_labels = eval_model(model, val_loader, criterion, epoch, train_stats, 'val')
+
+        val_loss = train_stats.get_epoch('val_loss', epoch=epoch)
+        plateau_scheduler.step(val_loss)
+
         # dataset_logits is N x num_classes, where N is the number of examples in the dataset
 
         train_stats.add_global('training_wall_time', sum(train_stats.get('train_wall_time')))
         train_stats.add_global('val_wall_time', sum(train_stats.get('val_wall_time')))
 
         if GMM_ENABLED:  # and epoch > 10:
-            print(" gmm work starts")
+            logger.info(" gmm work starts")
             gmm_models = list()
             for i in range(len(unique_class_labels)):
                 class_c_logits = class_bucketed_dataset_logits[i]
@@ -292,53 +317,37 @@ def train(args):
                 else:
                     gmm.logger.export()
                 elapsed_time = time.time() - start_time
-                print("Build GMM took: {}s".format(elapsed_time))
+                logger.info("Build GMM took: {}s".format(elapsed_time))
                 gmm_models.append(gmm)
                 train_stats.add(epoch, 'class_{}_gmm_log_likelihood'.format(unique_class_labels[i]), gmm.ll_prev)
 
-            print(unique_class_labels)
+            logger.info(unique_class_labels)
             softmax_preds, softmax_accuracy, gmm_preds, gmm_accuracy = eval_model_gmm(model, val_loader, gmm_models)
-            print("Softmax Accuracy: {}".format(softmax_accuracy))
-            print("GMM Accuracy: {}".format(gmm_accuracy))
+            logger.info("Softmax Accuracy: {}".format(softmax_accuracy))
+            logger.info("GMM Accuracy: {}".format(gmm_accuracy))
 
         # update the number of epochs trained
         train_stats.add_global('num_epochs_trained', epoch)
         # write copy of current metadata metrics to disk
         train_stats.export(args.output_filepath)
 
-        if num_epochs is not None:
+
+        # handle early stopping when loss converges
+        val_loss = train_stats.get('val_loss')
+        error_from_best = np.abs(val_loss - np.min(val_loss))
+        error_from_best[error_from_best < np.abs(args.loss_eps)] = 0
+        # if this epoch is with convergence tolerance of the global best, save the weights
+        #if error_from_best[epoch] == 0:
+        if plateau_scheduler.num_bad_epochs == 0:
+            logger.info('Updating best model with epoch: {} loss: {}'.format(epoch, val_loss[epoch]))
             best_model = copy.deepcopy(model)
             best_epoch = epoch
+
             # update the global metrics with the best epoch
             train_stats.update_global(epoch)
-        else:
-            # handle early stopping when loss converges
-            val_loss = train_stats.get('val_loss')
-            error_from_best = np.abs(val_loss - np.min(val_loss))
-            error_from_best[error_from_best < np.abs(args.loss_eps)] = 0
-            # if this epoch is with convergence tolerance of the global best, save the weights
-            if error_from_best[epoch] == 0:
-                print('Updating best model with epoch: {} loss: {}, as its less than the best loss plus eps {}.'.format(epoch, val_loss[epoch], args.loss_eps))
-                best_model = copy.deepcopy(model)
-                best_epoch = epoch
 
-                # update the global metrics with the best epoch
-                train_stats.update_global(epoch)
-            best_val_loss_epoch = np.where(error_from_best == 0)[0][0]  # unpack numpy array, select first time since that value has happened
-            if epoch >= (best_val_loss_epoch + args.early_stopping_epoch_count):
-                print("Exiting training loop in epoch: {} - due to early stopping criterion being met".format(epoch))
-                done = True
 
-        if not done:
-            # only advance epoch if we are not done
-            epoch += 1
-        # in case something goes wrong, we exit after training a long time ...
-        if num_epochs is not None and epoch >= num_epochs:
-            done = True
-        if epoch >= MAX_EPOCHS:
-            done = True
-
-    print('Evaluating model against test dataset')
+    logger.info('Evaluating model against test dataset')
     eval_model(best_model, test_loader, criterion, best_epoch, train_stats, 'test')
 
     # update the global metrics with the best epoch, to include test stats
@@ -346,7 +355,7 @@ def train(args):
 
     wall_time = time.time() - train_start_time
     train_stats.add_global('wall_time', wall_time)
-    print("Total WallTime: ", train_stats.get_global('wall_time'), 'seconds')
+    logger.info("Total WallTime: ", train_stats.get_global('wall_time'), 'seconds')
 
     train_stats.export(args.output_filepath)  # update metrics data on disk
     best_model.cpu()  # move to cpu before saving to simplify loading the model

@@ -156,7 +156,7 @@ class GMM:
         #normalization vector
         norm_vec = torch.sum(posteriors, 1)
 
-        #normalized posteriors
+        #normalized posteriors  # TODO add small epsilon to ensure no divide by 0
         posteriors = torch.div(posteriors.t(), norm_vec).t()
 
         #logging
