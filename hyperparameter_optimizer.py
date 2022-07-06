@@ -10,37 +10,39 @@ FOLDER_PATH = './models'
 
 
 def search():
-    N = 1000
 
-    for n in range(0, N):
-        fn = "id-{:08}".format(n)
-        fp = os.path.join(FOLDER_PATH, fn)
+    n = 0
+    fn = "id-{:08}".format(n)
+    fp = os.path.join(FOLDER_PATH, fn)
+    while os.path.exists(fp):
+        n += 1
 
-        if os.path.exists(fp):
-            continue
+    fn = "id-{:08}".format(n)
+    fp = os.path.join(FOLDER_PATH, fn)
 
-        loss_eps = np.random.uniform(1e-4, 1e-2)
-        patience = np.random.randint(10, 31)
+    loss_eps = np.random.uniform(1e-4, 1e-2)
+    patience = np.random.randint(10, 31)
 
-        batch_size = int(np.random.choice([16, 32, 64, 128]))
-        learning_rate = np.random.uniform(1e-4, 1e-2)
+    batch_size = int(np.random.choice([16, 32, 64, 128]))
+    learning_rate = np.random.uniform(1e-4, 1e-2)
 
-        args = dict()
-        args['arch'] = 'resnet18'
-        args['num_workers'] = 6
-        args['output_filepath'] = fp
-        args['batch_size'] = batch_size
-        args['learning_rate'] = learning_rate
-        args['loss_eps'] = loss_eps
-        args['patience'] = patience
-        args['cycle_factor'] = float(np.random.choice([2, 3, 4, 5]))
-        args['starting_model'] = None
-        args['debug'] = False
-        args['val_fraction'] = float(np.random.choice([0.01, 0.02, 0.03, 0.04, 0.05, 0.06, 0.07, 0.08, 0.09, 0.1]))
+    args = dict()
+    args['arch'] = 'resnet18'
+    args['num_workers'] = 6
+    args['output_filepath'] = fp
+    args['batch_size'] = batch_size
+    args['learning_rate'] = learning_rate
+    args['loss_eps'] = loss_eps
+    args['patience'] = patience
+    args['cycle_factor'] = float(np.random.choice([2, 3, 4, 5]))
+    args['starting_model'] = None
+    args['debug'] = False
+    args['val_fraction'] = float(np.random.choice([0.01, 0.02, 0.03, 0.04, 0.05, 0.06, 0.07, 0.08, 0.09, 0.1]))
 
-        args = argparse.Namespace(**args)
+    args = argparse.Namespace(**args)
 
-        stats = train.train(args)
+    stats = train.train(args)
+
 
 
 def select():
@@ -79,8 +81,8 @@ def select():
 
 
 if __name__ == '__main__':
-    #search()
-    select()
+    search()
+    #select()
 
 
 

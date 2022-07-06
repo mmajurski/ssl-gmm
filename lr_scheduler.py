@@ -53,20 +53,17 @@ class ReduceLROnPlateau(torch.optim.lr_scheduler.ReduceLROnPlateau):
     def step(self, metrics, epoch=None):
         # convert `metrics` to float, in case it's a zero-dim Tensor
         current = float(metrics)
+
         self.metric_values.append(current)
         if epoch is None:
             epoch = self.last_epoch + 1
         self.last_epoch = epoch
 
         if self.mode == 'min':
-            error_from_best = np.abs(np.asarray(self.metric_values) - np.min(self.metric_values))
-            # if not isinstance(error_from_best, np.ndarray):
-            #     error_from_best = np.asarray(error_from_best)
+            error_from_best = np.abs(np.asarray(self.metric_values) - np.nanmin(self.metric_values))
             error_from_best[error_from_best < np.abs(self.threshold)] = 0
         else:
-            error_from_best = np.abs(np.asarray(self.metric_values) + np.max(self.metric_values))
-            # if not isinstance(error_from_best, np.ndarray):
-            #     error_from_best = np.asarray(error_from_best)
+            error_from_best = np.abs(np.asarray(self.metric_values) + np.nanmax(self.metric_values))
             error_from_best[error_from_best > np.abs(self.threshold)] = 0
         # unpack numpy array, select first time since that value has happened
         best_metric_epoch = np.where(error_from_best == 0)[0][0]
@@ -95,6 +92,8 @@ class ReduceLROnPlateau(torch.optim.lr_scheduler.ReduceLROnPlateau):
                 self.cooldown_counter = self.cooldown
                 self.num_bad_epochs = 0
                 self.num_lr_reductions += 1
+                # invalidate the metric values from before the learning rate change, as those values should no longer be used in evaluating convergence
+                self.metric_values = [np.nan for v in self.metric_values]
                 if self.lr_reduction_callback is not None:
                     self.lr_reduction_callback()
 

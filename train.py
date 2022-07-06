@@ -13,7 +13,7 @@ import mmm
 import lr_scheduler
 
 MAX_EPOCHS = 1000
-GMM_ENABLED = True
+GMM_ENABLED = False
 
 logger = logging.getLogger()
 
@@ -356,7 +356,7 @@ def train(args):
 
     wall_time = time.time() - train_start_time
     train_stats.add_global('wall_time', wall_time)
-    logger.info("Total WallTime: ", train_stats.get_global('wall_time'), 'seconds')
+    logger.info("Total WallTime: {}seconds".format(train_stats.get_global('wall_time')))
 
     train_stats.export(args.output_filepath)  # update metrics data on disk
     best_model.cpu()  # move to cpu before saving to simplify loading the model
