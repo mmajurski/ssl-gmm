@@ -80,7 +80,7 @@ def main():
 
     x = torch.cat([cluster1, cluster2, cluster3]).double()
     
-    gmm = GMM(x, num_clusters=3, num_iterations=50,tolerance=1e-4)
+    gmm = GMM(x, num_clusters=3, num_iterations=50, tolerance=1e-4)
     mu, cov, posteriors, likelihoods = gmm.convergence()
 
     # plt.scatter(x.numpy()[:n1, 0], x.numpy()[:n1, 1], color='red')
@@ -92,7 +92,7 @@ def main():
     # density_plot(x.numpy(), mu, cov)
     # to test a predict_probs function.
     if False:
-        print(gmm.predict_probs(x[:10],mu,cov))
-        print(gmm.predict_probs(x[:10],mu,cov,False))
+        print(gmm.predict_probs(x[:10], mu, cov))
+        print(gmm.predict_probs(x[:10], mu, cov, False))
 
 main()

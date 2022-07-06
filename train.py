@@ -13,7 +13,7 @@ import mmm
 import lr_scheduler
 
 MAX_EPOCHS = 1000
-GMM_ENABLED = False
+GMM_ENABLED = True
 
 logger = logging.getLogger()
 
@@ -303,6 +303,7 @@ def train(args):
         train_stats.add_global('training_wall_time', sum(train_stats.get('train_wall_time')))
         train_stats.add_global('val_wall_time', sum(train_stats.get('val_wall_time')))
 
+        # TODO transfer this whole process into gmm or new class where these things can be handled by a single class and can be parallelized
         if GMM_ENABLED:  # and epoch > 10:
             logger.info(" gmm work starts")
             gmm_models = list()
@@ -319,7 +320,7 @@ def train(args):
                 elapsed_time = time.time() - start_time
                 logger.info("Build GMM took: {}s".format(elapsed_time))
                 gmm_models.append(gmm)
-                train_stats.add(epoch, 'class_{}_gmm_log_likelihood'.format(unique_class_labels[i]), gmm.ll_prev)
+                train_stats.add(epoch, 'class_{}_gmm_log_likelihood'.format(unique_class_labels[i]), gmm.log_likelihood)
 
             logger.info(unique_class_labels)
             softmax_preds, softmax_accuracy, gmm_preds, gmm_accuracy = eval_model_gmm(model, val_loader, gmm_models)
