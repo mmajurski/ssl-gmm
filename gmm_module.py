@@ -26,6 +26,8 @@ class GMM(torch.nn.Module):
         self._init_params()
         self.converged = False
 
+        self.reg_covar = 1e-6
+
     def _init_params(self):
         # validate or set initial cluster pi
         if self.pi is not None:
@@ -78,12 +80,29 @@ class GMM(torch.nn.Module):
         log_prob_norm, log_resp = self._estimate_log_prob_resp(x)
         return torch.mean(log_prob_norm), log_resp
 
+    def _estimate_parameters(self, x, resp):
+        eps = (10 * torch.finfo(resp.type()).eps)
+        nk = torch.add(torch.sum(resp), eps)
+        resp_x = torch.matmul(resp.transpose(0, 1), x)
+        means = torch.div(input=resp_x, other=nk.unsqueeze(1))
+        covariances = torch.empty(self.sigmas_shape).squeeze()
+        for k in range(self.n_components):
+            x_mr = torch.sub(input=x, other=means[k])
+            resp_xmrt = torch.matmul(resp[:, k], x_mr.transpose(0, 1))
+            resp_xmrt_xmr = torch.matmul(resp_xmrt, x_mr)
+
+            covariances[k] = torch.div(resp_xmrt_xmr, nk[k])
+            covariances[k, ::self.n_features + 1] = torch.add(input=covariances[k, ::self.n_features + 1], other=self.reg_covar)
+        return nk, means, covariances
+
     def _m_step(self, x, log_resp):
-        return None, None, None
+        self.pi,self.mus, self.sigmas = self._estimate_parameters(x, torch.exp(log_resp))
+        torch.div(input=self.pi,other=torch.sum(self.pi),out=self.pi)
+        self.precision_cholesky = self._compute_precision_cholesky()
 
     def _em_iteration(self, x):
         _, log_resp = self._e_step(x)
-        pi, mus, sigmas = self._m_step(x, log_resp)
+        self._m_step(x, log_resp)
 
     def predict_probability(self, x):
         pass
