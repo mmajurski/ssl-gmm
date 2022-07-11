@@ -266,11 +266,17 @@ def train(args):
     criterion = torch.nn.CrossEntropyLoss()
 
     # Setup optimizer
-    optimizer = torch.optim.AdamW(model.parameters(), lr=args.learning_rate)#, weight_decay=5e-4)
+    if args.weight_decay is not None:
+        optimizer = torch.optim.AdamW(model.parameters(), lr=args.learning_rate, weight_decay=args.weight_decay)
+    else:
+        optimizer = torch.optim.AdamW(model.parameters(), lr=args.learning_rate)
     # setup LR reduction on plateau
     plateau_scheduler = lr_scheduler.ReduceLROnPlateau(optimizer, mode='min', factor=0.1, patience=args.patience, threshold=args.loss_eps, max_num_lr_reductions=3, lr_reduction_callback=lr_reduction_callback)
 
-    cyclic_scheduler = torch.optim.lr_scheduler.CyclicLR(optimizer, base_lr=args.learning_rate/args.cycle_factor, max_lr=args.learning_rate*args.cycle_factor, step_size_up=int(len(train_loader) / 2), cycle_momentum=False)
+    if args.cycle_factor is not None:
+        cyclic_scheduler = torch.optim.lr_scheduler.CyclicLR(optimizer, base_lr=args.learning_rate/args.cycle_factor, max_lr=args.learning_rate*args.cycle_factor, step_size_up=int(len(train_loader) / 2), cycle_momentum=False)
+    else:
+        cyclic_scheduler = None
 
     # setup the metadata capture object
     train_stats = metadata.TrainingStats()

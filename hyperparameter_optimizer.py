@@ -19,23 +19,27 @@ def search():
     fp = os.path.join(FOLDER_PATH, "id-{:08}".format(n))
 
     loss_eps = np.random.uniform(1e-4, 1e-2)
-    patience = np.random.randint(10, 21)
+    patience = np.random.randint(20, 51)
+    cycle_factor = float(np.random.uniform(1, 5))
 
-    batch_size = int(np.random.choice([16, 32, 64, 128]))
-    learning_rate = np.random.uniform(1e-4, 5e-3)
+    # batch_size = int(np.random.choice([16, 32, 64, 128]))
+    # learning_rate = np.random.uniform(1e-4, 5e-3)
+
+    # params per "Benchopt: Reproducible, efficient and collaborative optimization benchmarks" page 28
 
     args = dict()
     args['arch'] = 'resnet18'
     args['num_workers'] = 2
     args['output_filepath'] = fp
-    args['batch_size'] = batch_size
-    args['learning_rate'] = learning_rate
-    args['loss_eps'] = loss_eps
+    args['batch_size'] = 128
+    args['learning_rate'] = 1e-3
+    args['loss_eps'] = 1e-3
     args['patience'] = patience
-    args['cycle_factor'] = float(np.random.uniform(1, 5))
+    args['weight_decay'] = 0.02
+    args['cycle_factor'] = None
     args['starting_model'] = None
     args['debug'] = False
-    args['val_fraction'] = float(np.random.uniform(0.01, 0.2))
+    args['val_fraction'] = float(0.1)
 
     args = argparse.Namespace(**args)
 
@@ -138,8 +142,8 @@ def select():
 
 
 if __name__ == '__main__':
-    #search()
-    select()
+    search()
+    #select()
 
 
 
