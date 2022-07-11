@@ -52,6 +52,19 @@ class GMM(torch.nn.Module):
 
         self.precision_cholesky = self._compute_precision_cholesky()
 
+    def get(self, var: str):
+        """
+        var can be "mu", "sigma" or "pi"
+        """
+        if var == "mu":
+            return torch.squeeze(self._mus)
+        if var == "sigma":
+            return torch.squeeze(self._sigmas)
+        if var == "pi":
+            return torch.squeeze(self._pi)
+        else:
+            return
+
     def fit(self, x):
         """
         fit the GMM module to the data by training it for max_iter epochs or till it is converged
