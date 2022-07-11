@@ -13,7 +13,7 @@ from gmm_module import GMM
 import lr_scheduler
 
 MAX_EPOCHS = 1000
-GMM_ENABLED = False
+GMM_ENABLED = True
 
 logger = logging.getLogger()
 

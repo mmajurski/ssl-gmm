@@ -1,6 +1,17 @@
 import torch
 import numpy as np
 
+"""
+----------------:Change log:----------------
+- replaced squeeze() with squeeze(dim=0) to avoid unintentional squeezing in case of n_clusters being 1
+- change sigma initialization from torch.randn to be identity matrices as randn was gnerating negative numbers
+    which aren't allowed in finding cholskey
+- set eps = (10 * torch.finfo(resp.dtype).eps)
+    as resp.type() was returning str
+- set resp_x = torch.matmul(resp.transpose(2, 1), x)
+    as resp.transpose(0,1) was resulting in shape (N,1,k)
+"""
+
 
 class GMM(torch.nn.Module):
 
@@ -48,7 +59,7 @@ class GMM(torch.nn.Module):
                 raise ValueError("Invalid covariance matrices provided")
             self._sigmas = torch.nn.Parameter(self._sigmas, requires_grad=False)
         else:
-            self._sigmas = torch.nn.Parameter(torch.randn(*self._sigmas_shape), requires_grad=False)
+            self._sigmas = torch.nn.Parameter(torch.eye(self.n_features).reshape(1, 1, self.n_features, self.n_features).repeat(1, self.n_clusters, 1, 1), requires_grad=False)
 
         self.precision_cholesky = self._compute_precision_cholesky()
 
@@ -57,11 +68,11 @@ class GMM(torch.nn.Module):
         var can be "mu", "sigma" or "pi"
         """
         if var == "mu":
-            return torch.squeeze(self._mus)
+            return torch.squeeze(self._mus, dim=0)
         if var == "sigma":
-            return torch.squeeze(self._sigmas)
+            return torch.squeeze(self._sigmas, dim=0)
         if var == "pi":
-            return torch.squeeze(self._pi)
+            return torch.squeeze(self._pi, dim=0)
         else:
             return
 
@@ -90,11 +101,11 @@ class GMM(torch.nn.Module):
 
         # calculating log_det
         log_det = torch.sum(
-            torch.log(self.precision_cholesky.squeeze().reshape(self.n_clusters, -1)[:, ::self.n_features + 1]), 1)
+            torch.log(self.precision_cholesky.squeeze(0).reshape(self.n_clusters, -1)[:, ::self.n_features + 1]), 1)
         log_prob = torch.empty((n_samples, self.n_clusters))
 
         # assuming covariance_type to be full and calculating the log_prob
-        for k, (mu, prec_chol) in enumerate(zip(self._mus.squeeze(), self.precision_cholesky.squeeze())):
+        for k, (mu, prec_chol) in enumerate(zip(self._mus.squeeze(0), self.precision_cholesky.squeeze(0))):
             y = torch.matmul(torch.sub(x, mu), prec_chol)
             log_prob[:, k] = torch.sum(torch.square(y), dim=1)
 
@@ -119,13 +130,14 @@ class GMM(torch.nn.Module):
 
     def _estimate_parameters(self, x, resp):
         # taking epsilon as 10 * the smallest possible value for resp
-        eps = (10 * torch.finfo(resp.type()).eps)
+        eps = (10 * torch.finfo(resp.dtype).eps)
         # adding epsilon
         nk = torch.add(torch.sum(resp), eps)
-        resp_x = torch.matmul(resp.transpose(0, 1), x)
+        # TODO: test the resp.transpose change
+        resp_x = torch.matmul(resp.transpose(2, 1), x)
         means = torch.div(input=resp_x, other=nk.unsqueeze(1))
         # finding covariances for full covariance_type
-        covariances = torch.empty(self._sigmas_shape).squeeze()
+        covariances = torch.empty(self._sigmas_shape).squeeze(0)
         for k in range(self.n_components):
             x_mr = torch.sub(input=x, other=means[k])
             resp_xmrt = torch.matmul(resp[:, k], x_mr.transpose(0, 1))
@@ -153,12 +165,12 @@ class GMM(torch.nn.Module):
         return torch.exp(log_resp)
 
     def _compute_precision_cholesky(self):
-        precision_cholesky = torch.empty(self._sigmas_shape).squeeze()
-        for k, covar_mat in enumerate(self._sigmas.squeeze()):
-            try:
-                cov_chol = torch.linalg.cholesky(covar_mat)
-            except:
-                raise ValueError("increase reg_covar because covariances are bad")
+        precision_cholesky = torch.empty(self._sigmas_shape).squeeze(dim=0)
+        for k, covar_mat in enumerate(self._sigmas.squeeze(dim=0)):
+            # try:
+            cov_chol = torch.linalg.cholesky(covar_mat)
+            # except():
+            #     raise ValueError("increase reg_covar because covariances are bad")
             precision_cholesky[k] = torch.linalg.solve_triangular(cov_chol, torch.eye(self.n_features),
                                                                   upper=False).transpose(0, 1)
         return precision_cholesky.unsqueeze(0)
