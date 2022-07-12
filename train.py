@@ -40,6 +40,8 @@ def setup(args):
     # setup and load CIFAR10
     train_dataset = cifar_datasets.Cifar10(transforms=cifar_datasets.Cifar10.TRANSFORM_TRAIN, train=True, subset=args.debug)
     train_dataset, val_dataset = train_dataset.train_val_split(val_fraction=args.val_fraction)
+    # set the validation augmentation to just normalize (.dataset since val_dataset is a Subset, not a full dataset)
+    val_dataset.set_transforms(cifar_datasets.Cifar10.TRANSFORM_TEST)
 
     test_dataset = cifar_datasets.Cifar10(transforms=cifar_datasets.Cifar10.TRANSFORM_TEST, train=False)
 
@@ -271,7 +273,7 @@ def train(args):
     else:
         optimizer = torch.optim.AdamW(model.parameters(), lr=args.learning_rate)
     # setup LR reduction on plateau
-    plateau_scheduler = lr_scheduler.ReduceLROnPlateau(optimizer, mode='min', factor=0.1, patience=args.patience, threshold=args.loss_eps, max_num_lr_reductions=3, lr_reduction_callback=lr_reduction_callback)
+    plateau_scheduler = lr_scheduler.ReduceLROnPlateau(optimizer, mode='min', factor=0.2, patience=args.patience, threshold=args.loss_eps, max_num_lr_reductions=0, lr_reduction_callback=lr_reduction_callback)
 
     if args.cycle_factor is not None:
         cyclic_scheduler = torch.optim.lr_scheduler.CyclicLR(optimizer, base_lr=args.learning_rate/args.cycle_factor, max_lr=args.learning_rate*args.cycle_factor, step_size_up=int(len(train_loader) / 2), cycle_momentum=False)
@@ -300,6 +302,9 @@ def train(args):
 
         logger.info("  evaluating validation data")
         dataset_logits, class_bucketed_dataset_logits, unique_class_labels = eval_model(model, val_loader, criterion, epoch, train_stats, 'val')
+
+        logger.info('Evaluating model against test dataset (not realistic since we are comparing test and val)')
+        eval_model(model, test_loader, criterion, epoch, train_stats, 'test')
 
         val_loss = train_stats.get_epoch('val_loss', epoch=epoch)
         plateau_scheduler.step(val_loss)

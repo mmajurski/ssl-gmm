@@ -52,6 +52,14 @@ class Cifar10(torch.utils.data.Dataset):
             val_size = len(self._dataset) - train_size
             self._dataset, _ = torch.utils.data.random_split(self._dataset, [train_size, val_size])
 
+    def set_transforms(self, transforms):
+        self._transforms = transforms
+        # handle potential Subset wrapper instead of the bare metal dataset
+        if hasattr(self._dataset, 'transforms'):
+            self._dataset.transforms = transforms
+        if hasattr(self._dataset, 'dataset'):
+            self._dataset.dataset.transforms = transforms
+
     def train_val_split(self, val_fraction: float = 0.1):
         train_fraction = 1.0 - val_fraction
         if train_fraction <= 0.0:
@@ -60,7 +68,12 @@ class Cifar10(torch.utils.data.Dataset):
 
         val_size = int(val_fraction * len(self._dataset))
         train_size = len(self._dataset) - val_size
-        train_dataset, val_dataset = torch.utils.data.random_split(self._dataset, [train_size, val_size])
+
+        t, v = torch.utils.data.random_split(self._dataset, [train_size, val_size])
+        train_dataset = copy.deepcopy(self)
+        val_dataset = copy.deepcopy(self)
+        train_dataset._dataset = t
+        val_dataset._dataset = v
 
         return train_dataset, val_dataset
 

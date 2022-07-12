@@ -48,7 +48,11 @@ class ReduceLROnPlateau(torch.optim.lr_scheduler.ReduceLROnPlateau):
         self.metric_values = list()
 
     def is_done(self):
-        return self.num_lr_reductions >= self.max_num_lr_reductions
+        if self.max_num_lr_reductions == 0:
+            # handle intuitive case where you don't want learning rate reductions, supporting plateau termination with 0 learning rate reductions
+            return self.num_lr_reductions > self.max_num_lr_reductions
+        else:
+            return self.num_lr_reductions >= self.max_num_lr_reductions
 
     def step(self, metrics, epoch=None):
         # convert `metrics` to float, in case it's a zero-dim Tensor
