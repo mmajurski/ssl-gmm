@@ -249,6 +249,8 @@ def train(args):
 
     logging.getLogger().addHandler(logging.StreamHandler())
 
+    logger.info(args)
+
     model, train_loader, val_loader, test_loader = setup(args)
 
     # write the arg configuration to disk
@@ -273,7 +275,7 @@ def train(args):
     else:
         optimizer = torch.optim.AdamW(model.parameters(), lr=args.learning_rate)
     # setup LR reduction on plateau
-    plateau_scheduler = lr_scheduler.ReduceLROnPlateau(optimizer, mode='min', factor=0.2, patience=args.patience, threshold=args.loss_eps, max_num_lr_reductions=0, lr_reduction_callback=lr_reduction_callback)
+    plateau_scheduler = lr_scheduler.ReduceLROnPlateau(optimizer, mode='min', factor=0.2, patience=args.patience, threshold=args.loss_eps, max_num_lr_reductions=args.num_lr_reductions, lr_reduction_callback=lr_reduction_callback)
 
     if args.cycle_factor is not None:
         cyclic_scheduler = torch.optim.lr_scheduler.CyclicLR(optimizer, base_lr=args.learning_rate/args.cycle_factor, max_lr=args.learning_rate*args.cycle_factor, step_size_up=int(len(train_loader) / 2), cycle_momentum=False)
@@ -303,12 +305,9 @@ def train(args):
         logger.info("  evaluating validation data")
         dataset_logits, class_bucketed_dataset_logits, unique_class_labels = eval_model(model, val_loader, criterion, epoch, train_stats, 'val')
 
-        logger.info('Evaluating model against test dataset (not realistic since we are comparing test and val)')
-        eval_model(model, test_loader, criterion, epoch, train_stats, 'test')
-
         val_loss = train_stats.get_epoch('val_loss', epoch=epoch)
         plateau_scheduler.step(val_loss)
-
+        
         # dataset_logits is N x num_classes, where N is the number of examples in the dataset
 
         train_stats.add_global('training_wall_time', sum(train_stats.get('train_wall_time')))
@@ -346,8 +345,9 @@ def train(args):
 
         # handle early stopping when loss converges
         val_loss = train_stats.get('val_loss')
-        error_from_best = np.abs(val_loss - np.min(val_loss))
-        error_from_best[error_from_best < np.abs(args.loss_eps)] = 0
+        # error_from_best = np.abs(val_loss - np.min(val_loss))
+        # error_from_best[error_from_best < np.abs(args.loss_eps)] = 0
+        
         # if this epoch is with convergence tolerance of the global best, save the weights
         #if error_from_best[epoch] == 0:
         if plateau_scheduler.num_bad_epochs == 0:

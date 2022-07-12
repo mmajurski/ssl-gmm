@@ -20,7 +20,8 @@ def search():
 
     loss_eps = np.random.uniform(1e-4, 1e-2)
     patience = np.random.randint(40, 101)
-    cycle_factor = float(np.random.uniform(2, 5))
+    #cycle_factor = float(np.random.uniform(2, 5))
+    cycle_factor = None
     # if np.random.rand() > 0.5:
     #     cycle_factor = None
 
@@ -34,8 +35,9 @@ def search():
     args['num_workers'] = 2
     args['output_filepath'] = fp
     args['batch_size'] = 128
-    args['learning_rate'] = 1e-3  # 3e-4
+    args['learning_rate'] = 1e-2  # 3e-4
     args['loss_eps'] = 1e-3
+    args['num_lr_reductions'] = 2
     args['patience'] = 20  # 50
     args['weight_decay'] = 0.1  # 1.0
     args['cycle_factor'] = cycle_factor
