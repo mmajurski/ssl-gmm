@@ -186,12 +186,12 @@ def eval_model_gmm(model, dataloader, gmm_list: list[GMM]):
                 gmm_inputs = outputs.detach().cpu()
 
                 # generate weights, mus and sigmas
-                weights = torch.unsqueeze(torch.unsqueeze(class_preval, dim=0), dim=-1)
-                mus = torch.unsqueeze(torch.cat([gmm.get("mu") for gmm in gmm_list]), dim=0)
-                sigmas = torch.unsqueeze(torch.cat([gmm.get("sigma") for gmm in gmm_list]), dim=0)
+                weights = class_preval
+                mus = torch.cat([gmm.get("mu") for gmm in gmm_list])
+                sigmas = torch.cat([gmm.get("sigma") for gmm in gmm_list])
 
                 # create new GMM object for combined data
-                gmm = GMM(n_features=gmm_inputs.shape[1], n_clusters=weights.shape[1], weights=weights, mus=mus, sigmas=sigmas)
+                gmm = GMM(n_features=gmm_inputs.shape[1], n_clusters=weights.shape[0], weights=weights, mu=mus, sigma=sigmas)
 
                 gmm_resp = gmm.predict_probability(gmm_inputs)  # N*K
 
@@ -203,8 +203,8 @@ def eval_model_gmm(model, dataloader, gmm_list: list[GMM]):
 
         gmm_accuracy = torch.mean(torch.cat(gmm_accuracy, dim=-1))
         softmax_accuracy = torch.mean(torch.cat(softmax_accuracy, dim=-1))
-        gmm_preds = torch.mean(torch.cat(gmm_preds, dim=-1))
-        softmax_preds = torch.mean(torch.cat(softmax_preds, dim=-1))
+        gmm_preds = torch.mean(torch.cat(gmm_preds, dim=-1).type(torch.float16))
+        softmax_preds = torch.mean(torch.cat(softmax_preds, dim=-1).type(torch.float16))
 
         return softmax_preds, softmax_accuracy, gmm_preds, gmm_accuracy
 
@@ -307,7 +307,7 @@ def train(args):
                 start_time = time.time()
                 gmm = GMM(n_features=class_c_logits.shape[1], n_clusters=1, tolerance=1e-4, max_iter=50)
                 gmm.fit(class_c_logits)
-                while np.any(np.isnan(gmm.cov.detach().cpu().numpy())):
+                while np.any(np.isnan(gmm.get("sigma").detach().cpu().numpy())):
                     gmm = GMM(n_features=class_c_logits.shape[1], n_clusters=1, tolerance=1e-4, max_iter=50)
                     gmm.fit(class_c_logits)
                 # else:
