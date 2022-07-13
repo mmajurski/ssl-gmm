@@ -56,7 +56,7 @@ def setup(args):
     return model, train_loader, val_loader, test_loader
 
 
-def train_epoch(model, dataloader, optimizer, criterion, scheduler, epoch, train_stats):
+def train_epoch(model, dataloader, optimizer, criterion, scheduler, epoch, train_stats, amp=True):
     avg_loss = 0
     avg_accuracy = 0
     model.train()
@@ -72,19 +72,27 @@ def train_epoch(model, dataloader, optimizer, criterion, scheduler, epoch, train
         labels = tensor_dict[1].cuda()
 
         # FP16 training
-        with torch.cuda.amp.autocast():
+        if amp:
+            with torch.cuda.amp.autocast():
+                outputs = model(inputs)
+                pred = torch.argmax(outputs, dim=-1)
+                accuracy = torch.sum(pred == labels)/len(pred)
+                loss = criterion(outputs, labels)
+
+                scaler.scale(loss).backward()
+                # scaler.step() first unscales the gradients of the optimizer's assigned params.
+                # If these gradients do not contain infs or NaNs, optimizer.step() is then called,
+                # otherwise, optimizer.step() is skipped.
+                scaler.step(optimizer)
+                # Updates the scale for next iteration.
+                scaler.update()
+        else:
             outputs = model(inputs)
             pred = torch.argmax(outputs, dim=-1)
             accuracy = torch.sum(pred == labels)/len(pred)
             loss = criterion(outputs, labels)
-
-            scaler.scale(loss).backward()
-            # scaler.step() first unscales the gradients of the optimizer's assigned params.
-            # If these gradients do not contain infs or NaNs, optimizer.step() is then called,
-            # otherwise, optimizer.step() is skipped.
-            scaler.step(optimizer)
-            # Updates the scale for next iteration.
-            scaler.update()
+            loss.backward()
+            optimizer.step()
 
         # nan loss values are ignored when using AMP, so ignore them for the average
         if not np.isnan(loss.detach().cpu().numpy()):
@@ -105,7 +113,7 @@ def train_epoch(model, dataloader, optimizer, criterion, scheduler, epoch, train
     train_stats.add(epoch, 'train_accuracy', avg_accuracy)
 
 
-def eval_model(model, dataloader, criterion, epoch, train_stats, split_name):
+def eval_model(model, dataloader, criterion, epoch, train_stats, split_name, amp=True):
     if dataloader is None or len(dataloader) == 0:
         train_stats.add(epoch, '{}_wall_time'.format(split_name), 0)
         train_stats.add(epoch, '{}_loss'.format(split_name), 0)
@@ -125,7 +133,19 @@ def eval_model(model, dataloader, criterion, epoch, train_stats, split_name):
             inputs = tensor_dict[0].cuda()
             labels = tensor_dict[1].cuda()
 
-            with torch.cuda.amp.autocast():
+            if amp:
+                with torch.cuda.amp.autocast():
+                    outputs = model(inputs)
+                    if GMM_ENABLED:
+                        dataset_logits.append(outputs.detach().cpu())
+                        dataset_labels.append(labels.detach().cpu())
+                    # TODO get the second to last activations as well
+                    pred = torch.argmax(outputs, dim=-1)
+                    accuracy = torch.sum(pred == labels) / len(pred)
+                    loss = criterion(outputs, labels)
+                    avg_loss += loss.item()
+                    avg_accuracy += accuracy.item()
+            else:
                 outputs = model(inputs)
                 if GMM_ENABLED:
                     dataset_logits.append(outputs.detach().cpu())
@@ -298,12 +318,12 @@ def train(args):
         logger.info("Epoch: {}".format(epoch))
         logger.info("  training")
         # TODO capture and return the full training dataset output layer (pre-softmax) and the labels
-        train_epoch(model, train_loader, optimizer, criterion, cyclic_scheduler, epoch, train_stats)
+        train_epoch(model, train_loader, optimizer, criterion, cyclic_scheduler, epoch, train_stats, args.amp)
 
         # TODO write function which buckets the output vectors by their true class label (not predicted label)
 
         logger.info("  evaluating validation data")
-        dataset_logits, class_bucketed_dataset_logits, unique_class_labels = eval_model(model, val_loader, criterion, epoch, train_stats, 'val')
+        dataset_logits, class_bucketed_dataset_logits, unique_class_labels = eval_model(model, val_loader, criterion, epoch, train_stats, 'val', args.amp)
 
         val_loss = train_stats.get_epoch('val_loss', epoch=epoch)
         plateau_scheduler.step(val_loss)
@@ -360,7 +380,7 @@ def train(args):
 
 
     logger.info('Evaluating model against test dataset')
-    eval_model(best_model, test_loader, criterion, best_epoch, train_stats, 'test')
+    eval_model(best_model, test_loader, criterion, best_epoch, train_stats, 'test', args.amp)
 
     # update the global metrics with the best epoch, to include test stats
     train_stats.update_global(best_epoch)

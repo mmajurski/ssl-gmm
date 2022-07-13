@@ -38,11 +38,12 @@ def search():
     args['learning_rate'] = 1e-2  # 3e-4
     args['loss_eps'] = 1e-3
     args['num_lr_reductions'] = 2
-    args['patience'] = 20  # 50
+    args['patience'] = 50
     args['weight_decay'] = 0.1  # 1.0
     args['cycle_factor'] = cycle_factor
     args['starting_model'] = None
     args['debug'] = False
+    args['amp'] = False
     args['val_fraction'] = float(0.1)
 
     args = argparse.Namespace(**args)

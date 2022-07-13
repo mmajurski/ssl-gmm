@@ -28,8 +28,8 @@ class Cifar10(torch.utils.data.Dataset):
     TRANSFORM_TRAIN = torchvision.transforms.Compose([
         torchvision.transforms.RandomHorizontalFlip(),
         torchvision.transforms.RandomCrop(size=32,
-                                          padding=int(32 * 0.125),
-                                          padding_mode='reflect'),
+                                          padding=int(4)),
+                                          #padding_mode='reflect'),
         torchvision.transforms.ToTensor(),
         torchvision.transforms.Normalize(mean=cifar10_mean, std=cifar10_std)
     ])
