@@ -158,7 +158,7 @@ def eval_model(model, dataloader, criterion, epoch, train_stats, split_name):
     return dataset_logits, bucketed_dataset_logits, unique_class_labels
 
 
-def eval_model_gmm(model, dataloader, gmm_list: list[GMM]):
+def eval_model_gmm(model, dataloader, gmm_list):
 
     batch_count = len(dataloader)
     model.eval()
@@ -315,7 +315,7 @@ def train(args):
                 elapsed_time = time.time() - start_time
                 logger.info("Build GMM took: {}s".format(elapsed_time))
                 gmm_models.append(gmm)
-                train_stats.add(epoch, 'class_{}_gmm_log_likelihood'.format(unique_class_labels[i]), gmm.log_likelihood)
+                train_stats.add(epoch, 'class_{}_gmm_log_likelihood'.format(unique_class_labels[i]), gmm.log_likelihood.detach().cpu().item())
 
             logger.info(unique_class_labels)
             softmax_preds, softmax_accuracy, gmm_preds, gmm_accuracy = eval_model_gmm(model, val_loader, gmm_models)
