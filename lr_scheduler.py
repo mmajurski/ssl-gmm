@@ -1,6 +1,7 @@
 import warnings
 import numpy as np
 import torch.optim
+import logging
 
 # https://pytorch.org/docs/stable/generated/torch.optim.lr_scheduler.ReduceLROnPlateau.html#reducelronplateau
 
@@ -45,10 +46,15 @@ class ReduceLROnPlateau(torch.optim.lr_scheduler.ReduceLROnPlateau):
         self.max_num_lr_reductions = max_num_lr_reductions
         self.lr_reduction_callback = lr_reduction_callback
         self.termination_callback = termination_callback
+        self.best_metric_epoch = 0
         self.metric_values = list()
 
     def is_done(self):
-        return self.num_lr_reductions >= self.max_num_lr_reductions
+        if self.max_num_lr_reductions == 0:
+            # handle intuitive case where you don't want learning rate reductions, supporting plateau termination with 0 learning rate reductions
+            return self.num_lr_reductions > self.max_num_lr_reductions
+        else:
+            return self.num_lr_reductions >= self.max_num_lr_reductions
 
     def step(self, metrics, epoch=None):
         # convert `metrics` to float, in case it's a zero-dim Tensor
@@ -66,10 +72,10 @@ class ReduceLROnPlateau(torch.optim.lr_scheduler.ReduceLROnPlateau):
             error_from_best = np.abs(np.asarray(self.metric_values) + np.nanmax(self.metric_values))
             error_from_best[error_from_best > np.abs(self.threshold)] = 0
         # unpack numpy array, select first time since that value has happened
-        best_metric_epoch = np.where(error_from_best == 0)[0][0]
+        self.best_metric_epoch = np.where(error_from_best == 0)[0][0]
 
         # update the number of "bad" epochs. The (-1) handles 0 based indexing vs natural counting of epochs
-        self.num_bad_epochs = (epoch-1) - best_metric_epoch
+        self.num_bad_epochs = (epoch-1) - self.best_metric_epoch
 
         # baseline ReduceLROnPlateau code from torch. Which has been replaced by the improved code above.
         # if self.is_better(current, self.best):
@@ -83,18 +89,19 @@ class ReduceLROnPlateau(torch.optim.lr_scheduler.ReduceLROnPlateau):
         #     self.num_bad_epochs = 0  # ignore any bad epochs in cooldown
 
         if self.num_bad_epochs > self.patience:
+            self.num_lr_reductions += 1
+            self.cooldown_counter = self.cooldown
+            self.num_bad_epochs = 0
+
             if self.num_lr_reductions >= self.max_num_lr_reductions:
                 # we have completed the requested number of learning rate reductions, call the provided function handle to let the user respond to this
                 if self.termination_callback is not None:
                     self.termination_callback()
             else:
                 self._reduce_lr(epoch)
-                self.cooldown_counter = self.cooldown
-                self.num_bad_epochs = 0
-                self.num_lr_reductions += 1
                 # invalidate the metric values from before the learning rate change, as those values should no longer be used in evaluating convergence
                 self.metric_values = [np.nan for v in self.metric_values]
                 if self.lr_reduction_callback is not None:
                     self.lr_reduction_callback()
 
-        self._last_lr = [group['lr'] for group in self.optimizer.param_groups]
+            self._last_lr = [group['lr'] for group in self.optimizer.param_groups]

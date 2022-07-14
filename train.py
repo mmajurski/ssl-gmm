@@ -40,6 +40,8 @@ def setup(args):
     # setup and load CIFAR10
     train_dataset = cifar_datasets.Cifar10(transforms=cifar_datasets.Cifar10.TRANSFORM_TRAIN, train=True, subset=args.debug)
     train_dataset, val_dataset = train_dataset.train_val_split(val_fraction=args.val_fraction)
+    # set the validation augmentation to just normalize (.dataset since val_dataset is a Subset, not a full dataset)
+    val_dataset.set_transforms(cifar_datasets.Cifar10.TRANSFORM_TEST)
 
     test_dataset = cifar_datasets.Cifar10(transforms=cifar_datasets.Cifar10.TRANSFORM_TEST, train=False)
 
@@ -54,7 +56,7 @@ def setup(args):
     return model, train_loader, val_loader, test_loader
 
 
-def train_epoch(model, dataloader, optimizer, criterion, scheduler, epoch, train_stats):
+def train_epoch(model, dataloader, optimizer, criterion, scheduler, epoch, train_stats, amp=True):
     avg_loss = 0
     avg_accuracy = 0
     model.train()
@@ -70,19 +72,27 @@ def train_epoch(model, dataloader, optimizer, criterion, scheduler, epoch, train
         labels = tensor_dict[1].cuda()
 
         # FP16 training
-        with torch.cuda.amp.autocast():
+        if amp:
+            with torch.cuda.amp.autocast():
+                outputs = model(inputs)
+                pred = torch.argmax(outputs, dim=-1)
+                accuracy = torch.sum(pred == labels)/len(pred)
+                loss = criterion(outputs, labels)
+
+                scaler.scale(loss).backward()
+                # scaler.step() first unscales the gradients of the optimizer's assigned params.
+                # If these gradients do not contain infs or NaNs, optimizer.step() is then called,
+                # otherwise, optimizer.step() is skipped.
+                scaler.step(optimizer)
+                # Updates the scale for next iteration.
+                scaler.update()
+        else:
             outputs = model(inputs)
             pred = torch.argmax(outputs, dim=-1)
             accuracy = torch.sum(pred == labels)/len(pred)
             loss = criterion(outputs, labels)
-
-            scaler.scale(loss).backward()
-            # scaler.step() first unscales the gradients of the optimizer's assigned params.
-            # If these gradients do not contain infs or NaNs, optimizer.step() is then called,
-            # otherwise, optimizer.step() is skipped.
-            scaler.step(optimizer)
-            # Updates the scale for next iteration.
-            scaler.update()
+            loss.backward()
+            optimizer.step()
 
         # nan loss values are ignored when using AMP, so ignore them for the average
         if not np.isnan(loss.detach().cpu().numpy()):
@@ -103,7 +113,7 @@ def train_epoch(model, dataloader, optimizer, criterion, scheduler, epoch, train
     train_stats.add(epoch, 'train_accuracy', avg_accuracy)
 
 
-def eval_model(model, dataloader, criterion, epoch, train_stats, split_name):
+def eval_model(model, dataloader, criterion, epoch, train_stats, split_name, amp=True):
     if dataloader is None or len(dataloader) == 0:
         train_stats.add(epoch, '{}_wall_time'.format(split_name), 0)
         train_stats.add(epoch, '{}_loss'.format(split_name), 0)
@@ -123,7 +133,19 @@ def eval_model(model, dataloader, criterion, epoch, train_stats, split_name):
             inputs = tensor_dict[0].cuda()
             labels = tensor_dict[1].cuda()
 
-            with torch.cuda.amp.autocast():
+            if amp:
+                with torch.cuda.amp.autocast():
+                    outputs = model(inputs)
+                    if GMM_ENABLED:
+                        dataset_logits.append(outputs.detach().cpu())
+                        dataset_labels.append(labels.detach().cpu())
+                    # TODO get the second to last activations as well
+                    pred = torch.argmax(outputs, dim=-1)
+                    accuracy = torch.sum(pred == labels) / len(pred)
+                    loss = criterion(outputs, labels)
+                    avg_loss += loss.item()
+                    avg_accuracy += accuracy.item()
+            else:
                 outputs = model(inputs)
                 if GMM_ENABLED:
                     dataset_logits.append(outputs.detach().cpu())
@@ -240,6 +262,8 @@ def train(args):
 
     logging.getLogger().addHandler(logging.StreamHandler())
 
+    logger.info(args)
+
     model, train_loader, val_loader, test_loader = setup(args)
 
     # write the arg configuration to disk
@@ -259,11 +283,17 @@ def train(args):
     criterion = torch.nn.CrossEntropyLoss()
 
     # Setup optimizer
-    optimizer = torch.optim.AdamW(model.parameters(), lr=args.learning_rate)#, weight_decay=5e-4)
+    if args.weight_decay is not None:
+        optimizer = torch.optim.AdamW(model.parameters(), lr=args.learning_rate, weight_decay=args.weight_decay)
+    else:
+        optimizer = torch.optim.AdamW(model.parameters(), lr=args.learning_rate)
     # setup LR reduction on plateau
-    plateau_scheduler = lr_scheduler.ReduceLROnPlateau(optimizer, mode='min', factor=0.1, patience=args.patience, threshold=args.loss_eps, max_num_lr_reductions=3, lr_reduction_callback=lr_reduction_callback)
+    plateau_scheduler = lr_scheduler.ReduceLROnPlateau(optimizer, mode='min', factor=0.2, patience=args.patience, threshold=args.loss_eps, max_num_lr_reductions=args.num_lr_reductions, lr_reduction_callback=lr_reduction_callback)
 
-    cyclic_scheduler = torch.optim.lr_scheduler.CyclicLR(optimizer, base_lr=args.learning_rate/args.cycle_factor, max_lr=args.learning_rate*args.cycle_factor, step_size_up=int(len(train_loader) / 2), cycle_momentum=False)
+    if args.cycle_factor is not None:
+        cyclic_scheduler = torch.optim.lr_scheduler.CyclicLR(optimizer, base_lr=args.learning_rate/args.cycle_factor, max_lr=args.learning_rate*args.cycle_factor, step_size_up=int(len(train_loader) / 2), cycle_momentum=False)
+    else:
+        cyclic_scheduler = None
 
     # setup the metadata capture object
     train_stats = metadata.TrainingStats()
@@ -281,16 +311,16 @@ def train(args):
         logger.info("Epoch: {}".format(epoch))
         logger.info("  training")
         # TODO capture and return the full training dataset output layer (pre-softmax) and the labels
-        train_epoch(model, train_loader, optimizer, criterion, cyclic_scheduler, epoch, train_stats)
+        train_epoch(model, train_loader, optimizer, criterion, cyclic_scheduler, epoch, train_stats, args.amp)
 
         # TODO write function which buckets the output vectors by their true class label (not predicted label)
 
         logger.info("  evaluating validation data")
-        dataset_logits, class_bucketed_dataset_logits, unique_class_labels = eval_model(model, val_loader, criterion, epoch, train_stats, 'val')
+        dataset_logits, class_bucketed_dataset_logits, unique_class_labels = eval_model(model, val_loader, criterion, epoch, train_stats, 'val', args.amp)
 
         val_loss = train_stats.get_epoch('val_loss', epoch=epoch)
         plateau_scheduler.step(val_loss)
-
+        
         # dataset_logits is N x num_classes, where N is the number of examples in the dataset
 
         train_stats.add_global('training_wall_time', sum(train_stats.get('train_wall_time')))
@@ -330,8 +360,9 @@ def train(args):
 
         # handle early stopping when loss converges
         val_loss = train_stats.get('val_loss')
-        error_from_best = np.abs(val_loss - np.min(val_loss))
-        error_from_best[error_from_best < np.abs(args.loss_eps)] = 0
+        # error_from_best = np.abs(val_loss - np.min(val_loss))
+        # error_from_best[error_from_best < np.abs(args.loss_eps)] = 0
+        
         # if this epoch is with convergence tolerance of the global best, save the weights
         #if error_from_best[epoch] == 0:
         if plateau_scheduler.num_bad_epochs == 0:
@@ -344,7 +375,7 @@ def train(args):
 
 
     logger.info('Evaluating model against test dataset')
-    eval_model(best_model, test_loader, criterion, best_epoch, train_stats, 'test')
+    eval_model(best_model, test_loader, criterion, best_epoch, train_stats, 'test', args.amp)
 
     # update the global metrics with the best epoch, to include test stats
     train_stats.update_global(best_epoch)

@@ -4,3 +4,5 @@ __pycache__/
 data/
 # ignore all model directories
 *model*/
+model.zip
+*.pyc
