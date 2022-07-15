@@ -18,15 +18,8 @@ def search():
 
     fp = os.path.join(FOLDER_PATH, "id-{:08}".format(n))
 
-    loss_eps = np.random.uniform(1e-4, 1e-2)
-    patience = np.random.randint(40, 101)
-    #cycle_factor = float(np.random.uniform(2, 5))
-    cycle_factor = None
-    # if np.random.rand() > 0.5:
-    #     cycle_factor = None
-
-    # learning_rate = np.random.uniform(1e-4, 5e-3)
-
+    weight_decay = np.random.uniform(0.1, 1.0)
+    
     # from "Benchopt: Reproducible, efficient and collaborative optimization benchmarks" page 28
     # from "Lookahead optimizer: k Steps forward, 1 step back" page 17
 
@@ -35,16 +28,17 @@ def search():
     args['num_workers'] = 2
     args['output_filepath'] = fp
     args['batch_size'] = 128
-    args['learning_rate'] = 1e-2  # 3e-4
+    args['learning_rate'] = 1e-3  # 3e-4
     args['loss_eps'] = 1e-3
-    args['num_lr_reductions'] = 2
+    args['num_lr_reductions'] = 3
+    args['lr_reduction_factor'] = 0.25
     args['patience'] = 50
-    args['weight_decay'] = 0.1  # 1.0
-    args['cycle_factor'] = cycle_factor
+    args['weight_decay'] = weight_decay
+    args['cycle_factor'] = None
     args['starting_model'] = None
     args['debug'] = False
-    args['amp'] = False
-    args['val_fraction'] = float(0.1)
+    args['amp'] = True
+    args['val_fraction'] = float(0.2)
 
     args = argparse.Namespace(**args)
 
@@ -71,7 +65,7 @@ def select():
                 config_dict = json.load(fh)
 
             if 'test_accuracy' not in stats_dict.keys():
-                print(fn)
+                print("{} missing test_accuracy".format(fn))
                 continue
 
             config_vector.append(config_dict)

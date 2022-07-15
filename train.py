@@ -39,21 +39,17 @@ def setup(args):
 
     # setup and load CIFAR10
     train_dataset = cifar_datasets.Cifar10(transforms=cifar_datasets.Cifar10.TRANSFORM_TRAIN, train=True, subset=args.debug)
-    train_dataset, val_dataset = train_dataset.train_val_split(val_fraction=args.val_fraction)
-    # set the validation augmentation to just normalize (.dataset since val_dataset is a Subset, not a full dataset)
-    val_dataset.set_transforms(cifar_datasets.Cifar10.TRANSFORM_TEST)
-
-    test_dataset = cifar_datasets.Cifar10(transforms=cifar_datasets.Cifar10.TRANSFORM_TEST, train=False)
+    
+    val_dataset = cifar_datasets.Cifar10(transforms=cifar_datasets.Cifar10.TRANSFORM_TEST, train=False)
 
     train_loader = torch.utils.data.DataLoader(train_dataset, batch_size=args.batch_size, shuffle=True, num_workers=args.num_workers, worker_init_fn=cifar_datasets.worker_init_fn)
     val_loader = torch.utils.data.DataLoader(val_dataset, batch_size=args.batch_size, shuffle=True, num_workers=args.num_workers, worker_init_fn=cifar_datasets.worker_init_fn)
-    test_loader = torch.utils.data.DataLoader(test_dataset, batch_size=args.batch_size, shuffle=True, num_workers=args.num_workers, worker_init_fn=cifar_datasets.worker_init_fn)
 
     # # wrap the model into a single node DataParallel
     # if not isinstance(model, torch.nn.DataParallel):
     #     model = torch.nn.DataParallel(model)
 
-    return model, train_loader, val_loader, test_loader
+    return model, train_loader, val_loader
 
 
 def train_epoch(model, dataloader, optimizer, criterion, scheduler, epoch, train_stats, amp=True):
@@ -271,7 +267,7 @@ def train(args):
 
     logger.info(args)
 
-    model, train_loader, val_loader, test_loader = setup(args)
+    model, train_loader, val_loader = setup(args)
 
     # write the arg configuration to disk
     dvals = vars(args)
@@ -295,7 +291,7 @@ def train(args):
     else:
         optimizer = torch.optim.AdamW(model.parameters(), lr=args.learning_rate)
     # setup LR reduction on plateau
-    plateau_scheduler = lr_scheduler.ReduceLROnPlateau(optimizer, mode='min', factor=0.2, patience=args.patience, threshold=args.loss_eps, max_num_lr_reductions=args.num_lr_reductions, lr_reduction_callback=lr_reduction_callback)
+    plateau_scheduler = lr_scheduler.ReduceLROnPlateau(optimizer, mode='min', factor=args.lr_reduction_factor, patience=args.patience, threshold=args.loss_eps, max_num_lr_reductions=args.num_lr_reductions, lr_reduction_callback=lr_reduction_callback)
 
     if args.cycle_factor is not None:
         cyclic_scheduler = torch.optim.lr_scheduler.CyclicLR(optimizer, base_lr=args.learning_rate/args.cycle_factor, max_lr=args.learning_rate*args.cycle_factor, step_size_up=int(len(train_loader) / 2), cycle_momentum=False)
@@ -378,9 +374,6 @@ def train(args):
             # update the global metrics with the best epoch
             train_stats.update_global(epoch)
 
-
-    logger.info('Evaluating model against test dataset')
-    eval_model(best_model, test_loader, criterion, best_epoch, train_stats, 'test', args.amp)
 
     # update the global metrics with the best epoch, to include test stats
     train_stats.update_global(best_epoch)
