@@ -9,11 +9,11 @@ import logging
 
 import cifar_datasets
 import metadata
-import mmm
+from gmm_module import GMM
 import lr_scheduler
 
 MAX_EPOCHS = 1000
-GMM_ENABLED = False
+GMM_ENABLED = True
 
 logger = logging.getLogger()
 
@@ -203,24 +203,17 @@ def eval_model_gmm(model, dataloader, gmm_list):
                 # passing the logits acquired before the softmax to gmm as inputs
                 gmm_inputs = outputs.detach().cpu()
 
-                # create mu_list and cov_list
-                mu_list = torch.cat([i.mu for i in gmm_list])
-                cov_list = torch.cat([i.cov for i in gmm_list])
+                # generate weights, mus and sigmas
+                weights = class_preval
+                mus = torch.cat([gmm.get("mu") for gmm in gmm_list])
+                sigmas = torch.cat([gmm.get("sigma") for gmm in gmm_list])
 
-                # using single object and list of mu and cov to do the computations faster as the only class variable
-                # used is dimension which will be same for all gmms making it safe to do so
-                gmm_probs = gmm_list[0].predict_probs(gmm_inputs, mu_list, cov_list)  # N*K
-                gmm_probs_sum = torch.sum(gmm_probs, 1)  # N*1
+                # create new GMM object for combined data
+                gmm = GMM(n_features=gmm_inputs.shape[1], n_clusters=weights.shape[0], weights=weights, mu=mus, sigma=sigmas)
 
+                gmm_resp = gmm.predict_probability(gmm_inputs)  # N*K
 
-                # TODO (JD) confirm the sequence of k is same for gmm_probs and class_preval
-                # (one is done with np.unique one with torch.unique)
-
-                numerator = gmm_probs * class_preval
-                gmm_outputs_t = torch.transpose(numerator,0,1) / gmm_probs_sum
-                gmm_outputs = torch.transpose(gmm_outputs_t,0,1)
-
-                gmm_pred = torch.argmax(gmm_outputs, dim=-1)
+                gmm_pred = torch.argmax(gmm_resp, dim=-1)
                 gmm_preds.append(gmm_pred.reshape(-1))
                 labels_cpu = labels.detach().cpu()
                 accuracy_g = torch.sum(gmm_pred == labels_cpu) / len(gmm_pred)
@@ -228,8 +221,8 @@ def eval_model_gmm(model, dataloader, gmm_list):
 
         gmm_accuracy = torch.mean(torch.cat(gmm_accuracy, dim=-1))
         softmax_accuracy = torch.mean(torch.cat(softmax_accuracy, dim=-1))
-        gmm_preds = torch.mean(torch.cat(gmm_preds, dim=-1))
-        softmax_preds = torch.mean(torch.cat(softmax_preds, dim=-1))
+        gmm_preds = torch.mean(torch.cat(gmm_preds, dim=-1).type(torch.float16))
+        softmax_preds = torch.mean(torch.cat(softmax_preds, dim=-1).type(torch.float16))
 
         return softmax_preds, softmax_accuracy, gmm_preds, gmm_accuracy
 
@@ -333,20 +326,22 @@ def train(args):
         if GMM_ENABLED:  # and epoch > 10:
             logger.info(" gmm work starts")
             gmm_models = list()
+            class_instances = list()
             for i in range(len(unique_class_labels)):
                 class_c_logits = class_bucketed_dataset_logits[i]
+                class_instances.append(class_c_logits.shape[0])
                 start_time = time.time()
-                gmm = mmm.GMM(class_c_logits, num_clusters=1, tolerance=1e-4, num_iterations=50)
-                gmm.convergence()
-                while np.any(np.isnan(gmm.cov.detach().cpu().numpy())):
-                    gmm = mmm.GMM(class_c_logits, num_clusters=1, tolerance=1e-4, num_iterations=50)
-                    gmm.convergence()
-                else:
-                    gmm.logger.export()
+                gmm = GMM(n_features=class_c_logits.shape[1], n_clusters=1, tolerance=1e-4, max_iter=50)
+                gmm.fit(class_c_logits)
+                while np.any(np.isnan(gmm.get("sigma").detach().cpu().numpy())):
+                    gmm = GMM(n_features=class_c_logits.shape[1], n_clusters=1, tolerance=1e-4, max_iter=50)
+                    gmm.fit(class_c_logits)
+                # else:
+                #     gmm.logger.export()
                 elapsed_time = time.time() - start_time
                 logger.info("Build GMM took: {}s".format(elapsed_time))
                 gmm_models.append(gmm)
-                train_stats.add(epoch, 'class_{}_gmm_log_likelihood'.format(unique_class_labels[i]), gmm.log_likelihood)
+                train_stats.add(epoch, 'class_{}_gmm_log_likelihood'.format(unique_class_labels[i]), gmm.log_likelihood.detach().cpu().item())
 
             logger.info(unique_class_labels)
             softmax_preds, softmax_accuracy, gmm_preds, gmm_accuracy = eval_model_gmm(model, val_loader, gmm_models)
