@@ -50,11 +50,7 @@ class ReduceLROnPlateau(torch.optim.lr_scheduler.ReduceLROnPlateau):
         self.metric_values = list()
 
     def is_done(self):
-        if self.max_num_lr_reductions == 0:
-            # handle intuitive case where you don't want learning rate reductions, supporting plateau termination with 0 learning rate reductions
-            return self.num_lr_reductions > self.max_num_lr_reductions
-        else:
-            return self.num_lr_reductions >= self.max_num_lr_reductions
+        return self.num_lr_reductions > self.max_num_lr_reductions
 
     def step(self, metrics, epoch=None):
         # convert `metrics` to float, in case it's a zero-dim Tensor
@@ -77,23 +73,12 @@ class ReduceLROnPlateau(torch.optim.lr_scheduler.ReduceLROnPlateau):
         # update the number of "bad" epochs. The (-1) handles 0 based indexing vs natural counting of epochs
         self.num_bad_epochs = (epoch-1) - self.best_metric_epoch
 
-        # baseline ReduceLROnPlateau code from torch. Which has been replaced by the improved code above.
-        # if self.is_better(current, self.best):
-        #     self.best = current
-        #     self.num_bad_epochs = 0
-        # else:
-        #     self.num_bad_epochs += 1
-        #
-        # if self.in_cooldown:
-        #     self.cooldown_counter -= 1
-        #     self.num_bad_epochs = 0  # ignore any bad epochs in cooldown
-
         if self.num_bad_epochs > self.patience:
             self.num_lr_reductions += 1
             self.cooldown_counter = self.cooldown
             self.num_bad_epochs = 0
 
-            if self.num_lr_reductions >= self.max_num_lr_reductions:
+            if self.num_lr_reductions > self.max_num_lr_reductions:
                 # we have completed the requested number of learning rate reductions, call the provided function handle to let the user respond to this
                 if self.termination_callback is not None:
                     self.termination_callback()

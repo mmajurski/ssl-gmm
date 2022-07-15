@@ -30,7 +30,7 @@ def search():
     args['batch_size'] = 128
     args['learning_rate'] = 1e-3  # 3e-4
     args['loss_eps'] = 1e-3
-    args['num_lr_reductions'] = 3
+    args['num_lr_reductions'] = 2
     args['lr_reduction_factor'] = 0.25
     args['patience'] = 50
     args['weight_decay'] = weight_decay
