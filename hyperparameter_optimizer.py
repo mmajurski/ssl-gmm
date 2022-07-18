@@ -17,8 +17,11 @@ def search():
         n += 1
 
     fp = os.path.join(FOLDER_PATH, "id-{:08}".format(n))
-
+    learning_rate = np.random.choice([1e-3, 3e-4])
     weight_decay = np.random.uniform(0.1, 1.0)
+    cycle_factor = float(np.random.uniform(2, 5))
+    if np.random.rand() > 0.5:
+        cycle_factor = None
     
     # from "Benchopt: Reproducible, efficient and collaborative optimization benchmarks" page 28
     # from "Lookahead optimizer: k Steps forward, 1 step back" page 17
@@ -28,17 +31,17 @@ def search():
     args['num_workers'] = 2
     args['output_filepath'] = fp
     args['batch_size'] = 128
-    args['learning_rate'] = 1e-3  # 3e-4
-    args['loss_eps'] = 1e-3
+    args['learning_rate'] = 3e-4
+    args['loss_eps'] = 1e-4
     args['num_lr_reductions'] = 2
     args['lr_reduction_factor'] = 0.25
     args['patience'] = 50
     args['weight_decay'] = weight_decay
-    args['cycle_factor'] = None
+    args['cycle_factor'] = cycle_factor
     args['starting_model'] = None
     args['debug'] = False
-    args['amp'] = True
-    args['val_fraction'] = float(0.2)
+    args['amp'] = True #bool(np.random.uniform(0, 1.0) > 0.5)
+    args['val_fraction'] = float(0.1)
 
     args = argparse.Namespace(**args)
 
@@ -64,21 +67,21 @@ def select():
             with open(config_fp, 'r') as fh:
                 config_dict = json.load(fh)
 
-            if 'test_accuracy' not in stats_dict.keys():
-                print("{} missing test_accuracy".format(fn))
+            if 'val_accuracy' not in stats_dict.keys():
+                print("{} missing val_accuracy".format(fn))
                 continue
 
             config_vector.append(config_dict)
-            acc_vector.append(stats_dict['test_accuracy'])
+            acc_vector.append(stats_dict['val_accuracy'])
 
             if best_config is None:
                 best_config = config_dict
-                best_accuracy = stats_dict['test_accuracy']
+                best_accuracy = stats_dict['val_accuracy']
                 best_model = fn
             else:
-                if stats_dict['test_accuracy'] > best_accuracy:
+                if stats_dict['val_accuracy'] > best_accuracy:
                     best_config = config_dict
-                    best_accuracy = stats_dict['test_accuracy']
+                    best_accuracy = stats_dict['val_accuracy']
                     best_model = fn
 
     print("Best Config (test accuracy = {}):".format(best_accuracy))
@@ -110,31 +113,31 @@ def select():
     plt.scatter(learning_rate_vals, acc_vector)
     plt.xlabel('Learning Rage')
     plt.ylabel('Accuracy')
-    plt.title('Test Accuracy vs Learning Rate')
+    plt.title('Val Accuracy vs Learning Rate')
     plt.show()
 
     plt.scatter(loss_eps_vals, acc_vector)
     plt.xlabel('Loss Eps')
     plt.ylabel('Accuracy')
-    plt.title('Test Accuracy vs Loss Eps')
+    plt.title('Val Accuracy vs Loss Eps')
     plt.show()
 
     plt.scatter(patience_vals, acc_vector)
     plt.xlabel('Patience')
     plt.ylabel('Accuracy')
-    plt.title('Test Accuracy vs Patience')
+    plt.title('Val Accuracy vs Patience')
     plt.show()
 
     plt.scatter(cycle_factor_vals, acc_vector)
     plt.xlabel('Cycle Factor')
     plt.ylabel('Accuracy')
-    plt.title('Test Accuracy vs Cycle Factor')
+    plt.title('Val Accuracy vs Cycle Factor')
     plt.show()
 
     plt.scatter(val_fraction_vals, acc_vector)
     plt.xlabel('Validation Fraction')
     plt.ylabel('Accuracy')
-    plt.title('Test Accuracy vs Validation Fraction')
+    plt.title('Val Accuracy vs Validation Fraction')
     plt.show()
 
 

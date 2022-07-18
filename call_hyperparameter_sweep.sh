@@ -14,8 +14,6 @@ python hyperparameter_optimizer.py &
 INDEX=$((INDEX+1))
 python hyperparameter_optimizer.py &
 INDEX=$((INDEX+1))
-python hyperparameter_optimizer.py &
-INDEX=$((INDEX+1))
 
 # loop over the remainder of the count to be generated, and when one of the two running jobs completes, launch a new one
 for i in $(seq $TOTAL_MODEL_COUNT); do

@@ -11,6 +11,7 @@ import cifar_datasets
 import metadata
 from gmm_module import GMM
 import lr_scheduler
+import flavored_resnets
 
 MAX_EPOCHS = 1000
 GMM_ENABLED = False
@@ -26,7 +27,8 @@ def setup(args):
         model = torch.load(args.starting_model)
     else:
         if args.arch == 'resnet18':
-            model = torchvision.models.resnet18(pretrained=False, num_classes=10)
+            #model = torchvision.models.resnet18(pretrained=False, num_classes=10)
+            model = flavored_resnets.ResNet18(num_classes=10)
         if args.arch == 'resnet34':
             model = torchvision.models.resnet34(pretrained=False, num_classes=10)
         if args.arch == 'resnext50_32x4d':
@@ -39,17 +41,23 @@ def setup(args):
 
     # setup and load CIFAR10
     train_dataset = cifar_datasets.Cifar10(transforms=cifar_datasets.Cifar10.TRANSFORM_TRAIN, train=True, subset=args.debug)
-    
-    val_dataset = cifar_datasets.Cifar10(transforms=cifar_datasets.Cifar10.TRANSFORM_TEST, train=False)
+
+    train_dataset, val_dataset = train_dataset.train_val_split(val_fraction=args.val_fraction)
+    # set the validation augmentation to just normalize (.dataset since val_dataset is a Subset, not a full dataset)
+    val_dataset.set_transforms(cifar_datasets.Cifar10.TRANSFORM_TEST)
+
+    test_dataset = cifar_datasets.Cifar10(transforms=cifar_datasets.Cifar10.TRANSFORM_TEST, train=False)
+
 
     train_loader = torch.utils.data.DataLoader(train_dataset, batch_size=args.batch_size, shuffle=True, num_workers=args.num_workers, worker_init_fn=cifar_datasets.worker_init_fn)
     val_loader = torch.utils.data.DataLoader(val_dataset, batch_size=args.batch_size, shuffle=True, num_workers=args.num_workers, worker_init_fn=cifar_datasets.worker_init_fn)
+    test_loader = torch.utils.data.DataLoader(test_dataset, batch_size=args.batch_size, shuffle=True, num_workers=args.num_workers, worker_init_fn=cifar_datasets.worker_init_fn)
 
     # # wrap the model into a single node DataParallel
     # if not isinstance(model, torch.nn.DataParallel):
     #     model = torch.nn.DataParallel(model)
 
-    return model, train_loader, val_loader
+    return model, train_loader, val_loader, test_loader
 
 
 def train_epoch(model, dataloader, optimizer, criterion, scheduler, epoch, train_stats, amp=True):
@@ -260,7 +268,7 @@ def train(args):
 
     logger.info(args)
 
-    model, train_loader, val_loader = setup(args)
+    model, train_loader, val_loader, test_loader = setup(args)
 
     # write the arg configuration to disk
     dvals = vars(args)
@@ -353,14 +361,8 @@ def train(args):
         # write copy of current metadata metrics to disk
         train_stats.export(args.output_filepath)
 
-
         # handle early stopping when loss converges
         val_loss = train_stats.get('val_loss')
-        # error_from_best = np.abs(val_loss - np.min(val_loss))
-        # error_from_best[error_from_best < np.abs(args.loss_eps)] = 0
-        
-        # if this epoch is with convergence tolerance of the global best, save the weights
-        #if error_from_best[epoch] == 0:
         if plateau_scheduler.num_bad_epochs == 0:
             logger.info('Updating best model with epoch: {} loss: {}'.format(epoch, val_loss[epoch]))
             best_model = copy.deepcopy(model)
@@ -369,6 +371,8 @@ def train(args):
             # update the global metrics with the best epoch
             train_stats.update_global(epoch)
 
+    logger.info('Evaluating model against test dataset')
+    eval_model(best_model, test_loader, criterion, best_epoch, train_stats, 'test', args.amp)
 
     # update the global metrics with the best epoch, to include test stats
     train_stats.update_global(best_epoch)
