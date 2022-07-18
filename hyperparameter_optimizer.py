@@ -43,6 +43,7 @@ def search():
     args['amp'] = True #bool(np.random.uniform(0, 1.0) > 0.5)
     args['val_fraction'] = float(0.1)
 
+
     args = argparse.Namespace(**args)
 
     stats = train.train(args)
@@ -144,8 +145,8 @@ def select():
 
 
 if __name__ == '__main__':
-    search()
-    #select()
+    #search()
+    select()
 
 
 
