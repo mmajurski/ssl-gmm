@@ -14,7 +14,7 @@ import lr_scheduler
 import flavored_resnets
 
 MAX_EPOCHS = 1000
-GMM_ENABLED = False
+GMM_ENABLED = True
 
 logger = logging.getLogger()
 
@@ -304,9 +304,9 @@ def train(args):
         epoch += 1
         logger.info("Epoch: {}".format(epoch))
         logger.info("  training")
+        # TODO (JD/Rushabh) build the GMM only on the train dataset
         # dataset_logits is N x num_classes, where N is the number of examples in the dataset
         dataset_logits, class_bucketed_dataset_logits, unique_class_labels = train_epoch(model, train_dataset, optimizer, criterion, cyclic_scheduler, epoch, train_stats, args)
-
         # TODO write function which buckets the output vectors by their true class label (not predicted label)
 
         logger.info("  evaluating validation data")
@@ -344,6 +344,9 @@ def train(args):
             logger.info("Softmax Accuracy: {}".format(softmax_accuracy))
             logger.info("GMM Accuracy: {}".format(gmm_accuracy))
 
+        # TODO insert cifar100 pseudo-labeling
+        # TODO make a second train function to do the SSL work in
+
         # update the number of epochs trained
         train_stats.add_global('num_epochs_trained', epoch)
         # write copy of current metadata metrics to disk
@@ -361,6 +364,8 @@ def train(args):
 
     logger.info('Evaluating model against test dataset')
     eval_model(best_model, test_dataset, criterion, best_epoch, train_stats, 'test', args)
+
+    # TODO (JD/Rushabh) evaluate the gmm vs softmax on the test data
 
     # update the global metrics with the best epoch, to include test stats
     train_stats.update_global(best_epoch)
