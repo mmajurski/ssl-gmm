@@ -14,7 +14,7 @@ import lr_scheduler
 import flavored_resnets
 
 MAX_EPOCHS = 1000
-GMM_ENABLED = True
+GMM_ENABLED = False
 
 logger = logging.getLogger()
 
@@ -278,9 +278,16 @@ def train(args):
 
     # Setup optimizer
     if args.weight_decay is not None:
-        optimizer = torch.optim.AdamW(model.parameters(), lr=args.learning_rate, weight_decay=args.weight_decay)
+        if args.optimizer == 'sgd':
+            optimizer = torch.optim.SGD(model.parameters(), lr=args.learning_rate, weight_decay=args.weight_decay, momentum=0.9, nesterov=args.nesterov)
+        else:
+            optimizer = torch.optim.AdamW(model.parameters(), lr=args.learning_rate, weight_decay=args.weight_decay)
     else:
-        optimizer = torch.optim.AdamW(model.parameters(), lr=args.learning_rate)
+        if args.optimizer == 'sgd':
+            optimizer = torch.optim.SGD(model.parameters(), lr=args.learning_rate, momentum=0.9, nesterov=args.nesterov)
+        else:
+            optimizer = torch.optim.AdamW(model.parameters(), lr=args.learning_rate)
+
     # setup LR reduction on plateau
     plateau_scheduler = lr_scheduler.ReduceLROnPlateau(optimizer, mode='min', factor=args.lr_reduction_factor, patience=args.patience, threshold=args.loss_eps, max_num_lr_reductions=args.num_lr_reductions)
 
