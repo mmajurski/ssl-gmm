@@ -1,11 +1,14 @@
 import copy
 import sys
 import os
+from typing import Any, Callable, Optional, Tuple
 
 import numpy as np
+import PIL.Image
 import torch
 import torchvision
 import logging
+import random
 
 
 logger = logging.getLogger()
@@ -38,96 +41,144 @@ class Cifar10(torch.utils.data.Dataset):
         torchvision.transforms.Normalize(mean=cifar10_mean, std=cifar10_std)
     ])
 
-    def __init__(self, transforms=None, train:bool=True, subset=False, lcl_fldr:str='./data'):
-        self.lcl_fldr = lcl_fldr
-        self._transforms = transforms
-        if train:
-            self._dataset = torchvision.datasets.CIFAR10(self.lcl_fldr, train=True, download=True, transform=self._transforms)
-        else:
-            self._dataset = torchvision.datasets.CIFAR10(self.lcl_fldr, train=False, download=True, transform=self._transforms)
+    def __init__(self, transform=None, train:bool=True, subset=False, lcl_fldr:str='./data'):
 
+        self.lcl_fldr = lcl_fldr
+        self.transform = transform
+        if train:
+            _dataset = torchvision.datasets.CIFAR10(self.lcl_fldr, train=True, download=True)
+        else:
+            _dataset = torchvision.datasets.CIFAR10(self.lcl_fldr, train=False, download=True)
+
+        self.targets = _dataset.targets
+        # break the data up into a list instead of a single numpy block to allow deleting and addition
+        self.data = list()
+        data_len = _dataset.data.shape[0]
         if subset:
             # for debugging, keep just 10% of the data to accelerate things
-            train_size = int(0.1 * len(self._dataset))
-            val_size = len(self._dataset) - train_size
-            self._dataset, _ = torch.utils.data.random_split(self._dataset, [train_size, val_size])
+            data_len = int(0.1 * data_len)
+
+        for i in range(data_len):
+            self.data.append(_dataset.data[i, :, :, :])
+
+        # cleanup the tmp CIFAR object
+        del _dataset
+
+    def __len__(self) -> int:
+        return len(self.data)
+
+    def __getitem__(self, index: int) -> Tuple[Any, Any]:
+        """
+        Args:
+            index (int): Index
+
+        Returns:
+            tuple: (image, target) where target is index of the target class.
+        """
+        img, target = self.data[index], self.targets[index]
+
+        # doing this so that it is consistent with all other datasets
+        # to return a PIL Image
+        img = PIL.Image.fromarray(img)
+
+        if self.transform is not None:
+            img = self.transform(img)
+
+        return img, target
+
+    def get(self, index:int) -> Tuple[Any, Any]:
+        """
+        Args:
+            index (int): Index
+
+        Returns:
+            tuple: (image, target) where target is index of the target class.
+        """
+        img, target = self.data[index], self.targets[index]
+        return img, target
+
+    def remove_datapoint(self, index):
+        del self.data[index]
+        del self.targets[index]
+
+    def add_datapoint(self, img, target):
+        if not isinstance(img, np.ndarray):
+            raise RuntimeError("Added image must be numpy array with shape [h,w,c]")
+        if not len(img.shape) == 3:
+            raise RuntimeError("Added image must be numpy array with shape [h,w,c]")
+        if not isinstance(target, int):
+            raise RuntimeError("Added target must be integer")
+        self.data.append(img)
+        self.targets.append(target)
 
     def set_transforms(self, transforms):
-        self._transforms = transforms
-        # handle potential Subset wrapper instead of the bare metal dataset
-        if hasattr(self._dataset, 'transforms'):
-            self._dataset.transforms = transforms
-        if hasattr(self._dataset, 'dataset'):
-            self._dataset.dataset.transforms = transforms
+        self.transform = transforms
 
     def train_val_split(self, val_fraction: float = 0.1):
-        train_fraction = 1.0 - val_fraction
-        if train_fraction <= 0.0:
-            raise RuntimeError("Train fraction too small. {}% of the data was allocated to training split, {}% to validation split.".format(int(train_fraction * 100), int(val_fraction * 100)))
-        logging.info("Train data fraction: {}, Validation data fraction: {}".format(train_fraction, val_fraction))
+        if val_fraction < 0.0 or val_fraction > 1.0:
+            raise RuntimeError("Impossible validation fraction {}.".format(val_fraction))
 
-        val_size = int(val_fraction * len(self._dataset))
-        train_size = len(self._dataset) - val_size
+        val_size = int(val_fraction * len(self.data))
 
-        t, v = torch.utils.data.random_split(self._dataset, [train_size, val_size])
+        idx = list(range(len(self.data)))
+        random.shuffle(idx)
+        v_idx = idx[0:val_size]
+        t_idx = idx[val_size:]
+        t_idx.sort()
+        v_idx.sort()
+
         train_dataset = copy.deepcopy(self)
         val_dataset = copy.deepcopy(self)
-        train_dataset._dataset = t
-        val_dataset._dataset = v
+        train_dataset.data = list()
+        for i in t_idx:
+            train_dataset.data.append(self.data[i])
+        train_dataset.targets = list()
+        for i in t_idx:
+            train_dataset.targets.append(self.targets[i])
+
+        val_dataset.data = list()
+        for i in v_idx:
+            val_dataset.data.append(self.data[i])
+        val_dataset.targets = list()
+        for i in v_idx:
+            val_dataset.targets.append(self.targets[i])
 
         return train_dataset, val_dataset
 
-    def __getitem__(self, index):
-        return self._dataset.__getitem__(index)
-
-    def __len__(self):
-        return self._dataset.__len__()
 
 
-
-class Cifar100(torch.utils.data.Dataset):
+class Cifar100(Cifar10):
     TRANSFORM_TRAIN = torchvision.transforms.Compose([
         torchvision.transforms.RandomHorizontalFlip(),
         torchvision.transforms.RandomCrop(size=32,
                                           padding=int(32 * 0.125),
                                           padding_mode='reflect'),
         torchvision.transforms.ToTensor(),
-        torchvision.transforms.Normalize(mean=cifar10_mean, std=cifar10_std)
+        torchvision.transforms.Normalize(mean=cifar100_mean, std=cifar100_std)
     ])
     TRANSFORM_TEST = torchvision.transforms.Compose([
         torchvision.transforms.ToTensor(),
-        torchvision.transforms.Normalize(mean=cifar10_mean, std=cifar10_std)
+        torchvision.transforms.Normalize(mean=cifar100_mean, std=cifar100_std)
     ])
 
-    def __init__(self, transforms=None, train:bool=True, subset=False, lcl_fldr:str='./data'):
+    def __init__(self, transform=None, train:bool=True, subset=False, lcl_fldr:str='./data'):
         self.lcl_fldr = lcl_fldr
-        self._transforms = transforms
+        self.transform = transform
         if train:
-            self._dataset = torchvision.datasets.CIFAR100(self.lcl_fldr, train=True, download=True, transform=self._transforms)
+            _dataset = torchvision.datasets.CIFAR100(self.lcl_fldr, train=True, download=True)
         else:
-            self._dataset = torchvision.datasets.CIFAR100(self.lcl_fldr, train=False, download=True, transform=self._transforms)
+            _dataset = torchvision.datasets.CIFAR100(self.lcl_fldr, train=False, download=True)
 
+        self.targets = _dataset.targets
+        # break the data up into a list instead of a single numpy block to allow deleting and addition
+        self.data = list()
+        data_len = _dataset.data.shape[0]
         if subset:
             # for debugging, keep just 10% of the data to accelerate things
-            train_size = int(0.1 * len(self._dataset))
-            val_size = len(self._dataset) - train_size
-            self._dataset, _ = torch.utils.data.random_split(self._dataset, [train_size, val_size])
+            data_len = int(0.1 * data_len)
 
-    def train_val_split(self, val_fraction: float = 0.1):
-        train_fraction = 1.0 - val_fraction
-        if train_fraction <= 0.0:
-            raise RuntimeError("Train fraction too small. {}% of the data was allocated to training split, {}% to validation split.".format(int(train_fraction * 100), int(val_fraction * 100)))
-        logging.info("Train data fraction: {}, Validation data fraction: {}".format(train_fraction, val_fraction))
+        for i in range(data_len):
+            self.data.append(_dataset.data[i, :, :, :])
 
-        # use 90% of the train for train, and 10% for val
-        val_size = int(val_fraction * len(self._dataset))
-        train_size = len(self._dataset) - val_size
-        train_dataset, val_dataset = torch.utils.data.random_split(self._dataset, [train_size, val_size])
-
-        return train_dataset, val_dataset
-
-    def __getitem__(self, index):
-        return self._dataset.__getitem__(index)
-
-    def __len__(self):
-        return self._dataset.__len__()
+        # cleanup the tmp CIFAR object
+        del _dataset
