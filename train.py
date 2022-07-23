@@ -14,7 +14,7 @@ import lr_scheduler
 import flavored_resnets
 
 MAX_EPOCHS = 1000
-GMM_ENABLED = False
+GMM_ENABLED = True
 
 logger = logging.getLogger()
 
@@ -115,6 +115,9 @@ def train_epoch(model, dataloader, optimizer, criterion, scheduler, epoch, train
     train_stats.add(epoch, 'train_wall_time', wall_time)
     train_stats.add(epoch, 'train_loss', avg_loss)
     train_stats.add(epoch, 'train_accuracy', avg_accuracy)
+
+    dataset_logits, class_bucketed_dataset_logits, unique_class_labels = None, None, None
+    return dataset_logits, class_bucketed_dataset_logits, unique_class_labels
 
 
 def eval_model(model, dataloader, criterion, epoch, train_stats, split_name, amp=True):
@@ -315,6 +318,7 @@ def train(args):
         logger.info("Epoch: {}".format(epoch))
         logger.info("  training")
         # TODO capture and return the full training dataset output layer (pre-softmax) and the labels
+        # TODO (JD/Rushabh) build the GMM only on the train dataset
         train_epoch(model, train_loader, optimizer, criterion, cyclic_scheduler, epoch, train_stats, args.amp)
 
         # TODO write function which buckets the output vectors by their true class label (not predicted label)
@@ -356,6 +360,9 @@ def train(args):
             logger.info("Softmax Accuracy: {}".format(softmax_accuracy))
             logger.info("GMM Accuracy: {}".format(gmm_accuracy))
 
+        # TODO insert cifar100 pseudo-labeling
+        # TODO make a second train function to do the SSL work in
+
         # update the number of epochs trained
         train_stats.add_global('num_epochs_trained', epoch)
         # write copy of current metadata metrics to disk
@@ -373,6 +380,8 @@ def train(args):
 
     logger.info('Evaluating model against test dataset')
     eval_model(best_model, test_loader, criterion, best_epoch, train_stats, 'test', args.amp)
+
+    # TODO (JD/Rushabh) evaluate the gmm vs softmax on the test data
 
     # update the global metrics with the best epoch, to include test stats
     train_stats.update_global(best_epoch)
