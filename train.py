@@ -14,7 +14,7 @@ import lr_scheduler
 import flavored_resnets
 
 MAX_EPOCHS = 1000
-GMM_ENABLED = False
+GMM_ENABLED = True
 
 logger = logging.getLogger()
 
@@ -341,12 +341,12 @@ def train(args):
         # TODO (JD/Rushabh) build the GMM only on the train dataset
 
         gmm_models = list()
-        gmm_models = train_epoch(model, train_loader, optimizer, criterion, cyclic_scheduler, epoch, train_stats, args,gmm_models)
+        gmm_models = train_epoch(model, train_dataset, optimizer, criterion, cyclic_scheduler, epoch, train_stats, args,gmm_models)
 
         # TODO write function which buckets the output vectors by their true class label (not predicted label)
 
         logger.info("  evaluating validation data")
-        eval_model(model, val_loader, criterion, epoch, train_stats, 'val', args.amp)
+        eval_model(model, val_dataset, criterion, epoch, train_stats, 'val', args)
 
         val_loss = train_stats.get_epoch('val_loss', epoch=epoch)
         plateau_scheduler.step(val_loss)
@@ -356,7 +356,7 @@ def train(args):
 
         # TODO transfer this whole process into gmm or new class where these things can be handled by a single class and can be parallelized
         if GMM_ENABLED:  # and epoch > 10:
-            softmax_preds, softmax_accuracy, gmm_preds, gmm_accuracy = eval_model_gmm(model, val_loader, gmm_models)
+            softmax_preds, softmax_accuracy, gmm_preds, gmm_accuracy = eval_model_gmm(model, val_dataset, gmm_models,args)
 
             # logger.info("Softmax Accuracy: {}".format(softmax_accuracy))
             # logger.info("GMM Accuracy: {}".format(gmm_accuracy))
