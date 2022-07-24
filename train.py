@@ -14,7 +14,7 @@ import lr_scheduler
 import flavored_resnets
 
 MAX_EPOCHS = 1000
-GMM_ENABLED = True
+GMM_ENABLED = False
 
 logger = logging.getLogger()
 
@@ -27,8 +27,8 @@ def setup(args):
         model = torch.load(args.starting_model)
     else:
         if args.arch == 'resnet18':
-            #model = torchvision.models.resnet18(pretrained=False, num_classes=10)
-            model = flavored_resnets.ResNet18(num_classes=10)
+            model = torchvision.models.resnet18(pretrained=False, num_classes=10)
+            #model = flavored_resnets.ResNet18(num_classes=10)
         if args.arch == 'resnet34':
             model = torchvision.models.resnet34(pretrained=False, num_classes=10)
         if args.arch == 'resnext50_32x4d':
@@ -40,31 +40,26 @@ def setup(args):
         raise RuntimeError("Unsupported model architecture selection: {}.".format(args.arch))
 
     # setup and load CIFAR10
-    train_dataset = cifar_datasets.Cifar10(transforms=cifar_datasets.Cifar10.TRANSFORM_TRAIN, train=True, subset=args.debug)
+    train_dataset = cifar_datasets.Cifar10(transform=cifar_datasets.Cifar10.TRANSFORM_TRAIN, train=True, subset=args.debug)
 
     train_dataset, val_dataset = train_dataset.train_val_split(val_fraction=args.val_fraction)
     # set the validation augmentation to just normalize (.dataset since val_dataset is a Subset, not a full dataset)
     val_dataset.set_transforms(cifar_datasets.Cifar10.TRANSFORM_TEST)
 
-    test_dataset = cifar_datasets.Cifar10(transforms=cifar_datasets.Cifar10.TRANSFORM_TEST, train=False)
+    test_dataset = cifar_datasets.Cifar10(transform=cifar_datasets.Cifar10.TRANSFORM_TEST, train=False)
+
+    return model, train_dataset, val_dataset, test_dataset
 
 
-    train_loader = torch.utils.data.DataLoader(train_dataset, batch_size=args.batch_size, shuffle=True, num_workers=args.num_workers, worker_init_fn=cifar_datasets.worker_init_fn)
-    val_loader = torch.utils.data.DataLoader(val_dataset, batch_size=args.batch_size, shuffle=True, num_workers=args.num_workers, worker_init_fn=cifar_datasets.worker_init_fn)
-    test_loader = torch.utils.data.DataLoader(test_dataset, batch_size=args.batch_size, shuffle=True, num_workers=args.num_workers, worker_init_fn=cifar_datasets.worker_init_fn)
 
-    # # wrap the model into a single node DataParallel
-    # if not isinstance(model, torch.nn.DataParallel):
-    #     model = torch.nn.DataParallel(model)
+def train_epoch(model, pt_dataset, optimizer, criterion, scheduler, epoch, train_stats, args,gmm_models=[]):
 
-    return model, train_loader, val_loader, test_loader
-
-
-def train_epoch(model, dataloader, optimizer, criterion, scheduler, epoch, train_stats,amp=True,gmm_models=[]):
     avg_loss = 0
     avg_accuracy = 0
     model.train()
     scaler = torch.cuda.amp.GradScaler()
+
+    dataloader = torch.utils.data.DataLoader(pt_dataset, batch_size=args.batch_size, shuffle=True, num_workers=args.num_workers, worker_init_fn=cifar_datasets.worker_init_fn)
 
     batch_count = len(dataloader)
     start_time = time.time()
@@ -78,16 +73,10 @@ def train_epoch(model, dataloader, optimizer, criterion, scheduler, epoch, train
         labels = tensor_dict[1].cuda()
 
         # FP16 training
-        if amp:
+        if args.amp:
             with torch.cuda.amp.autocast():
                 outputs = model(inputs)
-                if GMM_ENABLED:
-                    dataset_logits.append(outputs.detach().cpu())
-                    dataset_labels.append(labels.detach().cpu())
-                pred = torch.argmax(outputs, dim=-1)
-                accuracy = torch.sum(pred == labels)/len(pred)
                 loss = criterion(outputs, labels)
-
                 scaler.scale(loss).backward()
                 # scaler.step() first unscales the gradients of the optimizer's assigned params.
                 # If these gradients do not contain infs or NaNs, optimizer.step() is then called,
@@ -97,14 +86,16 @@ def train_epoch(model, dataloader, optimizer, criterion, scheduler, epoch, train
                 scaler.update()
         else:
             outputs = model(inputs)
-            if GMM_ENABLED:
-                dataset_logits.append(outputs.detach().cpu())
-                dataset_labels.append(labels.detach().cpu())
-            pred = torch.argmax(outputs, dim=-1)
-            accuracy = torch.sum(pred == labels)/len(pred)
             loss = criterion(outputs, labels)
             loss.backward()
             optimizer.step()
+
+        pred = torch.argmax(outputs, dim=-1)
+        accuracy = torch.sum(pred == labels) / len(pred)
+
+        if GMM_ENABLED:
+            dataset_logits.append(outputs.detach().cpu())
+            dataset_labels.append(labels.detach().cpu())
 
         # nan loss values are ignored when using AMP, so ignore them for the average
         if not np.isnan(loss.detach().cpu().numpy()):
@@ -161,12 +152,14 @@ def train_epoch(model, dataloader, optimizer, criterion, scheduler, epoch, train
 
 
 
-def eval_model(model, dataloader, criterion, epoch, train_stats, split_name, amp=True):
-    if dataloader is None or len(dataloader) == 0:
+def eval_model(model, pt_dataset, criterion, epoch, train_stats, split_name, args):
+    if pt_dataset is None or len(pt_dataset) == 0:
         train_stats.add(epoch, '{}_wall_time'.format(split_name), 0)
         train_stats.add(epoch, '{}_loss'.format(split_name), 0)
         train_stats.add(epoch, '{}_accuracy'.format(split_name), 0)
-        return None, None, None
+        return
+
+    dataloader = torch.utils.data.DataLoader(pt_dataset, batch_size=args.batch_size, shuffle=False, num_workers=args.num_workers, worker_init_fn=cifar_datasets.worker_init_fn)
 
     batch_count = len(dataloader)
     avg_loss = 0
@@ -181,29 +174,22 @@ def eval_model(model, dataloader, criterion, epoch, train_stats, split_name, amp
             inputs = tensor_dict[0].cuda()
             labels = tensor_dict[1].cuda()
 
-            if amp:
+            if args.amp:
                 with torch.cuda.amp.autocast():
                     outputs = model(inputs)
-                    # if GMM_ENABLED:
-                    #     dataset_logits.append(outputs.detach().cpu())
-                    #     dataset_labels.append(labels.detach().cpu())
-                    # TODO get the second to last activations as well
-                    pred = torch.argmax(outputs, dim=-1)
-                    accuracy = torch.sum(pred == labels) / len(pred)
-                    loss = criterion(outputs, labels)
-                    avg_loss += loss.item()
-                    avg_accuracy += accuracy.item()
             else:
                 outputs = model(inputs)
-                # if GMM_ENABLED:
-                #     dataset_logits.append(outputs.detach().cpu())
-                #     dataset_labels.append(labels.detach().cpu())
-                # TODO get the second to last activations as well
-                pred = torch.argmax(outputs, dim=-1)
-                accuracy = torch.sum(pred == labels) / len(pred)
-                loss = criterion(outputs, labels)
-                avg_loss += loss.item()
-                avg_accuracy += accuracy.item()
+
+            pred = torch.argmax(outputs, dim=-1)
+            accuracy = torch.sum(pred == labels) / len(pred)
+            loss = criterion(outputs, labels)
+            avg_loss += loss.item()
+            avg_accuracy += accuracy.item()
+
+            # if GMM_ENABLED:
+            #     dataset_logits.append(outputs.detach().cpu())
+            #     dataset_labels.append(labels.detach().cpu())
+
 
     wall_time = time.time() - start_time
     avg_loss /= batch_count
@@ -213,22 +199,12 @@ def eval_model(model, dataloader, criterion, epoch, train_stats, split_name, amp
     train_stats.add(epoch, '{}_loss'.format(split_name), avg_loss)
     train_stats.add(epoch, '{}_accuracy'.format(split_name), avg_accuracy)
 
-    # bucketed_dataset_logits = list()
-    # unique_class_labels = list()
-    # if GMM_ENABLED:
-    #     # join together the individual batches of numpy logit data
-    #     dataset_logits = torch.cat(dataset_logits)
-    #     dataset_labels = torch.cat(dataset_labels)
-    #     unique_class_labels = torch.unique(dataset_labels)
-    #
-    #     for i in range(len(unique_class_labels)):
-    #         c = unique_class_labels[i]
-    #         bucketed_dataset_logits.append(dataset_logits[dataset_labels == c])
-    #
-    # return dataset_logits, bucketed_dataset_logits, unique_class_labels
 
 
-def eval_model_gmm(model, dataloader, gmm_list):
+def eval_model_gmm(model, pt_dataset, gmm_list, args):
+
+    dataloader = torch.utils.data.DataLoader(pt_dataset, batch_size=args.batch_size, shuffle=False, num_workers=args.num_workers, worker_init_fn=cifar_datasets.worker_init_fn)
+
 
     batch_count = len(dataloader)
     model.eval()
@@ -312,7 +288,7 @@ def train(args):
 
     logger.info(args)
 
-    model, train_loader, val_loader, test_loader = setup(args)
+    model, train_dataset, val_dataset, test_dataset = setup(args)
 
     # write the arg configuration to disk
     dvals = vars(args)
@@ -324,22 +300,26 @@ def train(args):
     # Move model to device
     model.cuda()
 
-    def lr_reduction_callback():
-        logger.info("Learning rate reduced due to plateau")
-
     # Setup loss criteria
     criterion = torch.nn.CrossEntropyLoss()
 
     # Setup optimizer
     if args.weight_decay is not None:
-        optimizer = torch.optim.AdamW(model.parameters(), lr=args.learning_rate, weight_decay=args.weight_decay)
+        if args.optimizer == 'sgd':
+            optimizer = torch.optim.SGD(model.parameters(), lr=args.learning_rate, weight_decay=args.weight_decay, momentum=0.9, nesterov=args.nesterov)
+        else:
+            optimizer = torch.optim.AdamW(model.parameters(), lr=args.learning_rate, weight_decay=args.weight_decay)
     else:
-        optimizer = torch.optim.AdamW(model.parameters(), lr=args.learning_rate)
+        if args.optimizer == 'sgd':
+            optimizer = torch.optim.SGD(model.parameters(), lr=args.learning_rate, momentum=0.9, nesterov=args.nesterov)
+        else:
+            optimizer = torch.optim.AdamW(model.parameters(), lr=args.learning_rate)
+
     # setup LR reduction on plateau
-    plateau_scheduler = lr_scheduler.ReduceLROnPlateau(optimizer, mode='min', factor=args.lr_reduction_factor, patience=args.patience, threshold=args.loss_eps, max_num_lr_reductions=args.num_lr_reductions, lr_reduction_callback=lr_reduction_callback)
+    plateau_scheduler = lr_scheduler.ReduceLROnPlateau(optimizer, mode='min', factor=args.lr_reduction_factor, patience=args.patience, threshold=args.loss_eps, max_num_lr_reductions=args.num_lr_reductions)
 
     if args.cycle_factor is not None:
-        cyclic_scheduler = torch.optim.lr_scheduler.CyclicLR(optimizer, base_lr=args.learning_rate/args.cycle_factor, max_lr=args.learning_rate*args.cycle_factor, step_size_up=int(len(train_loader) / 2), cycle_momentum=False)
+        cyclic_scheduler = torch.optim.lr_scheduler.CyclicLR(optimizer, base_lr=args.learning_rate/args.cycle_factor, max_lr=args.learning_rate*args.cycle_factor, step_size_up=int(len(train_dataset) / 2), cycle_momentum=False)
     else:
         cyclic_scheduler = None
 
@@ -358,10 +338,10 @@ def train(args):
         epoch += 1
         logger.info("Epoch: {}".format(epoch))
         logger.info("  training")
-        # TODO capture and return the full training dataset output layer (pre-softmax) and the labels
         # TODO (JD/Rushabh) build the GMM only on the train dataset
+
         gmm_models = list()
-        gmm_models = train_epoch(model, train_loader, optimizer, criterion, cyclic_scheduler, epoch, train_stats, args.amp,gmm_models)
+        gmm_models = train_epoch(model, train_loader, optimizer, criterion, cyclic_scheduler, epoch, train_stats, args,gmm_models)
 
         # TODO write function which buckets the output vectors by their true class label (not predicted label)
 
@@ -370,8 +350,6 @@ def train(args):
 
         val_loss = train_stats.get_epoch('val_loss', epoch=epoch)
         plateau_scheduler.step(val_loss)
-        
-        # dataset_logits is N x num_classes, where N is the number of examples in the dataset
 
         train_stats.add_global('training_wall_time', sum(train_stats.get('train_wall_time')))
         train_stats.add_global('val_wall_time', sum(train_stats.get('val_wall_time')))
@@ -405,7 +383,7 @@ def train(args):
             train_stats.update_global(epoch)
 
     logger.info('Evaluating model against test dataset')
-    eval_model(best_model, test_loader, criterion, best_epoch, train_stats, 'test', args.amp)
+    eval_model(best_model, test_dataset, criterion, best_epoch, train_stats, 'test', args)
 
     # TODO (JD/Rushabh) evaluate the gmm vs softmax on the test data
 

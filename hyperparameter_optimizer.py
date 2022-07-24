@@ -17,11 +17,19 @@ def search():
         n += 1
 
     fp = os.path.join(FOLDER_PATH, "id-{:08}".format(n))
-    learning_rate = np.random.choice([1e-3, 3e-4])
-    weight_decay = np.random.uniform(0.1, 1.0)
+
     cycle_factor = float(np.random.uniform(2, 5))
     if np.random.rand() > 0.5:
         cycle_factor = None
+    optimizer = np.random.choice(['adamw','sgd'])
+    if optimizer == 'sgd':
+        weight_decay = np.random.uniform(1e-4, 1e-3)
+        learning_rate = float(np.random.uniform(1e-4, 1e-2))
+        nesterov = np.random.choice([False, True])
+    else:
+        weight_decay = float(np.random.uniform(1e-3, 1.0))
+        learning_rate = float(np.random.uniform(1e-2, 0.25))
+        nesterov = None
     
     # from "Benchopt: Reproducible, efficient and collaborative optimization benchmarks" page 28
     # from "Lookahead optimizer: k Steps forward, 1 step back" page 17
@@ -31,14 +39,15 @@ def search():
     args['num_workers'] = 2
     args['output_filepath'] = fp
     args['batch_size'] = 128
-    args['learning_rate'] = 3e-4
+    args['learning_rate'] = learning_rate
     args['loss_eps'] = 1e-4
     args['num_lr_reductions'] = 2
-    args['lr_reduction_factor'] = 0.25
+    args['lr_reduction_factor'] = 0.1
     args['patience'] = 50
     args['weight_decay'] = weight_decay
     args['cycle_factor'] = cycle_factor
-    args['starting_model'] = None
+    args['nesterov'] = nesterov
+    args['optimizer'] = optimizer
     args['debug'] = False
     args['amp'] = True #bool(np.random.uniform(0, 1.0) > 0.5)
     args['val_fraction'] = float(0.1)
