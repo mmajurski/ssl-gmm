@@ -60,7 +60,7 @@ def setup(args):
     return model, train_loader, val_loader, test_loader
 
 
-def train_epoch(model, dataloader, optimizer, criterion, scheduler, epoch, train_stats, amp=True):
+def train_epoch(model, dataloader, optimizer, criterion, scheduler, epoch, train_stats,amp=True,gmm_models=[]):
     avg_loss = 0
     avg_accuracy = 0
     model.train()
@@ -68,6 +68,8 @@ def train_epoch(model, dataloader, optimizer, criterion, scheduler, epoch, train
 
     batch_count = len(dataloader)
     start_time = time.time()
+    dataset_logits = list()
+    dataset_labels = list()
 
     for batch_idx, tensor_dict in enumerate(dataloader):
         optimizer.zero_grad()
@@ -79,6 +81,9 @@ def train_epoch(model, dataloader, optimizer, criterion, scheduler, epoch, train
         if amp:
             with torch.cuda.amp.autocast():
                 outputs = model(inputs)
+                if GMM_ENABLED:
+                    dataset_logits.append(outputs.detach().cpu())
+                    dataset_labels.append(labels.detach().cpu())
                 pred = torch.argmax(outputs, dim=-1)
                 accuracy = torch.sum(pred == labels)/len(pred)
                 loss = criterion(outputs, labels)
@@ -92,6 +97,9 @@ def train_epoch(model, dataloader, optimizer, criterion, scheduler, epoch, train
                 scaler.update()
         else:
             outputs = model(inputs)
+            if GMM_ENABLED:
+                dataset_logits.append(outputs.detach().cpu())
+                dataset_labels.append(labels.detach().cpu())
             pred = torch.argmax(outputs, dim=-1)
             accuracy = torch.sum(pred == labels)/len(pred)
             loss = criterion(outputs, labels)
@@ -116,8 +124,41 @@ def train_epoch(model, dataloader, optimizer, criterion, scheduler, epoch, train
     train_stats.add(epoch, 'train_loss', avg_loss)
     train_stats.add(epoch, 'train_accuracy', avg_accuracy)
 
-    dataset_logits, class_bucketed_dataset_logits, unique_class_labels = None, None, None
-    return dataset_logits, class_bucketed_dataset_logits, unique_class_labels
+    bucketed_dataset_logits = list()
+    unique_class_labels = list()
+
+    if GMM_ENABLED:
+        # join together the individual batches of numpy logit data
+        dataset_logits = torch.cat(dataset_logits)
+        dataset_labels = torch.cat(dataset_labels)
+        unique_class_labels = torch.unique(dataset_labels)
+
+        for i in range(len(unique_class_labels)):
+            c = unique_class_labels[i]
+            bucketed_dataset_logits.append(dataset_logits[dataset_labels == c])
+
+        # logger.info(" gmm work starts")
+
+        class_instances = list()
+        for i in range(len(unique_class_labels)):
+            class_c_logits = bucketed_dataset_logits[i]
+            class_instances.append(class_c_logits.shape[0])
+            # start_time = time.time()
+            gmm = GMM(n_features=class_c_logits.shape[1], n_clusters=1, tolerance=1e-4, max_iter=50)
+            gmm.fit(class_c_logits)
+            while np.any(np.isnan(gmm.get("sigma").detach().cpu().numpy())):
+                gmm = GMM(n_features=class_c_logits.shape[1], n_clusters=1, tolerance=1e-4, max_iter=50)
+                gmm.fit(class_c_logits)
+            # else:
+            #     gmm.logger.export()
+            # elapsed_time = time.time() - start_time
+            # logger.info("Build GMM took: {}s".format(elapsed_time))
+            gmm_models.append(gmm)
+            # train_stats.add(epoch, 'class_{}_gmm_log_likelihood'.format(unique_class_labels[i]),
+            #                 gmm.log_likelihood.detach().cpu().item())
+
+    return gmm_models
+
 
 
 def eval_model(model, dataloader, criterion, epoch, train_stats, split_name, amp=True):
@@ -133,8 +174,8 @@ def eval_model(model, dataloader, criterion, epoch, train_stats, split_name, amp
     start_time = time.time()
     model.eval()
 
-    dataset_logits = list()
-    dataset_labels = list()
+    # dataset_logits = list()
+    # dataset_labels = list()
     with torch.no_grad():
         for batch_idx, tensor_dict in enumerate(dataloader):
             inputs = tensor_dict[0].cuda()
@@ -143,9 +184,9 @@ def eval_model(model, dataloader, criterion, epoch, train_stats, split_name, amp
             if amp:
                 with torch.cuda.amp.autocast():
                     outputs = model(inputs)
-                    if GMM_ENABLED:
-                        dataset_logits.append(outputs.detach().cpu())
-                        dataset_labels.append(labels.detach().cpu())
+                    # if GMM_ENABLED:
+                    #     dataset_logits.append(outputs.detach().cpu())
+                    #     dataset_labels.append(labels.detach().cpu())
                     # TODO get the second to last activations as well
                     pred = torch.argmax(outputs, dim=-1)
                     accuracy = torch.sum(pred == labels) / len(pred)
@@ -154,9 +195,9 @@ def eval_model(model, dataloader, criterion, epoch, train_stats, split_name, amp
                     avg_accuracy += accuracy.item()
             else:
                 outputs = model(inputs)
-                if GMM_ENABLED:
-                    dataset_logits.append(outputs.detach().cpu())
-                    dataset_labels.append(labels.detach().cpu())
+                # if GMM_ENABLED:
+                #     dataset_logits.append(outputs.detach().cpu())
+                #     dataset_labels.append(labels.detach().cpu())
                 # TODO get the second to last activations as well
                 pred = torch.argmax(outputs, dim=-1)
                 accuracy = torch.sum(pred == labels) / len(pred)
@@ -172,19 +213,19 @@ def eval_model(model, dataloader, criterion, epoch, train_stats, split_name, amp
     train_stats.add(epoch, '{}_loss'.format(split_name), avg_loss)
     train_stats.add(epoch, '{}_accuracy'.format(split_name), avg_accuracy)
 
-    bucketed_dataset_logits = list()
-    unique_class_labels = list()
-    if GMM_ENABLED:
-        # join together the individual batches of numpy logit data
-        dataset_logits = torch.cat(dataset_logits)
-        dataset_labels = torch.cat(dataset_labels)
-        unique_class_labels = torch.unique(dataset_labels)
-
-        for i in range(len(unique_class_labels)):
-            c = unique_class_labels[i]
-            bucketed_dataset_logits.append(dataset_logits[dataset_labels == c])
-
-    return dataset_logits, bucketed_dataset_logits, unique_class_labels
+    # bucketed_dataset_logits = list()
+    # unique_class_labels = list()
+    # if GMM_ENABLED:
+    #     # join together the individual batches of numpy logit data
+    #     dataset_logits = torch.cat(dataset_logits)
+    #     dataset_labels = torch.cat(dataset_labels)
+    #     unique_class_labels = torch.unique(dataset_labels)
+    #
+    #     for i in range(len(unique_class_labels)):
+    #         c = unique_class_labels[i]
+    #         bucketed_dataset_logits.append(dataset_logits[dataset_labels == c])
+    #
+    # return dataset_logits, bucketed_dataset_logits, unique_class_labels
 
 
 def eval_model_gmm(model, dataloader, gmm_list):
@@ -319,12 +360,13 @@ def train(args):
         logger.info("  training")
         # TODO capture and return the full training dataset output layer (pre-softmax) and the labels
         # TODO (JD/Rushabh) build the GMM only on the train dataset
-        train_epoch(model, train_loader, optimizer, criterion, cyclic_scheduler, epoch, train_stats, args.amp)
+        gmm_models = list()
+        gmm_models = train_epoch(model, train_loader, optimizer, criterion, cyclic_scheduler, epoch, train_stats, args.amp,gmm_models)
 
         # TODO write function which buckets the output vectors by their true class label (not predicted label)
 
         logger.info("  evaluating validation data")
-        dataset_logits, class_bucketed_dataset_logits, unique_class_labels = eval_model(model, val_loader, criterion, epoch, train_stats, 'val', args.amp)
+        eval_model(model, val_loader, criterion, epoch, train_stats, 'val', args.amp)
 
         val_loss = train_stats.get_epoch('val_loss', epoch=epoch)
         plateau_scheduler.step(val_loss)
@@ -336,29 +378,13 @@ def train(args):
 
         # TODO transfer this whole process into gmm or new class where these things can be handled by a single class and can be parallelized
         if GMM_ENABLED:  # and epoch > 10:
-            logger.info(" gmm work starts")
-            gmm_models = list()
-            class_instances = list()
-            for i in range(len(unique_class_labels)):
-                class_c_logits = class_bucketed_dataset_logits[i]
-                class_instances.append(class_c_logits.shape[0])
-                start_time = time.time()
-                gmm = GMM(n_features=class_c_logits.shape[1], n_clusters=1, tolerance=1e-4, max_iter=50)
-                gmm.fit(class_c_logits)
-                while np.any(np.isnan(gmm.get("sigma").detach().cpu().numpy())):
-                    gmm = GMM(n_features=class_c_logits.shape[1], n_clusters=1, tolerance=1e-4, max_iter=50)
-                    gmm.fit(class_c_logits)
-                # else:
-                #     gmm.logger.export()
-                elapsed_time = time.time() - start_time
-                logger.info("Build GMM took: {}s".format(elapsed_time))
-                gmm_models.append(gmm)
-                train_stats.add(epoch, 'class_{}_gmm_log_likelihood'.format(unique_class_labels[i]), gmm.log_likelihood.detach().cpu().item())
-
-            logger.info(unique_class_labels)
             softmax_preds, softmax_accuracy, gmm_preds, gmm_accuracy = eval_model_gmm(model, val_loader, gmm_models)
-            logger.info("Softmax Accuracy: {}".format(softmax_accuracy))
-            logger.info("GMM Accuracy: {}".format(gmm_accuracy))
+
+            # logger.info("Softmax Accuracy: {}".format(softmax_accuracy))
+            # logger.info("GMM Accuracy: {}".format(gmm_accuracy))
+            train_stats.add(epoch,"softmax_val_accuracy",softmax_accuracy.detach().cpu().item())
+            train_stats.add(epoch,"gmm_val_accuracy",gmm_accuracy.detach().cpu().item())
+
 
         # TODO insert cifar100 pseudo-labeling
         # TODO make a second train function to do the SSL work in
