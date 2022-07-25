@@ -75,17 +75,10 @@ class GMM(torch.nn.Module):
         """
         var can be "mu", "sigma" or "pi"
         """
-        if var == "mu":
-            # return torch.squeeze(self._mu, dim=0)
-            return self._mu
-        if var == "sigma":
-            # return torch.squeeze(self._sigma, dim=0)
-            return self._sigma
-        if var == "pi":
-            # return torch.squeeze(self._pi, dim=0)
-            return self._pi
-        else:
-            return
+        try:
+            return self['_' + var]
+        except KeyError as ke:
+            raise AttributeError('Attribute not accessible.')
 
     def fit(self, x):
         """
@@ -186,8 +179,8 @@ class GMM(torch.nn.Module):
         return log_likelihood
 
     def predict_probability(self, x):
-        _, log_resp = self._estimate_log_prob_resp(x)
-        return torch.exp(log_resp)
+        log_prob_norm, log_resp = self._estimate_log_prob_resp(x)
+        return torch.exp(log_prob_norm), torch.exp(log_resp)
 
     def _compute_precision_cholesky(self):
         """

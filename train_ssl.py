@@ -239,7 +239,10 @@ def eval_model_gmm(model, pt_dataset, gmm_list, args):
                 # create new GMM object for combined data
                 gmm = GMM(n_features=gmm_inputs.shape[1], n_clusters=weights.shape[0], weights=weights, mu=mus, sigma=sigmas)
 
-                _, gmm_resp = gmm.predict_probability(gmm_inputs)  # N*K
+                # appending gmm for future use
+                gmm_list.append(gmm)
+
+                _, gmm_resp = gmm.predict_probability(gmm_inputs)  # N*1, N*K
 
                 gmm_pred = torch.argmax(gmm_resp, dim=-1)
                 gmm_preds.append(gmm_pred.reshape(-1))
@@ -252,7 +255,7 @@ def eval_model_gmm(model, pt_dataset, gmm_list, args):
         gmm_preds = torch.mean(torch.cat(gmm_preds, dim=-1).type(torch.float16))
         softmax_preds = torch.mean(torch.cat(softmax_preds, dim=-1).type(torch.float16))
 
-        return softmax_preds, softmax_accuracy, gmm_preds, gmm_accuracy
+        return softmax_preds, softmax_accuracy, gmm_preds, gmm_accuracy, gmm_list
 
 
 def compute_class_prevalance(dataloader):
@@ -290,7 +293,7 @@ def train(args):
 
     model, train_dataset, val_dataset, test_dataset = setup(args)
 
-    # write the args configuration to disk
+    # write the arg configuration to disk
     dvals = vars(args)
     with open(os.path.join(args.output_filepath, 'config.json'), 'w') as fh:
         json.dump(dvals, fh, ensure_ascii=True, indent=2)
@@ -356,15 +359,33 @@ def train(args):
 
         # TODO transfer this whole process into gmm or new class where these things can be handled by a single class and can be parallelized
         if GMM_ENABLED:  # and epoch > 10:
-            softmax_preds, softmax_accuracy, gmm_preds, gmm_accuracy = eval_model_gmm(model, val_dataset, gmm_models,args)
+            softmax_preds, softmax_accuracy, gmm_preds, gmm_accuracy, gmm_models = eval_model_gmm(model, val_dataset, gmm_models, args)
 
             # logger.info("Softmax Accuracy: {}".format(softmax_accuracy))
             # logger.info("GMM Accuracy: {}".format(gmm_accuracy))
             train_stats.add(epoch,"softmax_val_accuracy",softmax_accuracy.detach().cpu().item())
             train_stats.add(epoch,"gmm_val_accuracy",gmm_accuracy.detach().cpu().item())
 
+            # TODO insert cifar100 pseudo-labeling
 
-        # TODO insert cifar100 pseudo-labeling
+            gmm = gmm_models[-1]
+
+            # TODO change the name and get the actual data
+            cifar100_data = torch.Tensor()
+            cifar100_labels = torch.Tensor()
+            gmm_prob_sum, gmm_resp = gmm.predict_probability(cifar100_data)  # N*1, N*K
+
+            # TODO: discuss threshold
+            threshold = - torch.inf
+
+            # list of boolean where value is False for items having lower prob_sum then threshold, True otherwise
+            confidence_filter = gmm_prob_sum > threshold
+
+            # TODO use cifar10.add_datapoint() to add points from cifar100 into cifar10
+
+            # TODO cross-validate pseudo-labels that we are adding with actual labels to get the accuracy of pseudo labels for testing purposes
+
+
         # TODO make a second train function to do the SSL work in
 
         # update the number of epochs trained
