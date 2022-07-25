@@ -263,7 +263,7 @@ def train(args):
 
     model, train_dataset, val_dataset, test_dataset = setup(args)
 
-    # write the arg configuration to disk
+    # write the args configuration to disk
     dvals = vars(args)
     with open(os.path.join(args.output_filepath, 'config.json'), 'w') as fh:
         json.dump(dvals, fh, ensure_ascii=True, indent=2)

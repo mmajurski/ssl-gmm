@@ -21,11 +21,12 @@ def search():
     cycle_factor = float(np.random.uniform(2, 5))
     if np.random.rand() > 0.5:
         cycle_factor = None
+    lr_reduction_factor = float(np.random.uniform(0.1, 0.2))
     optimizer = np.random.choice(['adamw','sgd'])
     if optimizer == 'sgd':
         weight_decay = np.random.uniform(1e-4, 1e-3)
         learning_rate = float(np.random.uniform(1e-4, 1e-2))
-        nesterov = np.random.choice([False, True])
+        nesterov = bool(np.random.choice([False, True]))
     else:
         weight_decay = float(np.random.uniform(1e-3, 1.0))
         learning_rate = float(np.random.uniform(1e-2, 0.25))
@@ -35,17 +36,18 @@ def search():
     # from "Lookahead optimizer: k Steps forward, 1 step back" page 17
 
     args = dict()
-    args['arch'] = 'resnet18'
+    args['arch'] = 'wide_resnet50_2'
     args['num_workers'] = 2
     args['output_filepath'] = fp
     args['batch_size'] = 128
     args['learning_rate'] = learning_rate
     args['loss_eps'] = 1e-4
     args['num_lr_reductions'] = 2
-    args['lr_reduction_factor'] = 0.1
+    args['lr_reduction_factor'] = lr_reduction_factor
     args['patience'] = 50
     args['weight_decay'] = weight_decay
     args['cycle_factor'] = cycle_factor
+    args['starting_model'] = None
     args['nesterov'] = nesterov
     args['optimizer'] = optimizer
     args['debug'] = False
@@ -154,8 +156,8 @@ def select():
 
 
 if __name__ == '__main__':
-    #search()
-    select()
+    search()
+    #select()
 
 
 

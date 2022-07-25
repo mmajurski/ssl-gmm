@@ -11,5 +11,5 @@ conda activate gmm
 # install pytorch (best done through conda to handle cuda dependencies)
 conda install pytorch=1.11 torchvision=0.12 cudatoolkit=11.3 -c pytorch
 
-conda install pandas
+conda install pandas matplotlib
 
