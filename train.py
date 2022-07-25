@@ -14,7 +14,7 @@ import lr_scheduler
 import flavored_resnets
 
 MAX_EPOCHS = 1000
-GMM_ENABLED = False
+GMM_ENABLED = True
 
 logger = logging.getLogger()
 
@@ -51,7 +51,9 @@ def setup(args):
     return model, train_dataset, val_dataset, test_dataset
 
 
-def train_epoch(model, pt_dataset, optimizer, criterion, scheduler, epoch, train_stats, args):
+
+def train_epoch(model, pt_dataset, optimizer, criterion, scheduler, epoch, train_stats, args,gmm_models=[]):
+
     avg_loss = 0
     avg_accuracy = 0
     model.train()
@@ -115,6 +117,7 @@ def train_epoch(model, pt_dataset, optimizer, criterion, scheduler, epoch, train
 
     bucketed_dataset_logits = list()
     unique_class_labels = list()
+
     if GMM_ENABLED:
         # join together the individual batches of numpy logit data
         dataset_logits = torch.cat(dataset_logits)
@@ -125,7 +128,28 @@ def train_epoch(model, pt_dataset, optimizer, criterion, scheduler, epoch, train
             c = unique_class_labels[i]
             bucketed_dataset_logits.append(dataset_logits[dataset_labels == c])
 
-    return dataset_logits, bucketed_dataset_logits, unique_class_labels
+        # logger.info(" gmm work starts")
+
+        class_instances = list()
+        for i in range(len(unique_class_labels)):
+            class_c_logits = bucketed_dataset_logits[i]
+            class_instances.append(class_c_logits.shape[0])
+            # start_time = time.time()
+            gmm = GMM(n_features=class_c_logits.shape[1], n_clusters=1, tolerance=1e-4, max_iter=50)
+            gmm.fit(class_c_logits)
+            while np.any(np.isnan(gmm.get("sigma").detach().cpu().numpy())):
+                gmm = GMM(n_features=class_c_logits.shape[1], n_clusters=1, tolerance=1e-4, max_iter=50)
+                gmm.fit(class_c_logits)
+            # else:
+            #     gmm.logger.export()
+            # elapsed_time = time.time() - start_time
+            # logger.info("Build GMM took: {}s".format(elapsed_time))
+            gmm_models.append(gmm)
+            # train_stats.add(epoch, 'class_{}_gmm_log_likelihood'.format(unique_class_labels[i]),
+            #                 gmm.log_likelihood.detach().cpu().item())
+
+    return gmm_models
+
 
 
 def eval_model(model, pt_dataset, criterion, epoch, train_stats, split_name, args):
@@ -143,8 +167,8 @@ def eval_model(model, pt_dataset, criterion, epoch, train_stats, split_name, arg
     start_time = time.time()
     model.eval()
 
-    dataset_logits = list()
-    dataset_labels = list()
+    # dataset_logits = list()
+    # dataset_labels = list()
     with torch.no_grad():
         for batch_idx, tensor_dict in enumerate(dataloader):
             inputs = tensor_dict[0].cuda()
@@ -162,9 +186,10 @@ def eval_model(model, pt_dataset, criterion, epoch, train_stats, split_name, arg
             avg_loss += loss.item()
             avg_accuracy += accuracy.item()
 
-            if GMM_ENABLED:
-                dataset_logits.append(outputs.detach().cpu())
-                dataset_labels.append(labels.detach().cpu())
+            # if GMM_ENABLED:
+            #     dataset_logits.append(outputs.detach().cpu())
+            #     dataset_labels.append(labels.detach().cpu())
+
 
     wall_time = time.time() - start_time
     avg_loss /= batch_count
@@ -175,9 +200,11 @@ def eval_model(model, pt_dataset, criterion, epoch, train_stats, split_name, arg
     train_stats.add(epoch, '{}_accuracy'.format(split_name), avg_accuracy)
 
 
+
 def eval_model_gmm(model, pt_dataset, gmm_list, args):
 
     dataloader = torch.utils.data.DataLoader(pt_dataset, batch_size=args.batch_size, shuffle=False, num_workers=args.num_workers, worker_init_fn=cifar_datasets.worker_init_fn)
+
 
     batch_count = len(dataloader)
     model.eval()
@@ -312,8 +339,10 @@ def train(args):
         logger.info("Epoch: {}".format(epoch))
         logger.info("  training")
         # TODO (JD/Rushabh) build the GMM only on the train dataset
-        # dataset_logits is N x num_classes, where N is the number of examples in the dataset
-        dataset_logits, class_bucketed_dataset_logits, unique_class_labels = train_epoch(model, train_dataset, optimizer, criterion, cyclic_scheduler, epoch, train_stats, args)
+
+        gmm_models = list()
+        gmm_models = train_epoch(model, train_dataset, optimizer, criterion, cyclic_scheduler, epoch, train_stats, args,gmm_models)
+
         # TODO write function which buckets the output vectors by their true class label (not predicted label)
 
         logger.info("  evaluating validation data")
@@ -327,29 +356,13 @@ def train(args):
 
         # TODO transfer this whole process into gmm or new class where these things can be handled by a single class and can be parallelized
         if GMM_ENABLED:  # and epoch > 10:
-            logger.info(" gmm work starts")
-            gmm_models = list()
-            class_instances = list()
-            for i in range(len(unique_class_labels)):
-                class_c_logits = class_bucketed_dataset_logits[i]
-                class_instances.append(class_c_logits.shape[0])
-                start_time = time.time()
-                gmm = GMM(n_features=class_c_logits.shape[1], n_clusters=1, tolerance=1e-4, max_iter=50)
-                gmm.fit(class_c_logits)
-                while np.any(np.isnan(gmm.get("sigma").detach().cpu().numpy())):
-                    gmm = GMM(n_features=class_c_logits.shape[1], n_clusters=1, tolerance=1e-4, max_iter=50)
-                    gmm.fit(class_c_logits)
-                # else:
-                #     gmm.logger.export()
-                elapsed_time = time.time() - start_time
-                logger.info("Build GMM took: {}s".format(elapsed_time))
-                gmm_models.append(gmm)
-                train_stats.add(epoch, 'class_{}_gmm_log_likelihood'.format(unique_class_labels[i]), gmm.log_likelihood.detach().cpu().item())
+            softmax_preds, softmax_accuracy, gmm_preds, gmm_accuracy = eval_model_gmm(model, val_dataset, gmm_models,args)
 
-            logger.info(unique_class_labels)
-            softmax_preds, softmax_accuracy, gmm_preds, gmm_accuracy = eval_model_gmm(model, val_dataset, gmm_models, args)
-            logger.info("Softmax Accuracy: {}".format(softmax_accuracy))
-            logger.info("GMM Accuracy: {}".format(gmm_accuracy))
+            # logger.info("Softmax Accuracy: {}".format(softmax_accuracy))
+            # logger.info("GMM Accuracy: {}".format(gmm_accuracy))
+            train_stats.add(epoch,"softmax_val_accuracy",softmax_accuracy.detach().cpu().item())
+            train_stats.add(epoch,"gmm_val_accuracy",gmm_accuracy.detach().cpu().item())
+
 
         # TODO insert cifar100 pseudo-labeling
         # TODO make a second train function to do the SSL work in

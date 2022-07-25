@@ -21,7 +21,7 @@ def main():
     parser.add_argument('--debug', action='store_true')
     parser.add_argument('--amp', action='store_true')
     parser.add_argument('--starting_model', type=str, default=None, help='Pytorch model checkpoint to load instead of starting from random')
-
+    parser.add_argument('--optimizer',type=str,default=None,help='optimizer if nothing is passed AdamW would be used (currently supported sgd,adamw)')
     args = parser.parse_args()
     if not os.path.exists(args.output_filepath):
         os.makedirs(args.output_filepath)
