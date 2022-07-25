@@ -386,6 +386,13 @@ def train(args):
     eval_model(best_model, test_dataset, criterion, best_epoch, train_stats, 'test', args)
 
     # TODO (JD/Rushabh) evaluate the gmm vs softmax on the test data
+    if GMM_ENABLED:  # and epoch > 10:
+        softmax_preds, softmax_accuracy, gmm_preds, gmm_accuracy = eval_model_gmm(model, test_dataset, gmm_models, args)
+
+        # logger.info("Softmax Accuracy: {}".format(softmax_accuracy))
+        # logger.info("GMM Accuracy: {}".format(gmm_accuracy))
+        train_stats.add(epoch, "softmax_test_accuracy", softmax_accuracy.detach().cpu().item())
+        train_stats.add(epoch, "gmm_test_accuracy", gmm_accuracy.detach().cpu().item())
 
     # update the global metrics with the best epoch, to include test stats
     train_stats.update_global(best_epoch)
