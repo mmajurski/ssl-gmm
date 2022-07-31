@@ -140,10 +140,6 @@ def train_epoch(model, pt_dataset, optimizer, criterion, scheduler, epoch, train
             while np.any(np.isnan(gmm.get("sigma").detach().cpu().numpy())):
                 gmm = GMM(n_features=class_c_logits.shape[1], n_clusters=1, tolerance=1e-4, max_iter=50)
                 gmm.fit(class_c_logits)
-            # else:
-            #     gmm.logger.export()
-            # elapsed_time = time.time() - start_time
-            # logger.info("Build GMM took: {}s".format(elapsed_time))
             gmm_models.append(gmm)
             # train_stats.add(epoch, 'class_{}_gmm_log_likelihood'.format(unique_class_labels[i]),
             #                 gmm.log_likelihood.detach().cpu().item())
@@ -190,7 +186,6 @@ def eval_model(model, pt_dataset, criterion, epoch, train_stats, split_name, arg
             #     dataset_logits.append(outputs.detach().cpu())
             #     dataset_labels.append(labels.detach().cpu())
 
-
     wall_time = time.time() - start_time
     avg_loss /= batch_count
     avg_accuracy /= batch_count
@@ -204,7 +199,6 @@ def eval_model(model, pt_dataset, criterion, epoch, train_stats, split_name, arg
 def eval_model_gmm(model, pt_dataset, gmm_list, args):
 
     dataloader = torch.utils.data.DataLoader(pt_dataset, batch_size=args.batch_size, shuffle=False, num_workers=args.num_workers, worker_init_fn=cifar_datasets.worker_init_fn)
-
 
     batch_count = len(dataloader)
     model.eval()
@@ -338,12 +332,10 @@ def train(args):
         epoch += 1
         logger.info("Epoch: {}".format(epoch))
         logger.info("  training")
-        # TODO (JD/Rushabh) build the GMM only on the train dataset
 
         gmm_models = list()
         gmm_models = train_epoch(model, train_dataset, optimizer, criterion, cyclic_scheduler, epoch, train_stats, args,gmm_models)
 
-        # TODO write function which buckets the output vectors by their true class label (not predicted label)
 
         logger.info("  evaluating validation data")
         eval_model(model, val_dataset, criterion, epoch, train_stats, 'val', args)
@@ -385,7 +377,6 @@ def train(args):
     logger.info('Evaluating model against test dataset')
     eval_model(best_model, test_dataset, criterion, best_epoch, train_stats, 'test', args)
 
-    # TODO (JD/Rushabh) evaluate the gmm vs softmax on the test data
     if GMM_ENABLED:  # and epoch > 10:
         softmax_preds, softmax_accuracy, gmm_preds, gmm_accuracy = eval_model_gmm(model, test_dataset, gmm_models, args)
 
