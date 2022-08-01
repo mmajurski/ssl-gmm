@@ -14,7 +14,7 @@ import lr_scheduler
 import flavored_resnets
 
 MAX_EPOCHS = 1000
-GMM_ENABLED = True
+GMM_ENABLED = True  # always true for ssl
 
 logger = logging.getLogger()
 
@@ -50,6 +50,52 @@ def setup(args):
 
     return model, train_dataset, val_dataset, test_dataset
 
+
+def get_unlabelled_dataset(args,val_set=False):
+    # setup and load CIFAR100
+    train_dataset = cifar_datasets.Cifar100(transform=cifar_datasets.Cifar100.TRANSFORM_TRAIN, train=True,
+                                           subset=args.debug)
+    val_dataset = None
+    if val_set:
+        train_dataset, val_dataset = train_dataset.train_val_split(val_fraction=args.val_fraction)
+        # set the validation augmentation to just normalize (.dataset since val_dataset is a Subset, not a full dataset)
+        val_dataset.set_transforms(cifar_datasets.Cifar100.TRANSFORM_TEST)
+
+    test_dataset = cifar_datasets.Cifar100(transform=cifar_datasets.Cifar100.TRANSFORM_TEST, train=False)
+
+    return train_dataset, val_dataset, test_dataset
+
+
+def psuedolabel_data(train_dataset,gmm_models, args):
+
+    #get the combined GMM
+    gmm = gmm_models[-1]
+
+    # TODO: Update batchsize and dataloader code code if required
+    unlabelled_dataset, _, _ = get_unlabelled_dataset(args)
+
+    batch_size = 1
+
+    ul_dataloader = torch.utils.data.DataLoader(unlabelled_dataset,
+                                                batch_size=batch_size,
+                                                shuffle=True,
+                                                num_workers=args.num_workers,
+                                                worker_init_fn=cifar_datasets.worker_init_fn)
+
+    for batch_idx, tensor_dict in enumerate(ul_dataloader):
+        ul_data, ul_target = tensor_dict
+        gmm_prob_sum, gmm_resp = gmm.predict_probability(ul_data)  # N*1, N*K
+
+    # TODO: USE 80% of the class threshold instead of this
+    threshold = - torch.inf
+
+    # list of boolean where value is False for items having lower prob_sum then threshold, True otherwise
+    confidence_filter = gmm_prob_sum > threshold
+
+    # TODO use cifar10.add_datapoint() to add points from cifar100 into cifar10
+
+    # TODO cross-validate pseudo-labels that we are adding with actual labels to get the accuracy of pseudo labels for testing purposes
+    return train_dataset
 
 
 def train_epoch(model, pt_dataset, optimizer, criterion, scheduler, epoch, train_stats, args,gmm_models=[]):
@@ -140,10 +186,6 @@ def train_epoch(model, pt_dataset, optimizer, criterion, scheduler, epoch, train
             while np.any(np.isnan(gmm.get("sigma").detach().cpu().numpy())):
                 gmm = GMM(n_features=class_c_logits.shape[1], n_clusters=1, tolerance=1e-4, max_iter=50)
                 gmm.fit(class_c_logits)
-            # else:
-            #     gmm.logger.export()
-            # elapsed_time = time.time() - start_time
-            # logger.info("Build GMM took: {}s".format(elapsed_time))
             gmm_models.append(gmm)
             # train_stats.add(epoch, 'class_{}_gmm_log_likelihood'.format(unique_class_labels[i]),
             #                 gmm.log_likelihood.detach().cpu().item())
@@ -190,7 +232,6 @@ def eval_model(model, pt_dataset, criterion, epoch, train_stats, split_name, arg
             #     dataset_logits.append(outputs.detach().cpu())
             #     dataset_labels.append(labels.detach().cpu())
 
-
     wall_time = time.time() - start_time
     avg_loss /= batch_count
     avg_accuracy /= batch_count
@@ -204,7 +245,6 @@ def eval_model(model, pt_dataset, criterion, epoch, train_stats, split_name, arg
 def eval_model_gmm(model, pt_dataset, gmm_list, args):
 
     dataloader = torch.utils.data.DataLoader(pt_dataset, batch_size=args.batch_size, shuffle=False, num_workers=args.num_workers, worker_init_fn=cifar_datasets.worker_init_fn)
-
 
     batch_count = len(dataloader)
     model.eval()
@@ -293,7 +333,7 @@ def train(args):
 
     model, train_dataset, val_dataset, test_dataset = setup(args)
 
-    # write the arg configuration to disk
+    # write the args configuration to disk
     dvals = vars(args)
     with open(os.path.join(args.output_filepath, 'config.json'), 'w') as fh:
         json.dump(dvals, fh, ensure_ascii=True, indent=2)
@@ -341,12 +381,9 @@ def train(args):
         epoch += 1
         logger.info("Epoch: {}".format(epoch))
         logger.info("  training")
-        # TODO (JD/Rushabh) build the GMM only on the train dataset
 
         gmm_models = list()
-        gmm_models = train_epoch(model, train_dataset, optimizer, criterion, cyclic_scheduler, epoch, train_stats, args,gmm_models)
-
-        # TODO write function which buckets the output vectors by their true class label (not predicted label)
+        gmm_models = train_epoch(model, train_dataset, optimizer, criterion, cyclic_scheduler, epoch, train_stats, args, gmm_models)
 
         logger.info("  evaluating validation data")
         eval_model(model, val_dataset, criterion, epoch, train_stats, 'val', args)
@@ -361,32 +398,9 @@ def train(args):
         if GMM_ENABLED:  # and epoch > 10:
             softmax_preds, softmax_accuracy, gmm_preds, gmm_accuracy, gmm_models = eval_model_gmm(model, val_dataset, gmm_models, args)
 
-            # logger.info("Softmax Accuracy: {}".format(softmax_accuracy))
-            # logger.info("GMM Accuracy: {}".format(gmm_accuracy))
             train_stats.add(epoch,"softmax_val_accuracy",softmax_accuracy.detach().cpu().item())
             train_stats.add(epoch,"gmm_val_accuracy",gmm_accuracy.detach().cpu().item())
 
-            # TODO insert cifar100 pseudo-labeling
-
-            gmm = gmm_models[-1]
-
-            # TODO change the name and get the actual data
-            cifar100_data = torch.Tensor()
-            cifar100_labels = torch.Tensor()
-            gmm_prob_sum, gmm_resp = gmm.predict_probability(cifar100_data)  # N*1, N*K
-
-            # TODO: discuss threshold
-            threshold = - torch.inf
-
-            # list of boolean where value is False for items having lower prob_sum then threshold, True otherwise
-            confidence_filter = gmm_prob_sum > threshold
-
-            # TODO use cifar10.add_datapoint() to add points from cifar100 into cifar10
-
-            # TODO cross-validate pseudo-labels that we are adding with actual labels to get the accuracy of pseudo labels for testing purposes
-
-
-        # TODO make a second train function to do the SSL work in
 
         # update the number of epochs trained
         train_stats.add_global('num_epochs_trained', epoch)
@@ -403,10 +417,28 @@ def train(args):
             # update the global metrics with the best epoch
             train_stats.update_global(epoch)
 
+    # GMM on Test dataset on before SSL
+    if GMM_ENABLED:  # and epoch > 10:
+        softmax_preds, softmax_accuracy, gmm_preds, gmm_accuracy,_ = eval_model_gmm(model, test_dataset, gmm_models, args)
+
+        train_stats.add(epoch, "softmax_test_accuracy", softmax_accuracy.detach().cpu().item())
+        train_stats.add(epoch, "gmm_test_accuracy", gmm_accuracy.detach().cpu().item())
+
+    # TODO insert cifar100 pseudo-labeling
+
+    train_dataset = psuedolabel_data(train_dataset,gmm_models,args)
+
+    # TODO make a second train function to do the SSL work in
+
     logger.info('Evaluating model against test dataset')
     eval_model(best_model, test_dataset, criterion, best_epoch, train_stats, 'test', args)
 
-    # TODO (JD/Rushabh) evaluate the gmm vs softmax on the test data
+    # GMM on Test dataset on after SSL
+    if GMM_ENABLED:  # and epoch > 10:
+        softmax_preds, softmax_accuracy, gmm_preds, gmm_accuracy,_ = eval_model_gmm(model, test_dataset, gmm_models, args)
+
+        train_stats.add(epoch, "ssl_softmax_test_accuracy", softmax_accuracy.detach().cpu().item())
+        train_stats.add(epoch, "ssl_gmm_test_accuracy", gmm_accuracy.detach().cpu().item())
 
     # update the global metrics with the best epoch, to include test stats
     train_stats.update_global(best_epoch)
