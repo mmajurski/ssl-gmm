@@ -14,7 +14,7 @@ import lr_scheduler
 import flavored_resnets
 
 MAX_EPOCHS = 1000
-GMM_ENABLED = True
+GMM_ENABLED = False
 
 logger = logging.getLogger()
 
@@ -313,7 +313,8 @@ def train(args):
     plateau_scheduler = lr_scheduler.ReduceLROnPlateau(optimizer, mode='min', factor=args.lr_reduction_factor, patience=args.patience, threshold=args.loss_eps, max_num_lr_reductions=args.num_lr_reductions)
 
     if args.cycle_factor is not None:
-        cyclic_scheduler = torch.optim.lr_scheduler.CyclicLR(optimizer, base_lr=args.learning_rate/args.cycle_factor, max_lr=args.learning_rate*args.cycle_factor, step_size_up=int(len(train_dataset) / 2), cycle_momentum=False)
+        num_batches = len(train_dataset) / args.batch_size
+        cyclic_scheduler = torch.optim.lr_scheduler.CyclicLR(optimizer, base_lr=args.learning_rate/args.cycle_factor, max_lr=args.learning_rate*args.cycle_factor, step_size_up=int(num_batches), cycle_momentum=False)
     else:
         cyclic_scheduler = None
 

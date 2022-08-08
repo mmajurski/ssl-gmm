@@ -25,31 +25,33 @@ def search():
     optimizer = np.random.choice(['adamw','sgd'])
     if optimizer == 'sgd':
         weight_decay = np.random.uniform(1e-4, 1e-3)
-        learning_rate = float(np.random.uniform(1e-4, 1e-2))
-        nesterov = bool(np.random.choice([False, True]))
+        learning_rate = float(np.random.uniform(1e-3, 0.1))
+        nesterov = True
+        # nesterov = bool(np.random.choice([False, True]))
     else:
         weight_decay = float(np.random.uniform(1e-3, 1.0))
-        learning_rate = float(np.random.uniform(1e-2, 0.25))
+        learning_rate = float(np.random.uniform(1e-4, 1e-3))
         nesterov = None
     
     # from "Benchopt: Reproducible, efficient and collaborative optimization benchmarks" page 28
     # from "Lookahead optimizer: k Steps forward, 1 step back" page 17
+    # from "Wide Residual Networks" code
 
     args = dict()
     args['arch'] = 'wide_resnet50_2'
     args['num_workers'] = 2
     args['output_filepath'] = fp
     args['batch_size'] = 128
-    args['learning_rate'] = learning_rate
+    args['learning_rate'] = 0.1 #learning_rate
     args['loss_eps'] = 1e-4
     args['num_lr_reductions'] = 2
-    args['lr_reduction_factor'] = lr_reduction_factor
+    args['lr_reduction_factor'] = 0.2 #lr_reduction_factor
     args['patience'] = 50
-    args['weight_decay'] = weight_decay
-    args['cycle_factor'] = cycle_factor
+    args['weight_decay'] = 0.0005 #weight_decay
+    args['cycle_factor'] = 4 #cycle_factor
     args['starting_model'] = None
-    args['nesterov'] = nesterov
-    args['optimizer'] = optimizer
+    args['nesterov'] = True #nesterov
+    args['optimizer'] = "sgd" #optimizer
     args['debug'] = False
     args['amp'] = True #bool(np.random.uniform(0, 1.0) > 0.5)
     args['val_fraction'] = float(0.1)
