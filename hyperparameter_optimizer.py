@@ -24,12 +24,11 @@ def search():
     lr_reduction_factor = float(np.random.uniform(0.1, 0.2))
     optimizer = np.random.choice(['adamw','sgd'])
     if optimizer == 'sgd':
-        weight_decay = np.random.uniform(1e-4, 1e-3)
-        learning_rate = float(np.random.uniform(1e-3, 0.1))
-        nesterov = True
-        # nesterov = bool(np.random.choice([False, True]))
+        weight_decay = np.random.uniform(1e-6, 1e-4)
+        learning_rate = float(np.random.uniform(1e-3, 0.2))
+        nesterov = bool(np.random.choice([False, True]))
     else:
-        weight_decay = float(np.random.uniform(1e-3, 1.0))
+        weight_decay = float(np.random.uniform(1e-5, 1.0))
         learning_rate = float(np.random.uniform(1e-4, 1e-3))
         nesterov = None
     
@@ -48,14 +47,17 @@ def search():
     args['lr_reduction_factor'] = 0.2 #lr_reduction_factor
     args['patience'] = 50
     args['weight_decay'] = 0.0005 #weight_decay
-    args['cycle_factor'] = 4 #cycle_factor
+    args['cycle_factor'] = None #cycle_factor
     args['starting_model'] = None
-    args['nesterov'] = True #nesterov
-    args['optimizer'] = "sgd" #optimizer
+    args['nesterov'] = False #nesterov
+    args['optimizer'] = 'sgd' #optimizer
     args['debug'] = False
-    args['amp'] = True #bool(np.random.uniform(0, 1.0) > 0.5)
-    args['val_fraction'] = float(0.1)
+    args['amp'] = bool(np.random.uniform(0, 1.0) > 0.5)
+    args['val_fraction'] = float(0.0) #float(0.1)
 
+    if args['debug']:
+        args['loss_eps'] = 0.1
+        args['patience'] = 5
 
     args = argparse.Namespace(**args)
 
@@ -125,41 +127,41 @@ def select():
     plt.show()
 
     plt.scatter(learning_rate_vals, acc_vector)
-    plt.xlabel('Learning Rage')
+    plt.xlabel('Learning Rate')
     plt.ylabel('Accuracy')
     plt.title('Val Accuracy vs Learning Rate')
     plt.show()
 
-    plt.scatter(loss_eps_vals, acc_vector)
-    plt.xlabel('Loss Eps')
-    plt.ylabel('Accuracy')
-    plt.title('Val Accuracy vs Loss Eps')
-    plt.show()
+    # plt.scatter(loss_eps_vals, acc_vector)
+    # plt.xlabel('Loss Eps')
+    # plt.ylabel('Accuracy')
+    # plt.title('Val Accuracy vs Loss Eps')
+    # plt.show()
 
-    plt.scatter(patience_vals, acc_vector)
-    plt.xlabel('Patience')
-    plt.ylabel('Accuracy')
-    plt.title('Val Accuracy vs Patience')
-    plt.show()
-
-    plt.scatter(cycle_factor_vals, acc_vector)
-    plt.xlabel('Cycle Factor')
-    plt.ylabel('Accuracy')
-    plt.title('Val Accuracy vs Cycle Factor')
-    plt.show()
-
-    plt.scatter(val_fraction_vals, acc_vector)
-    plt.xlabel('Validation Fraction')
-    plt.ylabel('Accuracy')
-    plt.title('Val Accuracy vs Validation Fraction')
-    plt.show()
+    # plt.scatter(patience_vals, acc_vector)
+    # plt.xlabel('Patience')
+    # plt.ylabel('Accuracy')
+    # plt.title('Val Accuracy vs Patience')
+    # plt.show()
+    #
+    # plt.scatter(cycle_factor_vals, acc_vector)
+    # plt.xlabel('Cycle Factor')
+    # plt.ylabel('Accuracy')
+    # plt.title('Val Accuracy vs Cycle Factor')
+    # plt.show()
+    #
+    # plt.scatter(val_fraction_vals, acc_vector)
+    # plt.xlabel('Validation Fraction')
+    # plt.ylabel('Accuracy')
+    # plt.title('Val Accuracy vs Validation Fraction')
+    # plt.show()
 
 
 
 
 if __name__ == '__main__':
     search()
-    #select()
+    # select()
 
 
 

@@ -42,9 +42,14 @@ def setup(args):
     # setup and load CIFAR10
     train_dataset = cifar_datasets.Cifar10(transform=cifar_datasets.Cifar10.TRANSFORM_TRAIN, train=True, subset=args.debug)
 
-    train_dataset, val_dataset = train_dataset.train_val_split(val_fraction=args.val_fraction)
-    # set the validation augmentation to just normalize (.dataset since val_dataset is a Subset, not a full dataset)
-    val_dataset.set_transforms(cifar_datasets.Cifar10.TRANSFORM_TEST)
+    if args.val_fraction > 0.0:
+        train_dataset, val_dataset = train_dataset.train_val_split(val_fraction=args.val_fraction)
+        # set the validation augmentation to just normalize (.dataset since val_dataset is a Subset, not a full dataset)
+        val_dataset.set_transforms(cifar_datasets.Cifar10.TRANSFORM_TEST)
+    else:
+        val_dataset = copy.deepcopy(train_dataset)
+        # set the validation augmentation to just normalize (.dataset since val_dataset is a Subset, not a full dataset)
+        val_dataset.set_transforms(cifar_datasets.Cifar10.TRANSFORM_TEST)
 
     test_dataset = cifar_datasets.Cifar10(transform=cifar_datasets.Cifar10.TRANSFORM_TEST, train=False)
 
@@ -105,7 +110,10 @@ def train_epoch(model, pt_dataset, optimizer, criterion, scheduler, epoch, train
                 scheduler.step()
 
         if batch_idx % 100 == 0:
-            logger.info('  batch {}/{}  loss: {:8.8g}'.format(batch_idx, batch_count, loss.item()))
+            if scheduler is not None:
+                logger.info('  batch {}/{}  loss: {:8.8g}, lr: {}, cyclic_lr: {}'.format(batch_idx, batch_count, loss.item(), optimizer.param_groups[0]['lr'], scheduler.get_last_lr()[0]))
+            else:
+                logger.info('  batch {}/{}  loss: {:8.8g}, lr: {}'.format(batch_idx, batch_count, loss.item(), optimizer.param_groups[0]['lr']))
 
     avg_loss /= batch_count
     avg_accuracy /= batch_count
@@ -312,12 +320,6 @@ def train(args):
     # setup LR reduction on plateau
     plateau_scheduler = lr_scheduler.ReduceLROnPlateau(optimizer, mode='min', factor=args.lr_reduction_factor, patience=args.patience, threshold=args.loss_eps, max_num_lr_reductions=args.num_lr_reductions)
 
-    if args.cycle_factor is not None:
-        num_batches = len(train_dataset) / args.batch_size
-        cyclic_scheduler = torch.optim.lr_scheduler.CyclicLR(optimizer, base_lr=args.learning_rate/args.cycle_factor, max_lr=args.learning_rate*args.cycle_factor, step_size_up=int(num_batches), cycle_momentum=False)
-    else:
-        cyclic_scheduler = None
-
     # setup the metadata capture object
     train_stats = metadata.TrainingStats()
 
@@ -327,6 +329,12 @@ def train(args):
 
     # train epochs until loss converges
     while not plateau_scheduler.is_done():
+        if args.cycle_factor is not None:
+            num_batches = len(train_dataset) / args.batch_size
+            cyclic_scheduler = torch.optim.lr_scheduler.CyclicLR(optimizer, base_lr=plateau_scheduler._last_lr[0] / args.cycle_factor, max_lr=args.learning_rate * plateau_scheduler._last_lr[0], step_size_up=int(num_batches / 2), cycle_momentum=False)
+        else:
+            cyclic_scheduler = None
+
         # ensure we don't loop forever
         if epoch >= MAX_EPOCHS:
             break
@@ -336,7 +344,7 @@ def train(args):
 
         gmm_models = list()
         gmm_models = train_epoch(model, train_dataset, optimizer, criterion, cyclic_scheduler, epoch, train_stats, args,gmm_models)
-
+        train_stats.add(epoch, "learning_rate", optimizer.param_groups[0]['lr'])
 
         logger.info("  evaluating validation data")
         eval_model(model, val_dataset, criterion, epoch, train_stats, 'val', args)

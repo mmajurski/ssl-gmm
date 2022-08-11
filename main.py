@@ -2,6 +2,7 @@ import argparse
 import os
 
 import train
+import train_ssl
 
 
 def main():
@@ -10,18 +11,18 @@ def main():
     parser.add_argument('--num-workers', type=int, default=0, help='number of workers')
     parser.add_argument('--output-filepath', default='./model', type=str, help='filepath to where the outputs will be saved.')
     parser.add_argument('--batch-size', default=128, type=int, help='batch size')
-    parser.add_argument('--learning-rate', default=1e-3, type=float, help='initial learning rate')
+    parser.add_argument('--learning-rate', default=3e-4, type=float, help='initial learning rate')
     parser.add_argument('--loss_eps', default=1e-4, type=float, help='loss value eps for determining early stopping loss equivalence.')
     parser.add_argument('--val_fraction', default=0.1, type=float, help='fraction of the training data to use for validation.')
     parser.add_argument('--patience', default=20, type=int, help='number of epochs past optimal to explore before early stopping terminates training.')
     parser.add_argument('--weight_decay', default=1e-5, type=float)
     parser.add_argument('--cycle_factor', default=4.0, type=float, help='Cycle factor for cyclic learning rate scheduler.')
     parser.add_argument('--num_lr_reductions', default=2, type=int)
-    parser.add_argument('--lr_reduction_factor', default=0.25, type=float)
+    parser.add_argument('--lr_reduction_factor', default=0.2, type=float)
     parser.add_argument('--debug', action='store_true')
     parser.add_argument('--amp', action='store_true')
     parser.add_argument('--starting_model', type=str, default=None, help='Pytorch model checkpoint to load instead of starting from random')
-    parser.add_argument('--optimizer',type=str,default=None,help='optimizer if nothing is passed AdamW would be used (currently supported sgd,adamw)')
+    parser.add_argument('--optimizer',type=str,default='adamw',help='optimizer if nothing is passed AdamW would be used (currently supported sgd,adamw)')
     args = parser.parse_args()
     if not os.path.exists(args.output_filepath):
         os.makedirs(args.output_filepath)
@@ -34,7 +35,8 @@ def main():
     #     print("Detected debug mode, setting number of workers to 0")
     #     args.num_workers = 0
 
-    train.train(args)
+    # train.train(args)
+    train_ssl.train(args)
 
 
 if __name__ == '__main__':

@@ -114,6 +114,36 @@ class Cifar10(torch.utils.data.Dataset):
     def set_transforms(self, transforms):
         self.transform = transforms
 
+    def data_split_class_balanced(self, subset_count: int = 400):
+        idx = list(range(len(self.data)))
+        random.shuffle(idx)
+
+        subset_dataset = copy.deepcopy(self)
+        remainder_dataset = copy.deepcopy(self)
+        subset_dataset.data = list()
+        subset_dataset.targets = list()
+        remainder_dataset.data = list()
+        remainder_dataset.targets = list()
+
+        nb_classes = np.max(self.targets)
+        per_class_subset_count = subset_count / nb_classes
+        if not per_class_subset_count - per_class_subset_count.astype(int) != 0:
+            raise RuntimeError("Invalid subset_count = {}, resulted in a non-integer number of examples per class={}".format(subset_count, per_class_subset_count))
+        per_class_subset_count = per_class_subset_count.astype(int)
+
+        a_class_instance_count = np.zeros(nb_classes)
+        for i in idx:
+            t = self.targets[i]
+            d = self.data[i]
+            if a_class_instance_count[i] < per_class_subset_count:
+                subset_dataset.data.append(d)
+                subset_dataset.targets.append(t)
+            else:
+                remainder_dataset.data.append(d)
+                remainder_dataset.targets.append(t)
+
+        return subset_dataset, remainder_dataset
+
     def train_val_split(self, val_fraction: float = 0.1):
         if val_fraction < 0.0 or val_fraction > 1.0:
             raise RuntimeError("Impossible validation fraction {}.".format(val_fraction))

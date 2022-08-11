@@ -48,6 +48,7 @@ class ReduceLROnPlateau(torch.optim.lr_scheduler.ReduceLROnPlateau):
         self.termination_callback = termination_callback
         self.best_metric_epoch = 0
         self.metric_values = list()
+        self._last_lr = [group['lr'] for group in self.optimizer.param_groups]
 
     def is_done(self):
         return self.num_lr_reductions > self.max_num_lr_reductions
@@ -67,6 +68,8 @@ class ReduceLROnPlateau(torch.optim.lr_scheduler.ReduceLROnPlateau):
         else:
             error_from_best = np.abs(np.asarray(self.metric_values) + np.nanmax(self.metric_values))
             error_from_best[error_from_best > np.abs(self.threshold)] = 0
+        if np.all(np.isnan(error_from_best)):
+            return
         # unpack numpy array, select first time since that value has happened
         self.best_metric_epoch = np.where(error_from_best == 0)[0][0]
 
@@ -84,9 +87,9 @@ class ReduceLROnPlateau(torch.optim.lr_scheduler.ReduceLROnPlateau):
                     self.termination_callback()
             else:
                 self._reduce_lr(epoch)
+                self._last_lr = [group['lr'] for group in self.optimizer.param_groups]
+
                 # invalidate the metric values from before the learning rate change, as those values should no longer be used in evaluating convergence
                 self.metric_values = [np.nan for v in self.metric_values]
                 if self.lr_reduction_callback is not None:
                     self.lr_reduction_callback()
-
-            self._last_lr = [group['lr'] for group in self.optimizer.param_groups]
