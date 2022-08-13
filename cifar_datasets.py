@@ -125,19 +125,20 @@ class Cifar10(torch.utils.data.Dataset):
         remainder_dataset.data = list()
         remainder_dataset.targets = list()
 
-        nb_classes = np.max(self.targets)
+        nb_classes = len(set(self.targets))
         per_class_subset_count = subset_count / nb_classes
-        if not per_class_subset_count - per_class_subset_count.astype(int) != 0:
-            raise RuntimeError("Invalid subset_count = {}, resulted in a non-integer number of examples per class={}".format(subset_count, per_class_subset_count))
-        per_class_subset_count = per_class_subset_count.astype(int)
+        # if per_class_subset_count - int(per_class_subset_count) != 0:
+        #     raise RuntimeError("Invalid subset_count = {}, resulted in a non-integer number of examples per class={}".format(subset_count, per_class_subset_count))
+        per_class_subset_count = int(per_class_subset_count)
 
         a_class_instance_count = np.zeros(nb_classes)
         for i in idx:
             t = self.targets[i]
             d = self.data[i]
-            if a_class_instance_count[i] < per_class_subset_count:
+            if a_class_instance_count[t] < per_class_subset_count:
                 subset_dataset.data.append(d)
                 subset_dataset.targets.append(t)
+                a_class_instance_count[t] += 1
             else:
                 remainder_dataset.data.append(d)
                 remainder_dataset.targets.append(t)
