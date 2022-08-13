@@ -14,7 +14,7 @@ import lr_scheduler
 import flavored_resnets
 
 MAX_EPOCHS = 1000
-GMM_ENABLED = False  # always true for ssl
+GMM_ENABLED = True  # always true for ssl
 
 logger = logging.getLogger()
 
@@ -53,34 +53,65 @@ def setup(args):
     return model, train_dataset_labeled, train_dataset_unlabeled, val_dataset, test_dataset
 
 
-def psuedolabel_data(train_dataset_labeled, train_dataset_unlabeled, gmm_models, args):
-
-    #get the combined GMM
-    gmm = gmm_models[-1]
+def psuedolabel_data(model,train_dataset_labeled, train_dataset_unlabeled, combined_gmm, args):
 
     ul_dataloader = torch.utils.data.DataLoader(train_dataset_unlabeled,
-                                                batch_size=1,
+                                                batch_size=args.batch_size,
                                                 shuffle=False,
                                                 num_workers=args.num_workers,
                                                 worker_init_fn=cifar_datasets.worker_init_fn)
-
-    for batch_idx, tensor_dict in enumerate(ul_dataloader):
-        ul_data, ul_target = tensor_dict
-        gmm_prob_sum, gmm_resp = gmm.predict_probability(ul_data)  # N*1, N*K
-
-
     # TODO update this to use a per-class threshold, but that is an extension of the baseline technique
-    threshold = 0.8  # TODO update this to be 80 % confident
+    denominator_threshold = 500.0  # TODO update this to be 80 % confident
+    resp_threshold = 0.95
+    filtered_inputs = []
+    filtered_labels = []
+    filtered_data_resp = []
+    model.eval()
+    with torch.no_grad():
+        for batch_idx, tensor_dict in enumerate(ul_dataloader):
+            inputs = tensor_dict[0].cuda()
+            labels = tensor_dict[1].cuda()
 
-    # list of boolean where value is False for items having lower prob_sum then threshold, True otherwise
-    confidence_filter = gmm_prob_sum > threshold
+            with torch.cuda.amp.autocast():
+                outputs = model(inputs)
+                gmm_inputs = outputs.detach().cpu()
+                gmm_prob_sum, gmm_resp = combined_gmm.predict_probability(gmm_inputs)
 
-    # TODO use cifar10.add_datapoint() to add points from cifar100 into cifar10
+                # threshold filtering
 
-    # TODO cross-validate pseudo-labels that we are adding with actual labels to get the accuracy of pseudo labels for testing purposes
+                # list of boolean where value is False for items having lower prob_sum then threshold, True otherwise
+                denominator_filter = torch.squeeze(gmm_prob_sum > denominator_threshold)
+
+                filtered_inputs.append(inputs[denominator_filter])
+                filtered_labels.append(labels[denominator_filter])
+                filtered_data_resp.append(gmm_resp[denominator_filter])
+
+        filtered_inputs = torch.cat(filtered_inputs,dim=0)
+        filtered_labels = torch.cat(filtered_labels,dim= -1)
+        filtered_data_resp = torch.cat(filtered_data_resp,dim =0)
+
+        max_resps, filtered_preds = torch.max(filtered_data_resp,dim=-1)
+
+        resp_filter = max_resps > resp_threshold #TODO: change this filter
+
+        filtered_inputs = filtered_inputs[resp_filter]
+        filtered_labels = filtered_labels[resp_filter]
+        filtered_preds = filtered_preds[resp_filter]
+
+    num_additions = len(filtered_preds)
+    # print(num_additions)
+    for idx in range(num_additions):
+        train_dataset_labeled.add_datapoint(filtered_inputs[idx].cpu().numpy(),filtered_preds[idx].cpu().item())
+        # if not working then use permute(1,2,0)
+
+    #testing psuedolabel accuracy
+    psuedolabel_acc = torch.sum(filtered_preds.cpu() == filtered_labels.cpu()) / len(filtered_preds.cpu())
+
+    # print(psuedolabel_acc) # may add to trainstats
+
     return train_dataset_labeled, train_dataset_unlabeled
 
-
+#TODO:[Rushabh/JD] [Priority-LOW] transfer combining GMM at the end of train epoch from eval_model_gmm
 def train_epoch(model, pt_dataset, optimizer, criterion, scheduler, epoch, train_stats, args, gmm_models=[]):
 
     avg_loss = 0
@@ -230,6 +261,13 @@ def eval_model_gmm(model, pt_dataset, gmm_list, args):
     class_preval = compute_class_prevalance(dataloader)
     logger.info(class_preval)
     class_preval = torch.tensor(list(class_preval.values()))
+
+    # generate weights, mus and sigmas
+    weights = class_preval
+    mus = torch.cat([gmm.get("mu") for gmm in gmm_list])
+    sigmas = torch.cat([gmm.get("sigma") for gmm in gmm_list])
+    gmm = None
+
     with torch.no_grad():
         for batch_idx, tensor_dict in enumerate(dataloader):
             inputs = tensor_dict[0].cuda()
@@ -245,16 +283,14 @@ def eval_model_gmm(model, pt_dataset, gmm_list, args):
                 # passing the logits acquired before the softmax to gmm as inputs
                 gmm_inputs = outputs.detach().cpu()
 
-                # generate weights, mus and sigmas
-                weights = class_preval
-                mus = torch.cat([gmm.get("mu") for gmm in gmm_list])
-                sigmas = torch.cat([gmm.get("sigma") for gmm in gmm_list])
-
-                # create new GMM object for combined data
+                # # generate weights, mus and sigmas
+                # weights = class_preval
+                # mus = torch.cat([gmm.get("mu") for gmm in gmm_list])
+                # sigmas = torch.cat([gmm.get("sigma") for gmm in gmm_list])
+                #
+                # # create new GMM object for combined data
+                # gmm = GMM(n_features=gmm_inputs.shape[1], n_clusters=weights.shape[0], weights=weights, mu=mus, sigma=sigmas)
                 gmm = GMM(n_features=gmm_inputs.shape[1], n_clusters=weights.shape[0], weights=weights, mu=mus, sigma=sigmas)
-
-                # appending gmm for future use
-                gmm_list.append(gmm)
 
                 _, gmm_resp = gmm.predict_probability(gmm_inputs)  # N*1, N*K
 
@@ -269,7 +305,7 @@ def eval_model_gmm(model, pt_dataset, gmm_list, args):
         gmm_preds = torch.mean(torch.cat(gmm_preds, dim=-1).type(torch.float16))
         softmax_preds = torch.mean(torch.cat(softmax_preds, dim=-1).type(torch.float16))
 
-        return softmax_preds, softmax_accuracy, gmm_preds, gmm_accuracy, gmm_list
+        return softmax_preds, softmax_accuracy, gmm_preds, gmm_accuracy, gmm
 
 
 def compute_class_prevalance(dataloader):
@@ -370,14 +406,13 @@ def train(args):
 
 
         if epoch > 0 and GMM_ENABLED:
-            # TODO transfer this whole process into gmm or new class where these things can be handled by a single class and can be parallelized
-            softmax_preds, softmax_accuracy, gmm_preds, gmm_accuracy, gmm_models = eval_model_gmm(model, val_dataset, gmm_models, args)
+            softmax_preds, softmax_accuracy, gmm_preds, gmm_accuracy, combined_gmm = eval_model_gmm(model, val_dataset, gmm_models, args)
 
             train_stats.add(epoch, "softmax_val_accuracy", softmax_accuracy.detach().cpu().item())
             train_stats.add(epoch, "gmm_val_accuracy", gmm_accuracy.detach().cpu().item())
 
             # perform pseudo labeling
-            train_dataset_labeled, train_dataset_unlabeled = psuedolabel_data(train_dataset_labeled, train_dataset_unlabeled, gmm_models, args)
+            train_dataset_labeled, train_dataset_unlabeled = psuedolabel_data(model,train_dataset_labeled, train_dataset_unlabeled, combined_gmm, args)
 
 
 
@@ -408,14 +443,6 @@ def train(args):
             # update the global metrics with the best epoch
             train_stats.update_global(epoch)
 
-    # GMM on Test dataset on before SSL
-    if GMM_ENABLED:  # and epoch > 10:
-        softmax_preds, softmax_accuracy, gmm_preds, gmm_accuracy,_ = eval_model_gmm(model, test_dataset, gmm_models, args)
-
-        train_stats.add(epoch, "softmax_test_accuracy", softmax_accuracy.detach().cpu().item())
-        train_stats.add(epoch, "gmm_test_accuracy", gmm_accuracy.detach().cpu().item())
-
-
 
 
 
@@ -425,7 +452,7 @@ def train(args):
     # TODO insert cifar100 pseudo-labeling
 
     # train_dataset = psuedolabel_data(train_dataset,gmm_models,args)
-    train_dataset_labeled, train_dataset_unlabeled = psuedolabel_data(train_dataset_labeled, train_dataset_unlabeled, gmm_models, args)
+    # train_dataset_labeled, train_dataset_unlabeled = psuedolabel_data(train_dataset_labeled, train_dataset_unlabeled, gmm_models, args)
 
     # TODO make a second train function to do the SSL work in
 
