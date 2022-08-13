@@ -75,10 +75,8 @@ class GMM(torch.nn.Module):
         """
         var can be "mu", "sigma" or "pi"
         """
-        try:
-            return self['_' + var]
-        except KeyError as ke:
-            raise AttributeError('Attribute not accessible.')
+        return getattr(self, '_'+var)
+
 
     def fit(self, x):
         """
