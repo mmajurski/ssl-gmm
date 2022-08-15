@@ -63,6 +63,8 @@ def psuedolabel_data(model,train_dataset_labeled, train_dataset_unlabeled, combi
     # TODO update this to use a per-class threshold, but that is an extension of the baseline technique
     denominator_threshold = 500.0  # TODO update this to be 80 % confident
     resp_threshold = 0.95
+    size_threshold = 0.02
+    num_classes = 10
     filtered_inputs = []
     filtered_labels = []
     filtered_data_resp = []
@@ -98,10 +100,30 @@ def psuedolabel_data(model,train_dataset_labeled, train_dataset_unlabeled, combi
         filtered_labels = filtered_labels[resp_filter]
         filtered_preds = filtered_preds[resp_filter]
 
-    num_additions = len(filtered_preds)
-    # print(num_additions)
-    for idx in range(num_additions):
-        train_dataset_labeled.add_datapoint(filtered_inputs[idx].cpu().numpy(),filtered_preds[idx].cpu().item())
+        # assumption: classes are balanced
+        points_per_class = (len(train_dataset_unlabeled) * size_threshold) / num_classes
+
+        # class_present, class_points = torch.unique(filtered_preds, return_counts=True)
+
+        # for i, j in zip(class_present, class_points):
+        #     if class_points > points_per_class:
+        #         pass
+
+        class_counter = [0] * num_classes
+
+        for index, pred in enumerate(filtered_preds):
+            # assumption: 10 classes are 0 to 10
+            if class_counter[pred] <= points_per_class:
+                train_dataset_labeled.add_datapoint(filtered_inputs[index].cpu().numpy(),
+                                                    filtered_preds[index].cpu().item())
+                # if not working then use permute(1,2,0)
+                class_counter[pred] += 1
+        print(class_counter)
+
+    # num_additions = len(filtered_preds)
+    # # print(num_additions)
+    # for idx in range(num_additions):
+    #     train_dataset_labeled.add_datapoint(filtered_inputs[idx].cpu().numpy(),filtered_preds[idx].cpu().item())
         # if not working then use permute(1,2,0)
 
     #testing psuedolabel accuracy
