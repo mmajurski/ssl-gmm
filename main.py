@@ -7,8 +7,7 @@ import train_ssl
 
 def main():
     parser = argparse.ArgumentParser(description='PyTorch ResNet Training')
-    parser.add_argument('--arch', default='resnet18', type=str, help='Name of the image classification architecture to train')
-    # parser.add_argument('--arch', default='wide_resnet50_2', type=str, help='Name of the image classification architecture to train')
+    parser.add_argument('--arch', default='wide_resnet50_2', type=str, help='Name of the image classification architecture to train')
     parser.add_argument('--num-workers', type=int, default=0, help='number of workers')
     parser.add_argument('--output-filepath', default='./model', type=str, help='filepath to where the outputs will be saved.')
     parser.add_argument('--batch-size', default=128, type=int, help='batch size')
