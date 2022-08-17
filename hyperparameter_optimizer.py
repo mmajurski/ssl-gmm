@@ -41,19 +41,19 @@ def search():
     args['num_workers'] = 2
     args['output_filepath'] = fp
     args['batch_size'] = 128
-    args['learning_rate'] = 0.1 #learning_rate
+    args['learning_rate'] = 3e-4 #learning_rate
     args['loss_eps'] = 1e-4
     args['num_lr_reductions'] = 2
     args['lr_reduction_factor'] = 0.2 #lr_reduction_factor
     args['patience'] = 50
-    args['weight_decay'] = 0.0005 #weight_decay
+    args['weight_decay'] = 0.5  #0.0005 #weight_decay
     args['cycle_factor'] = None #cycle_factor
     args['starting_model'] = None
-    args['nesterov'] = False #nesterov
-    args['optimizer'] = 'sgd' #optimizer
+    args['nesterov'] = None #nesterov
+    args['optimizer'] = 'adamw' #optimizer
     args['debug'] = False
-    args['amp'] = bool(np.random.uniform(0, 1.0) > 0.5)
-    args['val_fraction'] = float(0.0) #float(0.1)
+    args['amp'] = True #bool(np.random.uniform(0, 1.0) > 0.5)
+    args['val_fraction'] = 0.1 #float(np.random.uniform(0.01, 0.1))
 
     if args['debug']:
         args['loss_eps'] = 0.1
@@ -88,74 +88,21 @@ def select():
                 continue
 
             config_vector.append(config_dict)
-            acc_vector.append(stats_dict['val_accuracy'])
+            acc_vector.append(stats_dict['test_accuracy'])
 
             if best_config is None:
                 best_config = config_dict
-                best_accuracy = stats_dict['val_accuracy']
+                best_accuracy = stats_dict['test_accuracy']
                 best_model = fn
             else:
                 if stats_dict['val_accuracy'] > best_accuracy:
                     best_config = config_dict
-                    best_accuracy = stats_dict['val_accuracy']
+                    best_accuracy = stats_dict['test_accuracy']
                     best_model = fn
 
     print("Best Config (test accuracy = {}):".format(best_accuracy))
     print(best_model)
     print(best_config)
-
-
-    learning_rate_vals = list()
-    loss_eps_vals = list()
-    patience_vals = list()
-    cycle_factor_vals = list()
-    val_fraction_vals = list()
-
-    for c in config_vector:
-        learning_rate_vals.append(c['learning_rate'])
-        loss_eps_vals.append(c['loss_eps'])
-        patience_vals.append(c['patience'])
-        cycle_factor_vals.append(c['cycle_factor'])
-        val_fraction_vals.append(c['val_fraction'])
-
-
-    fig = plt.figure(figsize=(16, 9), dpi=100)
-    plt.hist(acc_vector, bins=50)
-    plt.xlabel('Test Accuracy')
-    plt.ylabel('Count')
-    plt.title('Test Accuracy Distribution')
-    plt.show()
-
-    plt.scatter(learning_rate_vals, acc_vector)
-    plt.xlabel('Learning Rate')
-    plt.ylabel('Accuracy')
-    plt.title('Val Accuracy vs Learning Rate')
-    plt.show()
-
-    # plt.scatter(loss_eps_vals, acc_vector)
-    # plt.xlabel('Loss Eps')
-    # plt.ylabel('Accuracy')
-    # plt.title('Val Accuracy vs Loss Eps')
-    # plt.show()
-
-    # plt.scatter(patience_vals, acc_vector)
-    # plt.xlabel('Patience')
-    # plt.ylabel('Accuracy')
-    # plt.title('Val Accuracy vs Patience')
-    # plt.show()
-    #
-    # plt.scatter(cycle_factor_vals, acc_vector)
-    # plt.xlabel('Cycle Factor')
-    # plt.ylabel('Accuracy')
-    # plt.title('Val Accuracy vs Cycle Factor')
-    # plt.show()
-    #
-    # plt.scatter(val_fraction_vals, acc_vector)
-    # plt.xlabel('Validation Fraction')
-    # plt.ylabel('Accuracy')
-    # plt.title('Val Accuracy vs Validation Fraction')
-    # plt.show()
-
 
 
 

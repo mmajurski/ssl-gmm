@@ -27,6 +27,8 @@ def worker_init_fn(worker_id):
     np.random.seed(np.random.get_state()[1][0] + worker_id)
 
 
+# TODO setup sumeet style data augmentation to improve the results
+
 class Cifar10(torch.utils.data.Dataset):
     TRANSFORM_TRAIN = torchvision.transforms.Compose([
         torchvision.transforms.RandomHorizontalFlip(),

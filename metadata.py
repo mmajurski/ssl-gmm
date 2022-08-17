@@ -1,9 +1,9 @@
 import os
 import json
+import numpy as np
 import pandas as pd
 
 import logging
-
 logger = logging.getLogger()
 
 
@@ -33,32 +33,42 @@ class TrainingStats():
     def add_global(self, metric_name: str, value):
         self.global_data[metric_name] = value
 
-    def get(self, metric_name: str):
+    def get(self, metric_name: str, aggregator=None):
         data = list()
         for epoch_metrics in self.epoch_data:
             if metric_name not in epoch_metrics.keys():
-                raise RuntimeError('Missing data for metric "{}" in epoch stats'.format(metric_name))
-                # data.append(None)  # use this if you want to silently fail
+                # raise RuntimeError('Missing data for metric "{}" in epoch stats'.format(metric_name))
+                data.append(None)  # use this if you want to silently fail
             else:
                 data.append(epoch_metrics[metric_name])
+        if aggregator is not None:
+            data = np.asarray(data)
+            if aggregator == 'mean':
+                data = np.mean(data)
+            elif aggregator == 'median':
+                data = np.median(data)
+            elif aggregator == 'sum':
+                data = np.sum(data)
+            else:
+                raise RuntimeError('Invalid aggregator: {}'.format(aggregator))
         return data
 
     def get_epoch(self, metric_name: str, epoch: int):
         if epoch > len(self.epoch_data):
-            raise RuntimeError('Missing data for metric "{}" at epoch {} in epoch stats'.format(metric_name, epoch))
-            # return None  # use this if you want to silently fail
+            # raise RuntimeError('Missing data for metric "{}" at epoch {} in epoch stats'.format(metric_name, epoch))
+            return None  # use this if you want to silently fail
 
         epoch_data = self.epoch_data[epoch]
         if metric_name not in epoch_data.keys():
-            raise RuntimeError('Missing data for metric "{}" at epoch {} in epoch stats'.format(metric_name, epoch))
-            # return None  # use this if you want to silently fail
+            # raise RuntimeError('Missing data for metric "{}" at epoch {} in epoch stats'.format(metric_name, epoch))
+            return None  # use this if you want to silently fail
 
         return epoch_data[metric_name]
 
     def get_global(self, metric_name: str):
         if metric_name not in self.global_data.keys():
-            raise RuntimeError('Missing data for metric "{}" in global stats'.format(metric_name))
-            # return None  # use this if you want to silently fail
+            # raise RuntimeError('Missing data for metric "{}" in global stats'.format(metric_name))
+            return None  # use this if you want to silently fail
         return self.global_data[metric_name]
 
     def export(self, output_folder: str):
