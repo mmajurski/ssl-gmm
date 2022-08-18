@@ -27,7 +27,7 @@ def setup(args):
     else:
         if args.arch == 'resnet18':
             model = torchvision.models.resnet18(pretrained=False, num_classes=args.num_classes)
-            #model = flavored_resnets.ResNet18(num_classes=10)
+            #model = flavored_resnets.ResNet18(num_classes=args.num_classes)
         if args.arch == 'resnet34':
             model = torchvision.models.resnet34(pretrained=False, num_classes=args.num_classes)
         if args.arch == 'resnext50_32x4d':
@@ -63,9 +63,11 @@ def psuedolabel_data(model, train_dataset_labeled, train_dataset_unlabeled, gmm,
                                                 num_workers=args.num_workers,
                                                 worker_init_fn=cifar_datasets.worker_init_fn)
     # TODO update this to use a per-class threshold, but that is an extension of the baseline technique
-    denominator_threshold = 500.0  # TODO update this to be 80 % confident
+    denominator_threshold = 0.0
+    # denominator_threshold = 500.0
     resp_threshold = 0.95
-    size_threshold = 0.02
+    size_threshold = 2
+    # size_threshold = 0.02
 
     filtered_inputs = []
     filtered_labels = []
@@ -96,14 +98,21 @@ def psuedolabel_data(model, train_dataset_labeled, train_dataset_unlabeled, gmm,
 
     max_resps, filtered_preds = torch.max(filtered_data_resp,dim=-1)
 
-    resp_filter = max_resps > resp_threshold #TODO: change this filter
+    # sorting the data based on the resp
+    max_resps, sorted_indices = max_resps.sort(descending=True)
 
-    filtered_inputs = filtered_inputs[resp_filter]
-    filtered_labels = filtered_labels[resp_filter]
-    filtered_preds = filtered_preds[resp_filter]
+    filtered_inputs = filtered_inputs[sorted_indices]
+    filtered_labels = filtered_labels[sorted_indices]
+    filtered_preds = filtered_preds[sorted_indices]
+
+    # resp_filter = max_resps > resp_threshold
+    #
+    # filtered_inputs = filtered_inputs[resp_filter]
+    # filtered_labels = filtered_labels[resp_filter]
+    # filtered_preds = filtered_preds[resp_filter]
 
     # assumption: classes are balanced
-    points_per_class = float(len(train_dataset_unlabeled) * size_threshold) / float(args.num_classes)
+    # points_per_class = float(len(train_dataset_unlabeled) * size_threshold) / float(args.num_classes)
 
     # class_present, class_points = torch.unique(filtered_preds, return_counts=True)
 
@@ -113,11 +122,18 @@ def psuedolabel_data(model, train_dataset_labeled, train_dataset_unlabeled, gmm,
 
     class_counter = [0] * int(args.num_classes)
 
+    added_preds = []
+    added_label = []
+
     for index, pred in enumerate(filtered_preds):
         # assumption: 10 classes are 0 to 10
-        if class_counter[pred] <= points_per_class:
+        # if class_counter[pred] < points_per_class:
+        if class_counter[pred] < size_threshold:
             train_dataset_labeled.add_datapoint(filtered_inputs[index].detach().cpu().numpy(),
                                                 filtered_preds[index].item())
+            added_preds.append(filtered_preds[index])
+            added_label.append(filtered_labels[index])
+
             # if not working then use permute(1,2,0)
             class_counter[pred] += 1
     print(class_counter)
@@ -129,12 +145,14 @@ def psuedolabel_data(model, train_dataset_labeled, train_dataset_unlabeled, gmm,
     # # print(num_additions)
     # for idx in range(num_additions):
     #     train_dataset_labeled.add_datapoint(filtered_inputs[idx].cpu().numpy(),filtered_preds[idx].cpu().item())
-        # if not working then use permute(1,2,0)
+    # if not working then use permute(1,2,0)
 
     #testing psuedolabel accuracy
-    psuedolabel_acc = torch.sum(filtered_preds.cpu() == filtered_labels.cpu()) / len(filtered_preds.cpu())
+    # psuedolabel_acc = torch.sum(filtered_preds.cpu() == filtered_labels.cpu()) / len(filtered_preds.cpu())
+    added_preds, added_label = torch.tensor(added_preds), torch.tensor(added_label)
+    psuedolabel_acc = torch.sum(added_preds == added_label) / len(added_preds)
 
-    # print(psuedolabel_acc) # may add to trainstats
+    print(psuedolabel_acc)  # can add to train_stats
 
 
 def build_gmm(model, pytorch_dataset, epoch, train_stats, args):
