@@ -52,6 +52,7 @@ def search():
     args['nesterov'] = None #nesterov
     args['optimizer'] = 'adamw' #optimizer
     args['debug'] = False
+    args['num_classes'] = 10
     args['amp'] = True #bool(np.random.uniform(0, 1.0) > 0.5)
     args['val_fraction'] = 0.1 #float(np.random.uniform(0.01, 0.1))
 
@@ -107,8 +108,8 @@ def select():
 
 
 if __name__ == '__main__':
-    search()
-    # select()
+    # search()
+    select()
 
 
 

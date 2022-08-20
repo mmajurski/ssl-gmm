@@ -66,17 +66,18 @@ def psuedolabel_data(model, train_dataset_labeled, train_dataset_unlabeled, gmm,
     denominator_threshold = 0.0
     # denominator_threshold = 500.0
     resp_threshold = 0.95
-    size_threshold = 2
+    size_threshold = 2  # the number of data points from each class to add to the labeled population
     # size_threshold = 0.02
 
-    filtered_inputs = []
     filtered_labels = []
+    filtered_indicies = []
     filtered_data_resp = []
     model.eval()
     with torch.no_grad():
         for batch_idx, tensor_dict in enumerate(ul_dataloader):
             inputs = tensor_dict[0].cuda()
             labels = tensor_dict[1].cuda()
+            index = tensor_dict[2].cpu().detach()
 
             with torch.cuda.amp.autocast():
                 outputs = model(inputs)
@@ -88,71 +89,82 @@ def psuedolabel_data(model, train_dataset_labeled, train_dataset_unlabeled, gmm,
                 # list of boolean where value is False for items having lower prob_sum then threshold, True otherwise
                 denominator_filter = torch.squeeze(gmm_prob_sum > denominator_threshold)
 
-                filtered_inputs.append(inputs[denominator_filter])
                 filtered_labels.append(labels[denominator_filter])
                 filtered_data_resp.append(gmm_resp[denominator_filter])
+                filtered_indicies.append(index[denominator_filter])
 
-    filtered_inputs = torch.cat(filtered_inputs,dim=0)
-    filtered_labels = torch.cat(filtered_labels,dim= -1)
-    filtered_data_resp = torch.cat(filtered_data_resp,dim =0)
+    filtered_labels = torch.cat(filtered_labels, dim=-1)
+    filtered_indicies = torch.cat(filtered_indicies, dim=-1)
+    filtered_data_resp = torch.cat(filtered_data_resp, dim=0)
 
     max_resps, filtered_preds = torch.max(filtered_data_resp,dim=-1)
 
     # sorting the data based on the resp
     max_resps, sorted_indices = max_resps.sort(descending=True)
 
-    filtered_inputs = filtered_inputs[sorted_indices]
     filtered_labels = filtered_labels[sorted_indices]
+    filtered_indicies = filtered_indicies[sorted_indices]
     filtered_preds = filtered_preds[sorted_indices]
 
-    # resp_filter = max_resps > resp_threshold
-    #
-    # filtered_inputs = filtered_inputs[resp_filter]
-    # filtered_labels = filtered_labels[resp_filter]
-    # filtered_preds = filtered_preds[resp_filter]
 
-    # assumption: classes are balanced
-    # points_per_class = float(len(train_dataset_unlabeled) * size_threshold) / float(args.num_classes)
-
-    # class_present, class_points = torch.unique(filtered_preds, return_counts=True)
-
-    # for i, j in zip(class_present, class_points):
-    #     if class_points > points_per_class:
-    #         pass
 
     class_counter = [0] * int(args.num_classes)
+    added_accuracies = []
+    used_indices = []
 
-    added_preds = []
-    added_label = []
-
-    for index, pred in enumerate(filtered_preds):
+    for i in range(len(filtered_preds)):
+        pred = filtered_preds[i]
         # assumption: 10 classes are 0 to 10
         # if class_counter[pred] < points_per_class:
         if class_counter[pred] < size_threshold:
-            train_dataset_labeled.add_datapoint(filtered_inputs[index].detach().cpu().numpy(),
-                                                filtered_preds[index].item())
-            added_preds.append(filtered_preds[index])
-            added_label.append(filtered_labels[index])
-
-            # if not working then use permute(1,2,0)
             class_counter[pred] += 1
-    print(class_counter)
-    train_stats.add(epoch, 'pseudo_label_counts', class_counter)
-    # TODO expand the psueudo label metadata
+            label = filtered_labels[i].item()
+            index = filtered_indicies[i].item()
+            used_indices.append(index)
 
+            img, target = train_dataset_unlabeled.get_raw_datapoint(index)
+            train_dataset_labeled.add_datapoint(img, target)
 
-    # num_additions = len(filtered_preds)
-    # # print(num_additions)
-    # for idx in range(num_additions):
-    #     train_dataset_labeled.add_datapoint(filtered_inputs[idx].cpu().numpy(),filtered_preds[idx].cpu().item())
-    # if not working then use permute(1,2,0)
+            acc = float(pred == label)
+            added_accuracies.append(acc)
+    # delete the indices transferred to the labeled population. Do this after the move, so that we don't modify the index numbers during the move
+    train_dataset_unlabeled.remove_datapoints_by_index(used_indices)
 
-    #testing psuedolabel accuracy
-    # psuedolabel_acc = torch.sum(filtered_preds.cpu() == filtered_labels.cpu()) / len(filtered_preds.cpu())
-    added_preds, added_label = torch.tensor(added_preds), torch.tensor(added_label)
-    psuedolabel_acc = torch.sum(added_preds == added_label) / len(added_preds)
+    # get the average accuracy of the pseudo-labels (this data is not available in real SSL applications, since the unlabeled population would truly be unlabeled
+    pseudo_labeling_accuracy = float(np.mean(added_accuracies))
+    # update the training metadata
+    train_stats.add(epoch, 'pseudo_labeling_accuracy', pseudo_labeling_accuracy)
+    train_stats.add(epoch, 'pseudo_label_counts_per_class', class_counter)
 
-    print(psuedolabel_acc)  # can add to train_stats
+    #
+    # for index, pred in enumerate(filtered_preds):
+    #     # assumption: 10 classes are 0 to 10
+    #     # if class_counter[pred] < points_per_class:
+    #     if class_counter[pred] < size_threshold:
+    #         train_dataset_labeled.add_datapoint(filtered_inputs[index].detach().cpu().numpy(),
+    #                                             filtered_preds[index].item())
+    #         added_preds.append(filtered_preds[index])
+    #         added_label.append(filtered_labels[index])
+    #
+    #         # if not working then use permute(1,2,0)
+    #         class_counter[pred] += 1
+    # print(class_counter)
+    # train_stats.add(epoch, 'pseudo_label_counts', class_counter)
+    # # TODO expand the psueudo label metadata
+    #
+    #
+    # # num_additions = len(filtered_preds)
+    # # # print(num_additions)
+    # # for idx in range(num_additions):
+    # #     train_dataset_labeled.add_datapoint(filtered_inputs[idx].cpu().numpy(),filtered_preds[idx].cpu().item())
+    # # if not working then use permute(1,2,0)
+    #
+    # #testing psuedolabel accuracy
+    # # psuedolabel_acc = torch.sum(filtered_preds.cpu() == filtered_labels.cpu()) / len(filtered_preds.cpu())
+    # added_preds, added_label = torch.tensor(added_preds), torch.tensor(added_label)
+    # psuedolabel_acc = torch.sum(added_preds == added_label) / len(added_preds)
+    #
+    # print(psuedolabel_acc)  # can add to train_stats
 
 
 def build_gmm(model, pytorch_dataset, epoch, train_stats, args):
@@ -379,6 +391,11 @@ def compute_class_prevalance(dataloader):
 
     return class_preval
 
+
+
+# TODO, setup data augmentation and disqualify samples from being added to the labeled population based on contrastive learning. If the labeled changes under N instances of data augmentation, then the model is not confident about it.
+
+# TODO Test greedy pseudo-labeling, where for each call to this function, we take the top k=2 pseudo-labeled from each class. (how to determine the best samples, look at resp)
 
 def train(args):
     if not os.path.exists(args.output_filepath):

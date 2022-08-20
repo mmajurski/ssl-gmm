@@ -86,7 +86,7 @@ class Cifar10(torch.utils.data.Dataset):
         if self.transform is not None:
             img = self.transform(img)
 
-        return img, target
+        return img, target, index
 
     def get(self, index:int) -> Tuple[Any, Any]:
         """
@@ -99,9 +99,17 @@ class Cifar10(torch.utils.data.Dataset):
         img, target = self.data[index], self.targets[index]
         return img, target
 
-    def remove_datapoint(self, index):
-        del self.data[index]
-        del self.targets[index]
+    def get_raw_datapoint(self, index):
+        img = copy.deepcopy(self.data[index])
+        target = copy.deepcopy(self.targets[index])
+        return img, target
+
+    def remove_datapoints_by_index(self, indicies):
+        indicies.sort(reverse=True)
+        # delete in reverse order so the index number align as we expect them
+        for i in indicies:
+            del self.data[i]
+            del self.targets[i]
 
     def add_datapoint(self, img, target):
         if not isinstance(img, np.ndarray):
