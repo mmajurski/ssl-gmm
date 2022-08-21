@@ -35,8 +35,10 @@ def search():
     # from "Lookahead optimizer: k Steps forward, 1 step back" page 17
     # from "Wide Residual Networks" code
 
+    arch = np.random.choice(['wide_resnet','resnet18','resnet34','resnext50_32x4d'])
+
     args = dict()
-    args['arch'] = 'wide_resnet'
+    args['arch'] = arch #'wide_resnet'
     args['num_workers'] = 2
     args['output_filepath'] = fp
     args['batch_size'] = 128
