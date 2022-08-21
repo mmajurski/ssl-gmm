@@ -11,10 +11,11 @@ import cifar_datasets
 import metadata
 from gmm_module import GMM
 import lr_scheduler
-import flavored_resnets
+import flavored_resnet18
+import flavored_wideresnet
 
 MAX_EPOCHS = 300
-GMM_ENABLED = False
+GMM_ENABLED = True
 
 logger = logging.getLogger()
 
@@ -28,16 +29,21 @@ def setup(args):
     else:
         if args.arch == 'resnet18':
             model = torchvision.models.resnet18(pretrained=False, num_classes=args.num_classes)
-            #model = flavored_resnets.ResNet18(num_classes=10)
+            #model = flavored_resnet18.ResNet18(num_classes=args.num_classes)
         if args.arch == 'resnet34':
             model = torchvision.models.resnet34(pretrained=False, num_classes=args.num_classes)
         if args.arch == 'resnext50_32x4d':
             model = torchvision.models.resnext50_32x4d(pretrained=False, num_classes=args.num_classes)
         if args.arch == 'wide_resnet50_2':
             model = torchvision.models.wide_resnet50_2(pretrained=False, num_classes=args.num_classes)
+        if args.arch == 'wide_resnet':
+            model = flavored_wideresnet.build_wideresnet(num_classes=args.num_classes)
+
 
     if model is None:
         raise RuntimeError("Unsupported model architecture selection: {}.".format(args.arch))
+
+    logger.info("Total Model params: {:.2f}M".format(sum(p.numel() for p in model.parameters()) / 1e6))
 
     # setup and load CIFAR10
     if args.num_classes == 10:
