@@ -102,6 +102,15 @@ def psuedolabel_data(model, train_dataset_labeled, train_dataset_unlabeled, gmm,
     filtered_indicies = torch.cat(filtered_indicies, dim=-1)
     filtered_data_resp = torch.cat(filtered_data_resp, dim=0)
 
+    # TODO create a set of subfunctions which sorts/filters the gmm outputs using different methods. So it takes as input a list of all the GMM outputs, and then it returns a sorted list (potentially smaller if there is a filter). This subfunction allows us to swap out different pseudo-labeling strategies.
+    # TODO i.e. labels, indicies, data_resp = pseudo_label_filter_denominator(labels, indicies, data_resp)
+    # TODO i.e. labels, indicies, data_resp = pseudo_label_filter_neumerator(labels, indicies, data_resp)
+
+
+
+    # TODO start figuring out what the filtering and disqualifying filters are for the GMM to remove bad examples
+    # TODO Experiment with pseudo labeling sorting by the largest numerator per class, then do top k
+
     max_resps, filtered_preds = torch.max(filtered_data_resp,dim=-1)
 
     # sorting the data based on the resp
@@ -141,35 +150,11 @@ def psuedolabel_data(model, train_dataset_labeled, train_dataset_unlabeled, gmm,
     train_stats.add(epoch, 'pseudo_labeling_accuracy', pseudo_labeling_accuracy)
     train_stats.add(epoch, 'pseudo_label_counts_per_class', class_counter)
 
-    #
-    # for index, pred in enumerate(filtered_preds):
-    #     # assumption: 10 classes are 0 to 10
-    #     # if class_counter[pred] < points_per_class:
-    #     if class_counter[pred] < size_threshold:
-    #         train_dataset_labeled.add_datapoint(filtered_inputs[index].detach().cpu().numpy(),
-    #                                             filtered_preds[index].item())
-    #         added_preds.append(filtered_preds[index])
-    #         added_label.append(filtered_labels[index])
-    #
-    #         # if not working then use permute(1,2,0)
-    #         class_counter[pred] += 1
-    # print(class_counter)
-    # train_stats.add(epoch, 'pseudo_label_counts', class_counter)
-    # # TODO expand the psueudo label metadata
-    #
-    #
-    # # num_additions = len(filtered_preds)
-    # # # print(num_additions)
-    # # for idx in range(num_additions):
-    # #     train_dataset_labeled.add_datapoint(filtered_inputs[idx].cpu().numpy(),filtered_preds[idx].cpu().item())
-    # # if not working then use permute(1,2,0)
-    #
-    # #testing psuedolabel accuracy
-    # # psuedolabel_acc = torch.sum(filtered_preds.cpu() == filtered_labels.cpu()) / len(filtered_preds.cpu())
-    # added_preds, added_label = torch.tensor(added_preds), torch.tensor(added_label)
-    # psuedolabel_acc = torch.sum(added_preds == added_label) / len(added_preds)
-    #
-    # print(psuedolabel_acc)  # can add to train_stats
+    # TODO log the per-class accuracy of the pseudo-labels
+    # TODO build confusion matrix for the psuedo labeling
+    # TODO build confusion matrix for the validation accuracy using the gmm to predict labels
+    # TODO experiment and compute the baseline accuracy when using just 250 or 4000 labels.
+
 
 
 def build_gmm(model, pytorch_dataset, epoch, train_stats, args):

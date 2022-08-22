@@ -6,3 +6,4 @@ data/
 *model*/
 model.zip
 *.pyc
+*.png
