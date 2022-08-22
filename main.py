@@ -7,7 +7,7 @@ import train_ssl
 
 def main():
     parser = argparse.ArgumentParser(description='PyTorch ResNet Training')
-    parser.add_argument('--arch', default='wide_resnet50_2', type=str, help='Name of the image classification architecture to train')
+    parser.add_argument('--arch', default='wide_resnet', type=str, help='Name of the image classification architecture to train')
     parser.add_argument('--num-workers', type=int, default=0, help='number of workers')
     parser.add_argument('--output-filepath', default='./model', type=str, help='filepath to where the outputs will be saved.')
     parser.add_argument('--batch-size', default=128, type=int, help='batch size')
@@ -37,8 +37,8 @@ def main():
     #     print("Detected debug mode, setting number of workers to 0")
     #     args.num_workers = 0
 
-    # train.train(args)
-    train_ssl.train(args)
+    train.train(args)
+    # train_ssl.train(args)
 
 
 if __name__ == '__main__':

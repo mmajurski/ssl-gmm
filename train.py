@@ -11,10 +11,11 @@ import cifar_datasets
 import metadata
 from gmm_module import GMM
 import lr_scheduler
-import flavored_resnets
+import flavored_resnet18
+import flavored_wideresnet
 
 MAX_EPOCHS = 300
-GMM_ENABLED = False
+GMM_ENABLED = True
 
 logger = logging.getLogger()
 
@@ -28,16 +29,21 @@ def setup(args):
     else:
         if args.arch == 'resnet18':
             model = torchvision.models.resnet18(pretrained=False, num_classes=args.num_classes)
-            #model = flavored_resnets.ResNet18(num_classes=10)
+            #model = flavored_resnet18.ResNet18(num_classes=args.num_classes)
         if args.arch == 'resnet34':
             model = torchvision.models.resnet34(pretrained=False, num_classes=args.num_classes)
         if args.arch == 'resnext50_32x4d':
             model = torchvision.models.resnext50_32x4d(pretrained=False, num_classes=args.num_classes)
         if args.arch == 'wide_resnet50_2':
             model = torchvision.models.wide_resnet50_2(pretrained=False, num_classes=args.num_classes)
+        if args.arch == 'wide_resnet':
+            model = flavored_wideresnet.build_wideresnet(num_classes=args.num_classes)
+
 
     if model is None:
         raise RuntimeError("Unsupported model architecture selection: {}.".format(args.arch))
+
+    logger.info("Total Model params: {:.2f}M".format(sum(p.numel() for p in model.parameters()) / 1e6))
 
     # setup and load CIFAR10
     if args.num_classes == 10:
@@ -60,14 +66,77 @@ def setup(args):
 
 
 
-def train_epoch(model, pt_dataset, optimizer, criterion, scheduler, epoch, train_stats, args,gmm_models=[]):
+def build_gmm(model, pytorch_dataset, epoch, train_stats, args):
+    model.eval()
+
+    dataloader = torch.utils.data.DataLoader(pytorch_dataset, batch_size=args.batch_size, shuffle=True, num_workers=args.num_workers, worker_init_fn=cifar_datasets.worker_init_fn)
+
+    start_time = time.time()
+    dataset_logits = list()
+    dataset_labels = list()
+
+    for batch_idx, tensor_dict in enumerate(dataloader):
+        inputs = tensor_dict[0].cuda()
+        labels = tensor_dict[1].cuda()
+
+        # FP16 training
+        if args.amp:
+            with torch.cuda.amp.autocast():
+                outputs = model(inputs)
+        else:
+            outputs = model(inputs)
+
+        dataset_logits.append(outputs.detach().cpu())
+        dataset_labels.append(labels.detach().cpu())
+
+
+    gmm_list = list()
+    bucketed_dataset_logits = list()
+    # join together the individual batches of numpy logit data
+    dataset_logits = torch.cat(dataset_logits)
+    dataset_labels = torch.cat(dataset_labels)
+    unique_class_labels = torch.unique(dataset_labels)
+
+    for i in range(len(unique_class_labels)):
+        c = unique_class_labels[i]
+        bucketed_dataset_logits.append(dataset_logits[dataset_labels == c])
+
+
+    class_instances = list()
+    for i in range(len(unique_class_labels)):
+        class_c_logits = bucketed_dataset_logits[i]
+        class_instances.append(class_c_logits.shape[0])
+        gmm = GMM(n_features=class_c_logits.shape[1], n_clusters=1, tolerance=1e-4, max_iter=50)
+        gmm.fit(class_c_logits)
+        while np.any(np.isnan(gmm.get("sigma").detach().cpu().numpy())):
+            gmm = GMM(n_features=class_c_logits.shape[1], n_clusters=1, tolerance=1e-4, max_iter=50)
+            gmm.fit(class_c_logits)
+        gmm_list.append(gmm)
+
+    class_preval = compute_class_prevalance(dataloader)
+    logger.info(class_preval)
+    class_preval = torch.tensor(list(class_preval.values()))
+
+    # generate weights, mus and sigmas
+    weights = class_preval
+    mus = torch.cat([gmm.get("mu") for gmm in gmm_list])
+    sigmas = torch.cat([gmm.get("sigma") for gmm in gmm_list])
+    gmm = GMM(n_features=args.num_classes, n_clusters=weights.shape[0], weights=weights, mu=mus, sigma=sigmas)
+
+    wall_time = time.time() - start_time
+    train_stats.add(epoch, 'gmm_build_wall_time', wall_time)
+
+    return gmm
+
+
+def train_epoch(model, pytorch_dataset, optimizer, criterion, epoch, train_stats, args, scheduler=None, gmm_models=None):
 
     avg_loss = 0
     avg_accuracy = 0
     model.train()
     scaler = torch.cuda.amp.GradScaler()
 
-    dataloader = torch.utils.data.DataLoader(pt_dataset, batch_size=args.batch_size, shuffle=True, num_workers=args.num_workers, worker_init_fn=cifar_datasets.worker_init_fn)
+    dataloader = torch.utils.data.DataLoader(pytorch_dataset, batch_size=args.batch_size, shuffle=True, num_workers=args.num_workers, worker_init_fn=cifar_datasets.worker_init_fn)
 
     batch_count = len(dataloader)
     start_time = time.time()
@@ -101,7 +170,7 @@ def train_epoch(model, pt_dataset, optimizer, criterion, scheduler, epoch, train
         pred = torch.argmax(outputs, dim=-1)
         accuracy = torch.sum(pred == labels) / len(pred)
 
-        if GMM_ENABLED:
+        if gmm_models is not None:
             dataset_logits.append(outputs.detach().cpu())
             dataset_labels.append(labels.detach().cpu())
 
@@ -126,10 +195,8 @@ def train_epoch(model, pt_dataset, optimizer, criterion, scheduler, epoch, train
     train_stats.add(epoch, 'train_loss', avg_loss)
     train_stats.add(epoch, 'train_accuracy', avg_accuracy)
 
-    if GMM_ENABLED:
+    if gmm_models is not None:
         bucketed_dataset_logits = list()
-        unique_class_labels = list()
-
         # join together the individual batches of numpy logit data
         dataset_logits = torch.cat(dataset_logits)
         dataset_labels = torch.cat(dataset_labels)
@@ -139,78 +206,35 @@ def train_epoch(model, pt_dataset, optimizer, criterion, scheduler, epoch, train
             c = unique_class_labels[i]
             bucketed_dataset_logits.append(dataset_logits[dataset_labels == c])
 
-        # logger.info(" gmm work starts")
-
         class_instances = list()
         for i in range(len(unique_class_labels)):
             class_c_logits = bucketed_dataset_logits[i]
             class_instances.append(class_c_logits.shape[0])
-            # start_time = time.time()
             gmm = GMM(n_features=class_c_logits.shape[1], n_clusters=1, tolerance=1e-4, max_iter=50)
             gmm.fit(class_c_logits)
             while np.any(np.isnan(gmm.get("sigma").detach().cpu().numpy())):
                 gmm = GMM(n_features=class_c_logits.shape[1], n_clusters=1, tolerance=1e-4, max_iter=50)
                 gmm.fit(class_c_logits)
             gmm_models.append(gmm)
-            # train_stats.add(epoch, 'class_{}_gmm_log_likelihood'.format(unique_class_labels[i]),
-            #                 gmm.log_likelihood.detach().cpu().item())
 
     return gmm_models
 
 
-def eval_model(model, pt_dataset, criterion, epoch, train_stats, split_name, args):
-    if pt_dataset is None or len(pt_dataset) == 0:
+def eval_model(model, pytorch_dataset, criterion, train_stats, split_name, epoch, gmm, args):
+    if pytorch_dataset is None or len(pytorch_dataset) == 0:
         return
 
-    dataloader = torch.utils.data.DataLoader(pt_dataset, batch_size=args.batch_size, shuffle=False, num_workers=args.num_workers, worker_init_fn=cifar_datasets.worker_init_fn)
+    dataloader = torch.utils.data.DataLoader(pytorch_dataset, batch_size=args.batch_size, shuffle=False, num_workers=args.num_workers, worker_init_fn=cifar_datasets.worker_init_fn)
 
-    batch_count = len(dataloader)
-    avg_loss = 0
-    avg_accuracy = 0
+    model.eval()
     start_time = time.time()
-    model.eval()
 
-    with torch.no_grad():
-        for batch_idx, tensor_dict in enumerate(dataloader):
-            inputs = tensor_dict[0].cuda()
-            labels = tensor_dict[1].cuda()
-
-            if args.amp:
-                with torch.cuda.amp.autocast():
-                    outputs = model(inputs)
-            else:
-                outputs = model(inputs)
-
-            pred = torch.argmax(outputs, dim=-1)
-            accuracy = torch.sum(pred == labels) / len(pred)
-            loss = criterion(outputs, labels)
-            avg_loss += loss.item()
-            avg_accuracy += accuracy.item()
-
-    wall_time = time.time() - start_time
-    avg_loss /= batch_count
-    avg_accuracy /= batch_count
-
-    train_stats.add(epoch, '{}_wall_time'.format(split_name), wall_time)
-    train_stats.add(epoch, '{}_loss'.format(split_name), avg_loss)
-    train_stats.add(epoch, '{}_accuracy'.format(split_name), avg_accuracy)
-
-
-
-def eval_model_gmm(model, pt_dataset, gmm_list, args):
-
-    dataloader = torch.utils.data.DataLoader(pt_dataset, batch_size=args.batch_size, shuffle=False, num_workers=args.num_workers, worker_init_fn=cifar_datasets.worker_init_fn)
-
-    batch_count = len(dataloader)
-    model.eval()
-
-    gmm_preds = list()
-    softmax_preds = list()
-    gmm_accuracy = list()
+    loss = list()
     softmax_accuracy = list()
-    class_preval = compute_class_prevalance(dataloader)
-    logger.info(class_preval)
-    class_preval = torch.tensor(list(class_preval.values()))
+
+    if gmm is not None:
+        gmm_accuracy = list()
+
     with torch.no_grad():
         for batch_idx, tensor_dict in enumerate(dataloader):
             inputs = tensor_dict[0].cuda()
@@ -218,36 +242,32 @@ def eval_model_gmm(model, pt_dataset, gmm_list, args):
 
             with torch.cuda.amp.autocast():
                 outputs = model(inputs)
+                loss.append(criterion(outputs, labels).item())
                 pred = torch.argmax(outputs, dim=-1)
-                softmax_preds.append(pred.reshape(-1))
                 accuracy = torch.sum(pred == labels) / len(pred)
                 softmax_accuracy.append(accuracy.reshape(-1))
 
-                # passing the logits acquired before the softmax to gmm as inputs
-                gmm_inputs = outputs.detach().cpu()
+                if gmm is not None:
+                    # passing the logits acquired before the softmax to gmm as inputs
+                    gmm_inputs = outputs.detach().cpu()
+                    _, gmm_resp = gmm.predict_probability(gmm_inputs)  # N*1, N*K
 
-                # generate weights, mus and sigmas
-                weights = class_preval
-                mus = torch.cat([gmm.get("mu") for gmm in gmm_list])
-                sigmas = torch.cat([gmm.get("sigma") for gmm in gmm_list])
+                    gmm_pred = torch.argmax(gmm_resp, dim=-1)
+                    labels_cpu = labels.detach().cpu()
+                    accuracy_g = torch.sum(gmm_pred == labels_cpu) / len(gmm_pred)
+                    gmm_accuracy.append(accuracy_g.reshape(-1))
 
-                # create new GMM object for combined data
-                gmm = GMM(n_features=gmm_inputs.shape[1], n_clusters=weights.shape[0], weights=weights, mu=mus, sigma=sigmas)
+    avg_loss = np.mean(loss)
+    softmax_accuracy = torch.mean(torch.cat(softmax_accuracy, dim=-1))
 
-                _, gmm_resp = gmm.predict_probability(gmm_inputs)  # N*K
+    wall_time = time.time() - start_time
+    train_stats.add(epoch, '{}_wall_time'.format(split_name), wall_time)
+    train_stats.add(epoch, '{}_loss'.format(split_name), avg_loss)
+    train_stats.add(epoch, '{}_softmax_accuracy'.format(split_name), softmax_accuracy.item())
 
-                gmm_pred = torch.argmax(gmm_resp, dim=-1)
-                gmm_preds.append(gmm_pred.reshape(-1))
-                labels_cpu = labels.detach().cpu()
-                accuracy_g = torch.sum(gmm_pred == labels_cpu) / len(gmm_pred)
-                gmm_accuracy.append(accuracy_g.reshape(-1))
-
+    if gmm is not None:
         gmm_accuracy = torch.mean(torch.cat(gmm_accuracy, dim=-1))
-        softmax_accuracy = torch.mean(torch.cat(softmax_accuracy, dim=-1))
-        gmm_preds = torch.mean(torch.cat(gmm_preds, dim=-1).type(torch.float16))
-        softmax_preds = torch.mean(torch.cat(softmax_preds, dim=-1).type(torch.float16))
-
-        return softmax_preds, softmax_accuracy, gmm_preds, gmm_accuracy
+        train_stats.add(epoch, '{}_gmm_accuracy'.format(split_name), gmm_accuracy.item())
 
 
 def compute_class_prevalance(dataloader):
@@ -271,6 +291,11 @@ def compute_class_prevalance(dataloader):
     return class_preval
 
 
+
+# TODO, setup data augmentation and disqualify samples from being added to the labeled population based on contrastive learning. If the labeled changes under N instances of data augmentation, then the model is not confident about it.
+
+# TODO Test greedy pseudo-labeling, where for each call to this function, we take the top k=2 pseudo-labeled from each class. (how to determine the best samples, look at resp)
+
 def train(args):
     if not os.path.exists(args.output_filepath):
         os.makedirs(args.output_filepath)
@@ -283,7 +308,7 @@ def train(args):
 
     logger.info(args)
 
-    model, train_dataset, val_dataset, test_dataset = setup(args)
+    model, train_dataset_labeled, val_dataset, test_dataset = setup(args)
 
     # write the args configuration to disk
     dvals = vars(args)
@@ -302,16 +327,17 @@ def train(args):
     if args.weight_decay is not None:
         if args.optimizer == 'sgd':
             optimizer = torch.optim.SGD(model.parameters(), lr=args.learning_rate, weight_decay=args.weight_decay, momentum=0.9, nesterov=args.nesterov)
-        else:
+        elif args.optimizer == 'adamw':
             optimizer = torch.optim.AdamW(model.parameters(), lr=args.learning_rate, weight_decay=args.weight_decay)
+        else:
+            raise RuntimeError("Invalid optimizer: {}".format(args.optimizer))
     else:
         if args.optimizer == 'sgd':
             optimizer = torch.optim.SGD(model.parameters(), lr=args.learning_rate, momentum=0.9, nesterov=args.nesterov)
-        else:
+        elif args.optimizer == 'adamw':
             optimizer = torch.optim.AdamW(model.parameters(), lr=args.learning_rate)
-
-    # setup LR reduction on plateau
-    plateau_scheduler = lr_scheduler.ReduceLROnPlateau(optimizer, mode='min', factor=args.lr_reduction_factor, patience=args.patience, threshold=args.loss_eps, max_num_lr_reductions=args.num_lr_reductions)
+        else:
+            raise RuntimeError("Invalid optimizer: {}".format(args.optimizer))
 
     # setup the metadata capture object
     train_stats = metadata.TrainingStats()
@@ -320,67 +346,49 @@ def train(args):
     best_epoch = 0
     best_model = model
 
+    # *************************************
+    # ******** Supervised Training ********
+    # *************************************
+    # train the model until it has converged on the the labeled data
+    # setup early stopping on convergence using LR reduction on plateau
+    plateau_scheduler = lr_scheduler.ReduceLROnPlateau(optimizer, mode='min', factor=args.lr_reduction_factor, patience=args.patience, threshold=args.loss_eps, max_num_lr_reductions=args.num_lr_reductions)
+
     # train epochs until loss converges
     while not plateau_scheduler.is_done() and epoch < MAX_EPOCHS:
-        if args.cycle_factor is not None:
-            num_batches = len(train_dataset) / args.batch_size
-            cyclic_scheduler = torch.optim.lr_scheduler.CyclicLR(optimizer, base_lr=plateau_scheduler._last_lr[0] / args.cycle_factor, max_lr=args.learning_rate * plateau_scheduler._last_lr[0], step_size_up=int(num_batches / 2), cycle_momentum=False)
-        else:
-            cyclic_scheduler = None
-
         epoch += 1
-        logger.info("Epoch: {}".format(epoch))
-        logger.info("  training")
+        logger.info("Epoch (supervised): {}".format(epoch))
 
-        gmm_models = list()
-        gmm_models = train_epoch(model, train_dataset, optimizer, criterion, cyclic_scheduler, epoch, train_stats, args,gmm_models)
-        train_stats.add(epoch, "learning_rate", optimizer.param_groups[0]['lr'])
+        logger.info("  training against fully labeled dataset.")
+        train_epoch(model, train_dataset_labeled, optimizer, criterion, epoch, train_stats, args)
 
-        logger.info("  evaluating validation data")
-        eval_model(model, val_dataset, criterion, epoch, train_stats, 'val', args)
+        logger.info("  building the GMM models on the labeled training data.")
+        gmm = build_gmm(model, train_dataset_labeled, epoch, train_stats, args)
+
+        logger.info("  evaluating against validation data, using softmax and gmm")
+        eval_model(model, val_dataset, criterion, train_stats, "val", epoch, gmm, args)
 
         val_loss = train_stats.get_epoch('val_loss', epoch=epoch)
         plateau_scheduler.step(val_loss)
 
-        train_stats.add_global('training_wall_time', sum(train_stats.get('train_wall_time')))
-        train_stats.add_global('val_wall_time', sum(train_stats.get('val_wall_time')))
-
-        # TODO baseline the difference between GMM and softmax
-        # TODO baseline final model accuracy when trained using softmax vs completely replacing with GMM for the whole stack
-
-        if GMM_ENABLED:
-            softmax_preds, softmax_accuracy, gmm_preds, gmm_accuracy = eval_model_gmm(model, val_dataset, gmm_models,args)
-
-            # logger.info("Softmax Accuracy: {}".format(softmax_accuracy))
-            # logger.info("GMM Accuracy: {}".format(gmm_accuracy))
-            train_stats.add(epoch,"softmax_val_accuracy",softmax_accuracy.detach().cpu().item())
-            train_stats.add(epoch,"gmm_val_accuracy",gmm_accuracy.detach().cpu().item())
-
-        # update the number of epochs trained
+        # update global metadata stats
+        train_stats.add_global('training_wall_time', train_stats.get('train_wall_time', aggregator='sum'))
+        train_stats.add_global('val_wall_time', train_stats.get('val_wall_time', aggregator='sum'))
         train_stats.add_global('num_epochs_trained', epoch)
+
         # write copy of current metadata metrics to disk
         train_stats.export(args.output_filepath)
 
         # handle early stopping when loss converges
-        val_loss = train_stats.get('val_loss')
         if plateau_scheduler.num_bad_epochs == 0:
-            logger.info('Updating best model with epoch: {} loss: {}'.format(epoch, val_loss[epoch]))
+            logger.info('Updating best model with epoch: {} loss: {}'.format(epoch, val_loss))
             best_model = copy.deepcopy(model)
             best_epoch = epoch
 
             # update the global metrics with the best epoch
             train_stats.update_global(epoch)
 
-    logger.info('Evaluating model against test dataset')
-    eval_model(best_model, test_dataset, criterion, best_epoch, train_stats, 'test', args)
-
-    if GMM_ENABLED:  # and epoch > 10:
-        softmax_preds, softmax_accuracy, gmm_preds, gmm_accuracy = eval_model_gmm(model, test_dataset, gmm_models, args)
-
-        # logger.info("Softmax Accuracy: {}".format(softmax_accuracy))
-        # logger.info("GMM Accuracy: {}".format(gmm_accuracy))
-        train_stats.add(epoch, "softmax_test_accuracy", softmax_accuracy.detach().cpu().item())
-        train_stats.add(epoch, "gmm_test_accuracy", gmm_accuracy.detach().cpu().item())
+    logger.info('Evaluating model against test dataset using softmax and gmm')
+    eval_model(best_model, test_dataset, criterion, train_stats, "test", best_epoch, gmm, args)
 
     # update the global metrics with the best epoch, to include test stats
     train_stats.update_global(best_epoch)
@@ -392,4 +400,3 @@ def train(args):
     train_stats.export(args.output_filepath)  # update metrics data on disk
     best_model.cpu()  # move to cpu before saving to simplify loading the model
     torch.save(best_model, os.path.join(args.output_filepath, 'model.pt'))
-    return train_stats

@@ -18,43 +18,44 @@ def search():
 
     fp = os.path.join(FOLDER_PATH, "id-{:08}".format(n))
 
-    cycle_factor = float(np.random.uniform(2, 5))
-    if np.random.rand() > 0.5:
-        cycle_factor = None
-    lr_reduction_factor = float(np.random.uniform(0.1, 0.2))
-    optimizer = np.random.choice(['adamw','sgd'])
-    if optimizer == 'sgd':
-        weight_decay = np.random.uniform(1e-6, 1e-4)
-        learning_rate = float(np.random.uniform(1e-3, 0.2))
-        nesterov = bool(np.random.choice([False, True]))
-    else:
-        weight_decay = float(np.random.uniform(1e-5, 1.0))
-        learning_rate = float(np.random.uniform(1e-4, 1e-3))
-        nesterov = None
+    # cycle_factor = float(np.random.uniform(2, 5))
+    # if np.random.rand() > 0.5:
+    #     cycle_factor = None
+    # optimizer = np.random.choice(['adamw','sgd'])
+    # if optimizer == 'sgd':
+    #     weight_decay = np.random.uniform(1e-6, 1e-4)
+    #     learning_rate = float(np.random.uniform(1e-3, 0.2))
+    #     nesterov = True
+    # else:
+    #     weight_decay = float(np.random.uniform(1e-5, 1.0))
+    #     learning_rate = float(np.random.uniform(1e-4, 1e-3))
+    #     nesterov = None
     
     # from "Benchopt: Reproducible, efficient and collaborative optimization benchmarks" page 28
     # from "Lookahead optimizer: k Steps forward, 1 step back" page 17
     # from "Wide Residual Networks" code
 
+    arch = np.random.choice(['wide_resnet','resnet18','resnet34','resnext50_32x4d'])
+
     args = dict()
-    args['arch'] = 'wide_resnet50_2'
+    args['arch'] = arch #'wide_resnet'
     args['num_workers'] = 2
     args['output_filepath'] = fp
     args['batch_size'] = 128
     args['learning_rate'] = 3e-4 #learning_rate
     args['loss_eps'] = 1e-4
     args['num_lr_reductions'] = 2
-    args['lr_reduction_factor'] = 0.2 #lr_reduction_factor
+    args['lr_reduction_factor'] = 0.2
     args['patience'] = 50
-    args['weight_decay'] = 0.5  #0.0005 #weight_decay
-    args['cycle_factor'] = None #cycle_factor
+    args['weight_decay'] = 1e-5  #weight_decay
+    args['cycle_factor'] = 4 #cycle_factor
     args['starting_model'] = None
     args['nesterov'] = None #nesterov
-    args['optimizer'] = 'adamw' #optimizer
+    args['optimizer'] = 'adamw'  #optimizer
     args['debug'] = False
     args['num_classes'] = 10
-    args['amp'] = True #bool(np.random.uniform(0, 1.0) > 0.5)
-    args['val_fraction'] = 0.1 #float(np.random.uniform(0.01, 0.1))
+    args['amp'] = True
+    args['val_fraction'] = 0.1
 
     if args['debug']:
         args['loss_eps'] = 0.1
@@ -108,8 +109,8 @@ def select():
 
 
 if __name__ == '__main__':
-    # search()
-    select()
+    search()
+    #select()
 
 
 
