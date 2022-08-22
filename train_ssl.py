@@ -335,6 +335,7 @@ def eval_model(model, pytorch_dataset, criterion, train_stats, split_name, epoch
 
     if gmm is not None:
         gmm_accuracy = list()
+        cauchy_accuracy = list()
 
     with torch.no_grad():
         for batch_idx, tensor_dict in enumerate(dataloader):
@@ -353,10 +354,16 @@ def eval_model(model, pytorch_dataset, criterion, train_stats, split_name, epoch
                     gmm_inputs = outputs.detach().cpu()
                     _, gmm_resp = gmm.predict_probability(gmm_inputs)  # N*1, N*K
 
+                    _, cauchy_resp,cauchy_unnorm_resp = gmm.predict_cauchy_probability(gmm_inputs)
+
                     gmm_pred = torch.argmax(gmm_resp, dim=-1)
                     labels_cpu = labels.detach().cpu()
                     accuracy_g = torch.sum(gmm_pred == labels_cpu) / len(gmm_pred)
                     gmm_accuracy.append(accuracy_g.reshape(-1))
+
+                    cauchy_pred = torch.argmax(cauchy_resp,dim=-1)
+                    accuracy_c = torch.sum(cauchy_pred == labels_cpu)/ len(cauchy_pred)
+                    cauchy_accuracy.append(accuracy_c.reshape(-1))
 
     avg_loss = np.mean(loss)
     softmax_accuracy = torch.mean(torch.cat(softmax_accuracy, dim=-1))
@@ -369,6 +376,9 @@ def eval_model(model, pytorch_dataset, criterion, train_stats, split_name, epoch
     if gmm is not None:
         gmm_accuracy = torch.mean(torch.cat(gmm_accuracy, dim=-1))
         train_stats.add(epoch, '{}_gmm_accuracy'.format(split_name), gmm_accuracy.item())
+
+        cauchy_accuracy = torch.mean(torch.cat(cauchy_accuracy,dim=-1))
+        train_stats.add(epoch, '{}_cauchy_accuracy'.format(split_name), cauchy_accuracy.item())
 
 
 def compute_class_prevalance(dataloader):

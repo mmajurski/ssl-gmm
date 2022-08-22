@@ -1,6 +1,6 @@
 import torch
 import numpy as np
-
+from math import gamma
 """
 ----------------:Change log:----------------
 - replaced squeeze() with squeeze(dim=0) to avoid unintentional squeezing in case of n_clusters being 1
@@ -180,6 +180,52 @@ class GMM(torch.nn.Module):
         log_prob_norm, log_resp = self._estimate_log_prob_resp(x)
         return torch.exp(log_prob_norm), torch.exp(log_resp)
 
+    def _cauchy_estimate_log_prob(self, x):
+        n_samples = x.size(dim=0)
+
+        power_value = (1 + self.n_features) / 2
+        numerator = np.log(gamma(power_value))
+        denom_1 = np.log(gamma(1 / 2))
+        denom_2 = (self.n_features / 2) * np.log(np.pi)
+
+        log_det = torch.sum(
+            torch.log(self.precision_cholesky.reshape(self.n_clusters, -1)[:, ::self.n_features + 1]), 1)
+
+        # mahalanobis distance
+        m_dist = torch.empty((n_samples, self.n_clusters))
+
+        for k, (mu, prec_chol) in enumerate(zip(self._mu, self.precision_cholesky)):
+            y = torch.matmul(torch.sub(x, mu), prec_chol)
+            m_dist[:, k] = torch.sum(torch.square(y), dim=1)
+
+        denom_3 = torch.mul(log_det, 0.5)
+
+        denom_4 = torch.mul(torch.log(m_dist), power_value)
+
+        tensor_part = torch.mul(denom_4.add(denom_3), -1)
+
+        scalar_part = numerator - denom_1 - denom_2
+
+        log_pdf = torch.add(tensor_part, scalar_part)
+
+        return log_pdf
+
+    def _cauchy_estimate_weighted_log_prob(self, x):
+        return self._cauchy_estimate_log_prob(x) + torch.log(self._pi)
+
+    def _cauchy_estimate_log_prob_resp(self, x):
+        weighted_log_prob = self._cauchy_estimate_weighted_log_prob(x)
+        # log(sum(exp(weighted_log_prob elements across dim=1)))
+        log_prob_norm = torch.logsumexp(weighted_log_prob, dim=1, keepdim=True)
+        # equivalent of dividing by sum in the normal space
+        # verify if we need to normalize in case of 1 cluster? as it is returning all 0s in log space (1 in normal)
+        log_resp = weighted_log_prob - log_prob_norm
+        return log_prob_norm, log_resp , weighted_log_prob
+
+    def predict_cauchy_probability(self, x):
+        log_prob_norm, log_resp, unnorm_log_resp = self._cauchy_estimate_log_prob_resp(x)
+        return torch.exp(log_prob_norm), torch.exp(log_resp) , unnorm_log_resp
+    
     def _compute_precision_cholesky(self):
         """
         Calculates precision_cholesky from _sigma (covariances)
@@ -190,7 +236,7 @@ class GMM(torch.nn.Module):
         for k, covar_mat in enumerate(self._sigma):
             try:
                 cov_chol = torch.linalg.cholesky(covar_mat)
-            except():
+            except:
                 raise ValueError("increase _eps because covariances are bad")
             precision_cholesky[k] = torch.linalg.solve_triangular(cov_chol, torch.eye(self.n_features),
                                                                   upper=False).transpose(0, 1)
