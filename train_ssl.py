@@ -77,6 +77,7 @@ def psuedolabel_data(model, train_dataset_labeled, train_dataset_unlabeled, gmm,
     filtered_labels = []
     filtered_indicies = []
     filtered_data_resp = []
+    filtered_data_weighted_prob = []
     model.eval()
     with torch.no_grad():
         for batch_idx, tensor_dict in enumerate(ul_dataloader):
@@ -87,7 +88,7 @@ def psuedolabel_data(model, train_dataset_labeled, train_dataset_unlabeled, gmm,
             with torch.cuda.amp.autocast():
                 outputs = model(inputs)
                 gmm_inputs = outputs.detach().cpu()
-                gmm_prob_sum, gmm_resp = gmm.predict_probability(gmm_inputs)
+                gmm_prob_weighted, gmm_prob_sum, gmm_resp = gmm.predict_probability(gmm_inputs)
 
                 # threshold filtering
 
@@ -97,10 +98,12 @@ def psuedolabel_data(model, train_dataset_labeled, train_dataset_unlabeled, gmm,
                 filtered_labels.append(labels[denominator_filter])
                 filtered_data_resp.append(gmm_resp[denominator_filter])
                 filtered_indicies.append(index[denominator_filter])
+                filtered_data_weighted_prob.append(gmm_prob_weighted[denominator_filter])
 
     filtered_labels = torch.cat(filtered_labels, dim=-1)
     filtered_indicies = torch.cat(filtered_indicies, dim=-1)
     filtered_data_resp = torch.cat(filtered_data_resp, dim=0)
+    filtered_data_weighted_prob = torch.cat(filtered_data_weighted_prob, dim=0)
 
     # TODO create a set of subfunctions which sorts/filters the gmm outputs using different methods. So it takes as input a list of all the GMM outputs, and then it returns a sorted list (potentially smaller if there is a filter). This subfunction allows us to swap out different pseudo-labeling strategies.
     # TODO i.e. labels, indicies, data_resp = pseudo_label_filter_denominator(labels, indicies, data_resp)
@@ -111,10 +114,14 @@ def psuedolabel_data(model, train_dataset_labeled, train_dataset_unlabeled, gmm,
     # TODO start figuring out what the filtering and disqualifying filters are for the GMM to remove bad examples
     # TODO Experiment with pseudo labeling sorting by the largest numerator per class, then do top k
 
-    max_resps, filtered_preds = torch.max(filtered_data_resp,dim=-1)
+    numerator, filtered_preds = torch.max(filtered_data_weighted_prob, dim=-1)
+    # max_resps, filtered_preds = torch.max(filtered_data_resp,dim=-1)
 
     # sorting the data based on the resp
-    max_resps, sorted_indices = max_resps.sort(descending=True)
+    # max_resps, sorted_indices = max_resps.sort(descending=True)
+
+    # sorting the data based on weighted probability
+    _, sorted_indices = numerator.sort(descending=True)
 
     filtered_labels = filtered_labels[sorted_indices]
     filtered_indicies = filtered_indicies[sorted_indices]
@@ -123,6 +130,7 @@ def psuedolabel_data(model, train_dataset_labeled, train_dataset_unlabeled, gmm,
 
 
     class_counter = [0] * int(args.num_classes)
+    class_accuracy = [0] * int(args.num_classes)
     added_accuracies = []
     used_indices = []
 
@@ -140,6 +148,7 @@ def psuedolabel_data(model, train_dataset_labeled, train_dataset_unlabeled, gmm,
             train_dataset_labeled.add_datapoint(img, target)
 
             acc = float(pred == label)
+            class_accuracy[pred] += acc
             added_accuracies.append(acc)
     # delete the indices transferred to the labeled population. Do this after the move, so that we don't modify the index numbers during the move
     train_dataset_unlabeled.remove_datapoints_by_index(used_indices)
@@ -149,6 +158,7 @@ def psuedolabel_data(model, train_dataset_labeled, train_dataset_unlabeled, gmm,
     # update the training metadata
     train_stats.add(epoch, 'pseudo_labeling_accuracy', pseudo_labeling_accuracy)
     train_stats.add(epoch, 'pseudo_label_counts_per_class', class_counter)
+    train_stats.add(epoch, 'pseudo_labeling_accuracy_per_class', class_accuracy)
 
     # TODO log the per-class accuracy of the pseudo-labels
     # TODO build confusion matrix for the psuedo labeling
@@ -342,7 +352,7 @@ def eval_model(model, pytorch_dataset, criterion, train_stats, split_name, epoch
                 if gmm is not None:
                     # passing the logits acquired before the softmax to gmm as inputs
                     gmm_inputs = outputs.detach().cpu()
-                    _, gmm_resp = gmm.predict_probability(gmm_inputs)  # N*1, N*K
+                    _, _, gmm_resp = gmm.predict_probability(gmm_inputs)  # N*1, N*K
 
                     _, cauchy_resp,cauchy_unnorm_resp = gmm.predict_cauchy_probability(gmm_inputs)
 

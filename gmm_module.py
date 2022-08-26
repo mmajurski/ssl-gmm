@@ -125,10 +125,10 @@ class GMM(torch.nn.Module):
         # equivalent of dividing by sum in the normal space
         # verify if we need to normalize in case of 1 cluster? as it is returning all 0s in log space (1 in normal)
         log_resp = weighted_log_prob - log_prob_norm
-        return log_prob_norm, log_resp
+        return weighted_log_prob, log_prob_norm, log_resp
 
     def _e_step(self, x):
-        log_prob_norm, log_resp = self._estimate_log_prob_resp(x)
+        _, log_prob_norm, log_resp = self._estimate_log_prob_resp(x)
         return torch.mean(log_prob_norm), log_resp
 
     def _estimate_parameters(self, x, resp):
@@ -177,8 +177,8 @@ class GMM(torch.nn.Module):
         return log_likelihood
 
     def predict_probability(self, x):
-        log_prob_norm, log_resp = self._estimate_log_prob_resp(x)
-        return torch.exp(log_prob_norm), torch.exp(log_resp)
+        log_prob_weighted, log_prob_norm, log_resp = self._estimate_log_prob_resp(x)
+        return torch.exp(log_prob_weighted), torch.exp(log_prob_norm), torch.exp(log_resp)
 
     def _cauchy_estimate_log_prob(self, x):
         n_samples = x.size(dim=0)

@@ -250,7 +250,7 @@ def eval_model(model, pytorch_dataset, criterion, train_stats, split_name, epoch
                 if gmm is not None:
                     # passing the logits acquired before the softmax to gmm as inputs
                     gmm_inputs = outputs.detach().cpu()
-                    _, gmm_resp = gmm.predict_probability(gmm_inputs)  # N*1, N*K
+                    _, _, gmm_resp = gmm.predict_probability(gmm_inputs)  # N*1, N*K
 
                     gmm_pred = torch.argmax(gmm_resp, dim=-1)
                     labels_cpu = labels.detach().cpu()
