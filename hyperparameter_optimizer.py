@@ -56,6 +56,7 @@ def search():
     args['num_classes'] = 10
     args['amp'] = True
     args['val_fraction'] = 0.1
+    #args['num_labeled_datapoints'] = 4000
 
     if args['debug']:
         args['loss_eps'] = 0.1
@@ -63,7 +64,7 @@ def search():
 
     args = argparse.Namespace(**args)
 
-    stats = train.train(args)
+    train.train(args)
 
 
 
