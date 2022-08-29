@@ -10,6 +10,8 @@ import torchvision
 import logging
 import random
 
+import fixmatch_augmentation
+
 
 logger = logging.getLogger()
 
@@ -33,12 +35,21 @@ class Cifar10(torch.utils.data.Dataset):
     TRANSFORM_TRAIN = torchvision.transforms.Compose([
         torchvision.transforms.RandomHorizontalFlip(),
         torchvision.transforms.RandomCrop(size=32,
-                                          padding=int(4)),
-                                          #padding_mode='reflect'),
+                                          padding=int(4),
+                                          padding_mode='reflect'),
         torchvision.transforms.ToTensor(),
         torchvision.transforms.Normalize(mean=cifar10_mean, std=cifar10_std)
     ])
     TRANSFORM_TEST = torchvision.transforms.Compose([
+        torchvision.transforms.ToTensor(),
+        torchvision.transforms.Normalize(mean=cifar10_mean, std=cifar10_std)
+    ])
+    TRANSFORM_STRONG = torchvision.transforms.Compose([
+        torchvision.transforms.RandomHorizontalFlip(),
+        torchvision.transforms.RandomCrop(size=32,
+                                          padding=int(4),
+                                          padding_mode='reflect'),
+        fixmatch_augmentation.RandAugmentMC(n=2, m=10),
         torchvision.transforms.ToTensor(),
         torchvision.transforms.Normalize(mean=cifar10_mean, std=cifar10_std)
     ])
@@ -116,10 +127,10 @@ class Cifar10(torch.utils.data.Dataset):
             raise RuntimeError("Added image must be numpy array with shape [h,w,c]")
         if not len(img.shape) == 3:
             raise RuntimeError("Added image must be numpy array with shape [h,w,c]")
-        if not isinstance(target, int):
+        if not (isinstance(target, int) or isinstance(target, np.integer)):
             raise RuntimeError("Added target must be integer")
         self.data.append(img)
-        self.targets.append(target)
+        self.targets.append(int(target))
 
     def set_transforms(self, transforms):
         self.transform = transforms

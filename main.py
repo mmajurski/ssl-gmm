@@ -21,8 +21,9 @@ def main():
     parser.add_argument('--lr_reduction_factor', default=0.2, type=float)
     parser.add_argument('--debug', action='store_true')
     parser.add_argument('--amp', action='store_true')
+    parser.add_argument('--re-pseudo-label-each-epoch', action='store_true')
     parser.add_argument('--num_classes', default=10, type=int, help='number of classes in the dataset.')
-    parser.add_argument('--num_labeled_datapoints', default=4000, type=int, help='number of labeled annotations in the dataset.')
+    parser.add_argument('--num_labeled_datapoints', default=250, type=int, help='number of labeled annotations in the dataset.')
     parser.add_argument('--starting_model', type=str, default=None, help='Pytorch model checkpoint to load instead of starting from random')
     parser.add_argument('--optimizer', type=str, default='adamw',help='optimizer if nothing is passed AdamW would be used (currently supported sgd,adamw)')
     args = parser.parse_args()
@@ -37,8 +38,8 @@ def main():
     #     print("Detected debug mode, setting number of workers to 0")
     #     args.num_workers = 0
 
-    train.train(args)
-    # train_ssl.train(args)
+    # train.train(args)
+    train_ssl.train(args)
 
 
 if __name__ == '__main__':
