@@ -73,7 +73,7 @@ def psuedolabel_data(model, train_dataset_labeled, train_dataset_unlabeled, gmm,
     resp_threshold = 0.95
     size_threshold = 2  # the number of data points from each class to add to the labeled population
     # size_threshold = 0.02
-
+    filtered_denominators = []
     filtered_labels = []
     filtered_indicies = []
     filtered_data_resp = []
@@ -93,41 +93,29 @@ def psuedolabel_data(model, train_dataset_labeled, train_dataset_unlabeled, gmm,
                 # threshold filtering
 
                 # list of boolean where value is False for items having lower prob_sum then threshold, True otherwise
-                denominator_filter = torch.squeeze(gmm_prob_sum > denominator_threshold)
+                # denominator_filter = torch.squeeze(gmm_prob_sum > denominator_threshold)
+                filtered_denominators.append(gmm_prob_sum)
+                filtered_labels.append(labels.cpu().detach())
+                filtered_indicies.append(index)
+                filtered_data_resp.append(gmm_resp)
+                filtered_data_weighted_prob.append(gmm_prob_weighted)
 
-                filtered_labels.append(labels[denominator_filter])
-                filtered_data_resp.append(gmm_resp[denominator_filter])
-                filtered_indicies.append(index[denominator_filter])
-                filtered_data_weighted_prob.append(gmm_prob_weighted[denominator_filter])
-
+    filtered_denominators = torch.cat(filtered_denominators, dim=0)
     filtered_labels = torch.cat(filtered_labels, dim=-1)
     filtered_indicies = torch.cat(filtered_indicies, dim=-1)
     filtered_data_resp = torch.cat(filtered_data_resp, dim=0)
     filtered_data_weighted_prob = torch.cat(filtered_data_weighted_prob, dim=0)
 
-    # TODO create a set of subfunctions which sorts/filters the gmm outputs using different methods. So it takes as input a list of all the GMM outputs, and then it returns a sorted list (potentially smaller if there is a filter). This subfunction allows us to swap out different pseudo-labeling strategies.
-    # TODO i.e. labels, indicies, data_resp = pseudo_label_filter_denominator(labels, indicies, data_resp)
-    # TODO i.e. labels, indicies, data_resp = pseudo_label_filter_neumerator(labels, indicies, data_resp)
+    filtered_labels, filtered_indicies, filtered_data_resp, filtered_data_weighted_prob = pseudo_label_denominator_filter(filtered_denominators, filtered_labels, filtered_indicies, filtered_data_resp, filtered_data_weighted_prob)
 
-
+    # DONE: RUSHABH | create a set of subfunctions which sorts/filters the gmm outputs using different methods. So it takes as input a list of all the GMM outputs, and then it returns a sorted list (potentially smaller if there is a filter). This subfunction allows us to swap out different pseudo-labeling strategies.
+    # DONE: RUSHABH | i.e. labels, indicies, data_resp = pseudo_label_filter_denominator(labels, indicies, data_resp)
+    # DONE: RUSHABH | i.e. labels, indicies, data_resp = pseudo_label_filter_numerator(labels, indicies, data_resp)
 
     # TODO start figuring out what the filtering and disqualifying filters are for the GMM to remove bad examples
-    # TODO Experiment with pseudo labeling sorting by the largest numerator per class, then do top k
+    # DONE: JD | Experiment with pseudo labeling sorting by the largest numerator per class, then do top k
 
-    numerator, filtered_preds = torch.max(filtered_data_weighted_prob, dim=-1)
-    # max_resps, filtered_preds = torch.max(filtered_data_resp,dim=-1)
-
-    # sorting the data based on the resp
-    # max_resps, sorted_indices = max_resps.sort(descending=True)
-
-    # sorting the data based on weighted probability
-    _, sorted_indices = numerator.sort(descending=True)
-
-    filtered_labels = filtered_labels[sorted_indices]
-    filtered_indicies = filtered_indicies[sorted_indices]
-    filtered_preds = filtered_preds[sorted_indices]
-
-
+    filtered_labels, filtered_indicies, filtered_preds = pseudo_label_numerator_filter(filtered_labels, filtered_indicies, filtered_data_resp, filtered_data_weighted_prob, weighted=True)
 
     class_counter = [0] * int(args.num_classes)
     class_accuracy = [0] * int(args.num_classes)
@@ -160,11 +148,38 @@ def psuedolabel_data(model, train_dataset_labeled, train_dataset_unlabeled, gmm,
     train_stats.add(epoch, 'pseudo_label_counts_per_class', class_counter)
     train_stats.add(epoch, 'pseudo_labeling_accuracy_per_class', class_accuracy)
 
-    # TODO log the per-class accuracy of the pseudo-labels
+    # DONE: JD |log the per-class accuracy of the pseudo-labels
     # TODO build confusion matrix for the psuedo labeling
     # TODO build confusion matrix for the validation accuracy using the gmm to predict labels
     # TODO experiment and compute the baseline accuracy when using just 250 or 4000 labels.
 
+
+def pseudo_label_denominator_filter(denominators, labels, indices, data_resp, data_weighted_probs):
+    denominator_threshold = 0.0
+    denominator_filter = torch.squeeze(denominators > denominator_threshold)
+    labels = labels[denominator_filter]
+    data_resp = data_resp[denominator_filter]
+    indices = indices[denominator_filter]
+    data_weighted_probs = data_weighted_probs[denominator_filter]
+
+    return labels, indices, data_resp, data_weighted_probs
+
+
+def pseudo_label_numerator_filter(labels, indices, data_resp, data_weighted_probs, weighted=True):
+    numerator_resp_threshold = 0.95
+
+    data = data_resp if not weighted else data_weighted_probs
+    max_numerator, preds = torch.max(data, dim=-1)
+    sorted_numerators, max_sorted_indices = max_numerator.sort(descending=True)
+
+    if not weighted:
+        max_sorted_indices = max_sorted_indices[sorted_numerators > numerator_resp_threshold]
+
+    labels = labels[max_sorted_indices]
+    indices = indices[max_sorted_indices]
+    preds = preds[max_sorted_indices]
+
+    return labels, indices, preds
 
 
 def build_gmm(model, pytorch_dataset, epoch, train_stats, args):
