@@ -180,6 +180,12 @@ class GMM(torch.nn.Module):
         log_prob_weighted, log_prob_norm, log_resp = self._estimate_log_prob_resp(x)
         return torch.exp(log_prob_weighted), torch.exp(log_prob_norm), torch.exp(log_resp)
 
+    def predict_proba(self, x):
+        if not torch.is_tensor(x):
+            x = torch.tensor(x)
+        _, _, gmm_resp = self.predict_probability(x)
+        return gmm_resp
+
     def _cauchy_estimate_log_prob(self, x):
         n_samples = x.size(dim=0)
 

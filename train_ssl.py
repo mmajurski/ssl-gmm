@@ -6,6 +6,7 @@ import torch
 import torchvision
 import json
 import logging
+import sklearn.mixture
 
 import cifar_datasets
 import metadata
@@ -15,7 +16,9 @@ import flavored_resnet18
 import flavored_wideresnet
 import fixmatch_augmentation
 
+
 MAX_EPOCHS = 300
+CACHE_FULLY_SUPERVISED_MODEL = True
 
 logger = logging.getLogger()
 
@@ -189,7 +192,7 @@ def pseudo_label_numerator_filter(labels, indices, data_resp, data_weighted_prob
     return labels, indices, preds
 
 
-def train_epoch(model, pytorch_dataset, optimizer, criterion, epoch, train_stats, args, scheduler=None, gmm_models=None, nb_reps=1):
+def train_epoch(model, pytorch_dataset, optimizer, criterion, epoch, train_stats, args, scheduler=None, nb_reps=1):
 
     avg_loss = 0
     avg_accuracy = 0
@@ -200,8 +203,6 @@ def train_epoch(model, pytorch_dataset, optimizer, criterion, epoch, train_stats
 
     batch_count = nb_reps * len(dataloader)
     start_time = time.time()
-    dataset_logits = list()
-    dataset_labels = list()
 
     for rep_count in range(nb_reps):
         for batch_idx, tensor_dict in enumerate(dataloader):
@@ -234,10 +235,6 @@ def train_epoch(model, pytorch_dataset, optimizer, criterion, epoch, train_stats
             pred = torch.argmax(outputs, dim=-1)
             accuracy = torch.sum(pred == labels) / len(pred)
 
-            if gmm_models is not None:
-                dataset_logits.append(outputs.detach().cpu())
-                dataset_labels.append(labels.detach().cpu())
-
             # nan loss values are ignored when using AMP, so ignore them for the average
             if not np.isnan(loss.detach().cpu().numpy()):
                 avg_loss += loss.item()
@@ -258,30 +255,6 @@ def train_epoch(model, pytorch_dataset, optimizer, criterion, epoch, train_stats
     train_stats.add(epoch, 'train_wall_time', wall_time)
     train_stats.add(epoch, 'train_loss', avg_loss)
     train_stats.add(epoch, 'train_accuracy', avg_accuracy)
-
-    if gmm_models is not None:
-        bucketed_dataset_logits = list()
-        # join together the individual batches of numpy logit data
-        dataset_logits = torch.cat(dataset_logits)
-        dataset_labels = torch.cat(dataset_labels)
-        unique_class_labels = torch.unique(dataset_labels)
-
-        for i in range(len(unique_class_labels)):
-            c = unique_class_labels[i]
-            bucketed_dataset_logits.append(dataset_logits[dataset_labels == c])
-
-        class_instances = list()
-        for i in range(len(unique_class_labels)):
-            class_c_logits = bucketed_dataset_logits[i]
-            class_instances.append(class_c_logits.shape[0])
-            gmm = GMM(n_features=class_c_logits.shape[1], n_clusters=1, tolerance=1e-4, max_iter=50)
-            gmm.fit(class_c_logits)
-            while np.any(np.isnan(gmm.get("sigma").detach().cpu().numpy())):
-                gmm = GMM(n_features=class_c_logits.shape[1], n_clusters=1, tolerance=1e-4, max_iter=50)
-                gmm.fit(class_c_logits)
-            gmm_models.append(gmm)
-
-    return gmm_models
 
 
 def build_gmm(model, pytorch_dataset, epoch, train_stats, args):
@@ -307,7 +280,6 @@ def build_gmm(model, pytorch_dataset, epoch, train_stats, args):
         dataset_logits.append(outputs.detach().cpu())
         dataset_labels.append(labels.detach().cpu())
 
-    gmm_list = list()
     bucketed_dataset_logits = list()
     # join together the individual batches of numpy logit data
     dataset_logits = torch.cat(dataset_logits)
@@ -318,17 +290,19 @@ def build_gmm(model, pytorch_dataset, epoch, train_stats, args):
         c = unique_class_labels[i]
         bucketed_dataset_logits.append(dataset_logits[dataset_labels == c])
 
-
-    class_instances = list()
+    gmm_list = list()
+    gmm_list_skl = list()
     for i in range(len(unique_class_labels)):
         class_c_logits = bucketed_dataset_logits[i]
-        class_instances.append(class_c_logits.shape[0])
         gmm = GMM(n_features=class_c_logits.shape[1], n_clusters=1, tolerance=1e-4, max_iter=50)
         gmm.fit(class_c_logits)
         while np.any(np.isnan(gmm.get("sigma").detach().cpu().numpy())):
             gmm = GMM(n_features=class_c_logits.shape[1], n_clusters=1, tolerance=1e-4, max_iter=50)
             gmm.fit(class_c_logits)
         gmm_list.append(gmm)
+        gmm_skl = sklearn.mixture.GaussianMixture(n_components=1)
+        gmm_skl.fit(class_c_logits.numpy())
+        gmm_list_skl.append(gmm_skl)
 
     class_preval = compute_class_prevalance(dataloader)
     logger.info(class_preval)
@@ -340,10 +314,22 @@ def build_gmm(model, pytorch_dataset, epoch, train_stats, args):
     sigmas = torch.cat([gmm.get("sigma") for gmm in gmm_list])
     gmm = GMM(n_features=args.num_classes, n_clusters=weights.shape[0], weights=weights, mu=mus, sigma=sigmas)
 
+    # merge the individual sklearn GMMs
+    means = np.concatenate([gmm.means_ for gmm in gmm_list_skl])
+    covariances = np.concatenate([gmm.covariances_ for gmm in gmm_list_skl])
+    precisions = np.concatenate([gmm.precisions_ for gmm in gmm_list_skl])
+    precisions_chol = np.concatenate([gmm.precisions_cholesky_ for gmm in gmm_list_skl])
+    gmm_skl = sklearn.mixture.GaussianMixture(n_components=args.num_classes)
+    gmm_skl.weights_ = weights.numpy()
+    gmm_skl.means_ = means
+    gmm_skl.covariances_ = covariances
+    gmm_skl.precisions_ = precisions
+    gmm_skl.precisions_cholesky_ = precisions_chol
+
     wall_time = time.time() - start_time
     train_stats.add(epoch, 'gmm_build_wall_time', wall_time)
 
-    return gmm
+    return gmm, gmm_skl
 
 
 def eval_model(model, pytorch_dataset, criterion, train_stats, split_name, epoch, gmm, args):
@@ -380,15 +366,16 @@ def eval_model(model, pytorch_dataset, criterion, train_stats, split_name, epoch
                 if gmm is not None:
                     # passing the logits acquired before the softmax to gmm as inputs
                     gmm_inputs = outputs.detach().cpu()
-                    _, _, gmm_resp = gmm.predict_probability(gmm_inputs)  # N*1, N*K
-
-                    _, cauchy_resp,cauchy_unnorm_resp = gmm.predict_cauchy_probability(gmm_inputs)
-
-                    gmm_pred = torch.argmax(gmm_resp, dim=-1).detach().cpu().numpy()
+                    gmm_resp = gmm.predict_proba(gmm_inputs.numpy())  # N*1, N*K
+                    if not isinstance(gmm_resp, np.ndarray):
+                        gmm_resp = gmm_resp.detach().cpu().numpy()
+                    gmm_pred = np.argmax(gmm_resp, axis=-1)
                     gmm_preds.extend(gmm_pred)
 
-                    cauchy_pred = torch.argmax(cauchy_resp,dim=-1).detach().cpu().numpy()
-                    cauchy_preds.extend(cauchy_pred)
+                    if hasattr(gmm, 'predict_cauchy_probability'):
+                        _, cauchy_resp,cauchy_unnorm_resp = gmm.predict_cauchy_probability(gmm_inputs)
+                        cauchy_pred = torch.argmax(cauchy_resp,dim=-1).detach().cpu().numpy()
+                        cauchy_preds.extend(cauchy_pred)
 
 
     avg_loss = np.mean(loss)
@@ -404,17 +391,17 @@ def eval_model(model, pytorch_dataset, criterion, train_stats, split_name, epoch
     if gmm is not None:
         gmm_preds = np.asarray(gmm_preds)
         cauchy_preds = np.asarray(cauchy_preds)
-        gmm_accuracy = (gmm_preds == gt_labels).astype(float)
-        cauchy_accuracy = (cauchy_preds == gt_labels).astype(float)
+        if len(gmm_preds) > 0:
+            gmm_accuracy = (gmm_preds == gt_labels).astype(float)
+            gmm_accuracy = np.mean(gmm_accuracy)
+            train_stats.add(epoch, '{}_gmm_accuracy'.format(split_name), gmm_accuracy)
+            train_stats.render_and_save_confusion_matrix(gt_labels, gmm_preds, args.output_filepath, '{}_gmm_confusion_matrix'.format(split_name), epoch)
 
-        gmm_accuracy = np.mean(gmm_accuracy)
-        train_stats.add(epoch, '{}_gmm_accuracy'.format(split_name), gmm_accuracy)
-        train_stats.render_and_save_confusion_matrix(gt_labels, gmm_preds, args.output_filepath, '{}_gmm_confusion_matrix'.format(split_name), epoch)
-
-        cauchy_accuracy = np.mean(cauchy_accuracy)
-        train_stats.add(epoch, '{}_cauchy_accuracy'.format(split_name), cauchy_accuracy)
-        train_stats.render_and_save_confusion_matrix(gt_labels, cauchy_preds, args.output_filepath, '{}_cauchy_confusion_matrix'.format(split_name), epoch)
-
+        if len(cauchy_preds) > 0:
+            cauchy_accuracy = (cauchy_preds == gt_labels).astype(float)
+            cauchy_accuracy = np.mean(cauchy_accuracy)
+            train_stats.add(epoch, '{}_cauchy_accuracy'.format(split_name), cauchy_accuracy)
+            train_stats.render_and_save_confusion_matrix(gt_labels, cauchy_preds, args.output_filepath, '{}_cauchy_confusion_matrix'.format(split_name), epoch)
 
 
 def compute_class_prevalance(dataloader):
@@ -456,6 +443,10 @@ def train(args):
     logger.info(args)
 
     model, train_dataset_labeled, train_dataset_unlabeled, val_dataset, test_dataset = setup(args)
+    loaded_cached = False
+    if CACHE_FULLY_SUPERVISED_MODEL and os.path.exists('base-model.pt'):
+        loaded_cached = True
+        model = torch.load('base-model.pt')
 
     # write the args configuration to disk
     dvals = vars(args)
@@ -501,6 +492,8 @@ def train(args):
     plateau_scheduler = lr_scheduler.ReduceLROnPlateau(optimizer, mode='min', factor=0.0, patience=args.patience, threshold=args.loss_eps, max_num_lr_reductions=0)
     # train epochs until loss converges
     while not plateau_scheduler.is_done() and epoch < MAX_EPOCHS:
+        if loaded_cached:
+            break
         epoch += 1
         logger.info("Epoch (supervised): {}".format(epoch))
 
@@ -530,6 +523,9 @@ def train(args):
             # update the global metrics with the best epoch
             train_stats.update_global(epoch)
 
+    if CACHE_FULLY_SUPERVISED_MODEL and not os.path.exists('base-model.pt'):
+        best_model.cpu()  # move to cpu before saving to simplify loading the model
+        torch.save(best_model, 'base-model.pt')
 
     # TODO (long term) compare the benefits of adding Mean Teacher to this pseudo-labeling process
     # TODO (long term) examine the benefits of virtual adversarial training
@@ -556,10 +552,11 @@ def train(args):
         train_epoch(model, train_dataset_labeled, optimizer, criterion, epoch, train_stats, args)
 
         logger.info("  building the GMM models on the labeled training data.")
-        gmm = build_gmm(model, train_dataset_labeled, epoch, train_stats, args)
+        gmm, gmm_skl = build_gmm(model, train_dataset_labeled, epoch, train_stats, args)
 
         logger.info("  evaluating against validation data, using softmax and gmm")
         eval_model(model, val_dataset, criterion, train_stats, "val", epoch, gmm, args)
+        eval_model(model, val_dataset, criterion, train_stats, "val_skl", epoch, gmm_skl, args)
 
         if args.re_pseudo_label_each_epoch:
             # TODO test completely re-psuedo labeling every epoch, instead of it being a one way function
