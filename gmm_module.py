@@ -189,6 +189,7 @@ class GMM(torch.nn.Module):
     def _cauchy_estimate_log_prob(self, x):
         n_samples = x.size(dim=0)
 
+
         power_value = (1 + self.n_features) / 2
         numerator = np.log(gamma(power_value))
         denom_1 = np.log(gamma(1 / 2))
@@ -229,8 +230,11 @@ class GMM(torch.nn.Module):
         return log_prob_norm, log_resp , weighted_log_prob
 
     def predict_cauchy_probability(self, x):
+        if not torch.is_tensor(x):
+            x = torch.tensor(x)
+
         log_prob_norm, log_resp, unnorm_log_resp = self._cauchy_estimate_log_prob_resp(x)
-        return torch.exp(log_prob_norm), torch.exp(log_resp) , unnorm_log_resp
+        return torch.exp(log_prob_norm), torch.exp(log_resp), unnorm_log_resp
     
     def _compute_precision_cholesky(self):
         """

@@ -11,6 +11,7 @@ import sklearn.mixture
 import cifar_datasets
 import metadata
 from gmm_module import GMM
+from skl_cauchy_mm import CMM
 import lr_scheduler
 import flavored_resnet18
 import flavored_wideresnet
@@ -321,7 +322,7 @@ def build_gmm(model, pytorch_dataset, epoch, train_stats, args):
     covariances = np.concatenate([gmm.covariances_ for gmm in gmm_list_skl])
     precisions = np.concatenate([gmm.precisions_ for gmm in gmm_list_skl])
     precisions_chol = np.concatenate([gmm.precisions_cholesky_ for gmm in gmm_list_skl])
-    gmm_skl = sklearn.mixture.GaussianMixture(n_components=args.num_classes)
+    gmm_skl = CMM(n_components=args.num_classes)
     gmm_skl.weights_ = weights.numpy()
     gmm_skl.means_ = means
     gmm_skl.covariances_ = covariances
@@ -367,16 +368,18 @@ def eval_model(model, pytorch_dataset, criterion, train_stats, split_name, epoch
 
                 if gmm is not None:
                     # passing the logits acquired before the softmax to gmm as inputs
-                    gmm_inputs = outputs.detach().cpu()
-                    gmm_resp = gmm.predict_proba(gmm_inputs.numpy())  # N*1, N*K
+                    gmm_inputs = outputs.detach().cpu().numpy()
+                    gmm_resp = gmm.predict_proba(gmm_inputs)  # N*1, N*K
                     if not isinstance(gmm_resp, np.ndarray):
                         gmm_resp = gmm_resp.detach().cpu().numpy()
                     gmm_pred = np.argmax(gmm_resp, axis=-1)
                     gmm_preds.extend(gmm_pred)
 
                     if hasattr(gmm, 'predict_cauchy_probability'):
-                        _, cauchy_resp,cauchy_unnorm_resp = gmm.predict_cauchy_probability(gmm_inputs)
-                        cauchy_pred = torch.argmax(cauchy_resp,dim=-1).detach().cpu().numpy()
+                        _, cauchy_resp, cauchy_unnorm_resp = gmm.predict_cauchy_probability(gmm_inputs)
+                        if not isinstance(cauchy_resp, np.ndarray):
+                            cauchy_resp = cauchy_resp.detach().cpu().numpy()
+                        cauchy_pred = np.argmax(cauchy_resp, axis=-1)
                         cauchy_preds.extend(cauchy_pred)
 
 
