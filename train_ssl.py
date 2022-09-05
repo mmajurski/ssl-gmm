@@ -124,6 +124,7 @@ def psuedolabel_data(model, train_dataset_labeled, train_dataset_unlabeled, gmm,
     class_accuracy = [0] * int(args.num_classes)
     added_accuracies = []
     used_indices = []
+    used_filtered_indices = []
 
     for i in range(len(filtered_preds)):
         pred = filtered_preds[i]
@@ -134,6 +135,7 @@ def psuedolabel_data(model, train_dataset_labeled, train_dataset_unlabeled, gmm,
             label = filtered_labels[i]
             index = filtered_indicies[i]
             used_indices.append(index)
+            used_filtered_indices.append(i)
 
             img, target = train_dataset_unlabeled.get_raw_datapoint(index)
             # add the predicted pseudo-label to the training dataset
@@ -146,8 +148,8 @@ def psuedolabel_data(model, train_dataset_labeled, train_dataset_unlabeled, gmm,
     # delete the indices transferred to the labeled population. Do this after the move, so that we don't modify the index numbers during the move
     train_dataset_unlabeled.remove_datapoints_by_index(used_indices)
 
-    used_true_labels = filtered_labels[used_indices]
-    used_pseudo_labels = filtered_preds[used_indices]
+    used_true_labels = filtered_labels[used_filtered_indices]
+    used_pseudo_labels = filtered_preds[used_filtered_indices]
 
     for i in range(len(class_accuracy)):
         class_accuracy[i] /= class_counter[i]
