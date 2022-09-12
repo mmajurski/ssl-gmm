@@ -493,9 +493,9 @@ def train(args):
 
     model, train_dataset_labeled, train_dataset_unlabeled, val_dataset, test_dataset = setup(args)
     loaded_cached = False
-    if CACHE_FULLY_SUPERVISED_MODEL and os.path.exists('base-model.pt'):
+    if CACHE_FULLY_SUPERVISED_MODEL and os.path.exists(f'base-model-{args.num_labeled_datapoints}.pt'):
         loaded_cached = True
-        model = torch.load('base-model.pt')
+        model = torch.load(f'base-model-{args.num_labeled_datapoints}.pt')
 
     # write the args configuration to disk
     dvals = vars(args)
@@ -572,9 +572,9 @@ def train(args):
             # update the global metrics with the best epoch
             train_stats.update_global(epoch)
 
-    if CACHE_FULLY_SUPERVISED_MODEL and not os.path.exists('base-model.pt'):
+    if CACHE_FULLY_SUPERVISED_MODEL and not os.path.exists(f'base-model-{args.num_labeled_datapoints}.pt'):
         best_model.cpu()  # move to cpu before saving to simplify loading the model
-        torch.save(best_model, 'base-model.pt')
+        torch.save(best_model, f'base-model-{args.num_labeled_datapoints}.pt')
 
     # TODO (long term) compare the benefits of adding Mean Teacher to this pseudo-labeling process
     # TODO (long term) examine the benefits of virtual adversarial training
