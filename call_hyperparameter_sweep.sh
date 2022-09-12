@@ -7,12 +7,9 @@ conda activate gmm
 
 
 INDEX=0
-TOTAL_MODEL_COUNT=50
+TOTAL_MODEL_COUNT=10
 
 # start the first 2 trains right away
-python hyperparameter_optimizer.py &
-INDEX=$((INDEX+1))
-sleep 1
 python hyperparameter_optimizer.py &
 INDEX=$((INDEX+1))
 sleep 1
