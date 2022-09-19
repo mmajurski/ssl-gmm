@@ -18,7 +18,7 @@ import flavored_wideresnet
 import fixmatch_augmentation
 
 
-MAX_EPOCHS = 300
+MAX_EPOCHS = 2000
 CACHE_FULLY_SUPERVISED_MODEL = False
 
 logger = logging.getLogger()
@@ -72,10 +72,10 @@ def psuedolabel_data(model, train_dataset_labeled, train_dataset_unlabeled, gmm,
                                                 shuffle=False,
                                                 num_workers=args.num_workers,
                                                 worker_init_fn=cifar_datasets.worker_init_fn)
-    # TODO update this to use a per-class threshold, but that is an extension of the baseline technique
-    denominator_threshold = 0.0
-    # denominator_threshold = 500.0
-    resp_threshold = 0.95
+    # # TODO update this to use a per-class threshold, but that is an extension of the baseline technique
+    # denominator_threshold = 0.0
+    # # denominator_threshold = 500.0
+    # resp_threshold = 0.95
 
     filtered_denominators = []
     filtered_labels = []
@@ -92,7 +92,12 @@ def psuedolabel_data(model, train_dataset_labeled, train_dataset_unlabeled, gmm,
             with torch.cuda.amp.autocast():
                 outputs = model(inputs)
                 gmm_inputs = outputs.detach().cpu()
-                gmm_prob_weighted, gmm_prob_sum, gmm_resp = gmm.predict_probability(gmm_inputs)
+                if args.inference_method == 'gmm':
+                    gmm_prob_weighted, gmm_prob_sum, gmm_resp = gmm.predict_probability(gmm_inputs)
+                elif args.inference_method == 'cauchy':
+                    gmm_prob_weighted, gmm_prob_sum, gmm_resp = gmm.predict_cauchy_probability(gmm_inputs)
+                else:
+                    raise RuntimeError("Invalid PL - inference method: {}. Expected gmm or cauchy".format(args.inference_method))
                 # threshold filtering
 
                 # list of boolean where value is False for items having lower prob_sum then threshold, True otherwise
@@ -122,12 +127,26 @@ def psuedolabel_data(model, train_dataset_labeled, train_dataset_unlabeled, gmm,
 
     # filtered_labels, filtered_indicies, filtered_preds = pseudo_label_numerator_filter_1perc(filtered_labels, filtered_indicies, filtered_data_resp, filtered_data_weighted_prob, weighted=True)
 
-    filtered_labels, filtered_indicies, filtered_preds = pseudo_label_numerator_filter(filtered_labels, filtered_indicies, filtered_data_resp, filtered_data_weighted_prob, weighted=True, thres=0.0)
+
+
+    if args.pseudo_label_percentile_threshold == "resp":
+        filtered_labels, filtered_indicies, filtered_preds = pseudo_label_numerator_filter(filtered_labels, filtered_indicies, filtered_data_resp, filtered_data_weighted_prob, weighted=True, thres=0.0)
+    elif args.pseudo_label_percentile_threshold == "neum":
+        filtered_labels, filtered_indicies, filtered_preds = pseudo_label_numerator_filter(filtered_labels, filtered_indicies, filtered_data_resp, filtered_data_weighted_prob, weighted=False, thres=0.0)
+    else:
+        # take to 1% of the resp, and then sort based on neumerator
+        filtered_labels, filtered_indicies, filtered_preds = pseudo_label_resp_filter_Pperc_sort_neumerator(filtered_labels, filtered_indicies, filtered_data_resp, filtered_data_weighted_prob, float(args.pseudo_label_percentile_threshold))
+
+
+
+    # ratio based selection
+    # filtered_labels, filtered_indicies, filtered_preds = pseudo_label_numerator_filter(filtered_labels, filtered_indicies, filtered_data_resp, filtered_data_weighted_prob, weighted=True, thres=0.0)
+    # # numerator based selection
+    # filtered_labels, filtered_indicies, filtered_preds = pseudo_label_numerator_filter(filtered_labels, filtered_indicies, filtered_data_resp, filtered_data_weighted_prob, weighted=False, thres=0.0)
 
     class_counter = [0] * int(args.num_classes)
     true_class_counter = [0] * int(args.num_classes)
     class_accuracy = [0] * int(args.num_classes)
-    added_accuracies = []
     used_indices = []
     used_filtered_indices = []
 
@@ -150,30 +169,32 @@ def psuedolabel_data(model, train_dataset_labeled, train_dataset_unlabeled, gmm,
             acc = float(pred == label)
             class_accuracy[target] += acc
             true_class_counter[target] += 1
-            added_accuracies.append(acc)
-    # delete the indices transferred to the labeled population. Do this after the move, so that we don't modify the index numbers during the move
-    train_dataset_unlabeled.remove_datapoints_by_index(used_indices)
 
-    used_true_labels = filtered_labels[used_filtered_indices]
-    used_pseudo_labels = filtered_preds[used_filtered_indices]
+    if len(used_indices) == 0:
+        logger.warning("Pseudo-labeler found no examples to add to the training dataset")
+        train_stats.add(epoch, 'num_added_pseudo_labels', int(np.sum(class_counter)))
+    else:
+        # delete the indices transferred to the labeled population. Do this after the move, so that we don't modify the index numbers during the move
+        train_dataset_unlabeled.remove_datapoints_by_index(used_indices)
 
-    for i in range(len(class_accuracy)):
-        if true_class_counter[i] == 0:
-            class_accuracy[i] = np.nan
-        else:
-            class_accuracy[i] /= true_class_counter[i]
+        used_true_labels = filtered_labels[used_filtered_indices]
+        used_pseudo_labels = filtered_preds[used_filtered_indices]
 
-    # get the average accuracy of the pseudo-labels (this data is not available in real SSL applications, since the unlabeled population would truly be unlabeled
-    pseudo_labeling_accuracy = float(np.mean(added_accuracies))
-    # update the training metadata
-    train_stats.add(epoch, 'pseudo_labeling_accuracy', pseudo_labeling_accuracy)
-    train_stats.add(epoch, 'pseudo_label_counts_per_class', class_counter)
-    train_stats.add(epoch, 'pseudo_label_true_counts_per_class', true_class_counter)
-    train_stats.add(epoch, 'pseudo_labeling_accuracy_per_class', class_accuracy)
+        for i in range(len(class_accuracy)):
+            if true_class_counter[i] == 0:
+                class_accuracy[i] = np.nan
+            else:
+                class_accuracy[i] /= true_class_counter[i]
 
-    train_stats.render_and_save_confusion_matrix(used_true_labels, used_pseudo_labels, args.output_filepath, 'pseudo_labeling_confusion_matrix', epoch)
+        # update the training metadata
+        train_stats.add(epoch, 'pseudo_label_counts_per_class', class_counter)
+        train_stats.add(epoch, 'pseudo_label_true_counts_per_class', true_class_counter)
+        train_stats.add(epoch, 'pseudo_labeling_accuracy_per_class', class_accuracy)
+        # get the average accuracy of the pseudo-labels (this data is not available in real SSL applications, since the unlabeled population would truly be unlabeled
+        train_stats.add(epoch, 'pseudo_labeling_accuracy', float(np.nanmean(class_accuracy)))
+        train_stats.add(epoch, 'num_added_pseudo_labels', int(np.sum(class_counter)))
 
-    # TODO experiment and compute the baseline accuracy when using just 250 or 4000 labels.
+        train_stats.render_and_save_confusion_matrix(used_true_labels, used_pseudo_labels, args.output_filepath, 'pseudo_labeling_confusion_matrix', epoch)
 
 
 def pseudo_label_denominator_filter(denominators, labels, indices, data_resp, data_weighted_probs):
@@ -215,6 +236,30 @@ def pseudo_label_numerator_filter_1perc(labels, indices, data_resp, data_weighte
     labels = labels[max_sorted_indices].detach().cpu().numpy()
     indices = indices[max_sorted_indices].detach().cpu().numpy()
     preds = preds[max_sorted_indices].detach().cpu().numpy()
+
+    return labels, indices, preds
+
+
+def pseudo_label_resp_filter_Pperc_sort_neumerator(labels, indices, resp, neumerator, perc):
+
+    max_resp, _ = torch.max(resp, dim=-1)
+    sorted_resp, _ = max_resp.sort(descending=False)
+
+    idx = int(len(sorted_resp) * perc)
+    threshold = float(sorted_resp[idx])
+    filter = torch.squeeze(max_resp >= threshold)
+
+    neumerator = neumerator[filter]
+    labels = labels[filter]
+    indices = indices[filter]
+
+    max_neum, preds = torch.max(neumerator, dim=-1)
+    sorted_neum, sorted_neum_idx = max_neum.sort(descending=True)
+
+    sorted_neum = sorted_neum.detach().cpu().numpy()
+    labels = labels[sorted_neum_idx].detach().cpu().numpy()
+    indices = indices[sorted_neum_idx].detach().cpu().numpy()
+    preds = preds[sorted_neum_idx].detach().cpu().numpy()
 
     return labels, indices, preds
 
@@ -262,7 +307,7 @@ def train_epoch(model, pytorch_dataset, optimizer, criterion, epoch, train_stats
             labels = tensor_dict[1].cuda()
 
             # FP16 training
-            if args.amp:
+            if not args.disable_amp:
                 with torch.cuda.amp.autocast():
                     outputs = model(inputs)
                     loss = criterion(outputs, labels)
@@ -318,7 +363,7 @@ def build_gmm(model, pytorch_dataset, epoch, train_stats, args):
         labels = tensor_dict[1].cuda()
 
         # FP16 training
-        if args.amp:
+        if not args.disable_amp:
             with torch.cuda.amp.autocast():
                 outputs = model(inputs)
         else:
@@ -338,7 +383,7 @@ def build_gmm(model, pytorch_dataset, epoch, train_stats, args):
         bucketed_dataset_logits.append(dataset_logits[dataset_labels == c])
 
     gmm_list = list()
-    gmm_list_skl = list()
+    # gmm_list_skl = list()
     for i in range(len(unique_class_labels)):
         class_c_logits = bucketed_dataset_logits[i]
         gmm = GMM(n_features=class_c_logits.shape[1], n_clusters=1, tolerance=1e-4, max_iter=50)
@@ -347,9 +392,9 @@ def build_gmm(model, pytorch_dataset, epoch, train_stats, args):
             gmm = GMM(n_features=class_c_logits.shape[1], n_clusters=1, tolerance=1e-4, max_iter=50)
             gmm.fit(class_c_logits)
         gmm_list.append(gmm)
-        gmm_skl = sklearn.mixture.GaussianMixture(n_components=1)
-        gmm_skl.fit(class_c_logits.numpy())
-        gmm_list_skl.append(gmm_skl)
+        # gmm_skl = sklearn.mixture.GaussianMixture(n_components=1)
+        # gmm_skl.fit(class_c_logits.numpy())
+        # gmm_list_skl.append(gmm_skl)
 
     class_preval = compute_class_prevalance(dataloader)
     logger.info(class_preval)
@@ -361,22 +406,22 @@ def build_gmm(model, pytorch_dataset, epoch, train_stats, args):
     sigmas = torch.cat([gmm.get("sigma") for gmm in gmm_list])
     gmm = GMM(n_features=args.num_classes, n_clusters=weights.shape[0], weights=weights, mu=mus, sigma=sigmas)
 
-    # merge the individual sklearn GMMs
-    means = np.concatenate([gmm.means_ for gmm in gmm_list_skl])
-    covariances = np.concatenate([gmm.covariances_ for gmm in gmm_list_skl])
-    precisions = np.concatenate([gmm.precisions_ for gmm in gmm_list_skl])
-    precisions_chol = np.concatenate([gmm.precisions_cholesky_ for gmm in gmm_list_skl])
-    gmm_skl = CMM(n_components=args.num_classes)
-    gmm_skl.weights_ = weights.numpy()
-    gmm_skl.means_ = means
-    gmm_skl.covariances_ = covariances
-    gmm_skl.precisions_ = precisions
-    gmm_skl.precisions_cholesky_ = precisions_chol
+    # # merge the individual sklearn GMMs
+    # means = np.concatenate([gmm.means_ for gmm in gmm_list_skl])
+    # covariances = np.concatenate([gmm.covariances_ for gmm in gmm_list_skl])
+    # precisions = np.concatenate([gmm.precisions_ for gmm in gmm_list_skl])
+    # precisions_chol = np.concatenate([gmm.precisions_cholesky_ for gmm in gmm_list_skl])
+    # gmm_skl = CMM(n_components=args.num_classes)
+    # gmm_skl.weights_ = weights.numpy()
+    # gmm_skl.means_ = means
+    # gmm_skl.covariances_ = covariances
+    # gmm_skl.precisions_ = precisions
+    # gmm_skl.precisions_cholesky_ = precisions_chol
 
     wall_time = time.time() - start_time
     train_stats.add(epoch, 'gmm_build_wall_time', wall_time)
 
-    return gmm, gmm_skl
+    return gmm
 
 
 def eval_model(model, pytorch_dataset, criterion, train_stats, split_name, epoch, gmm, args):
@@ -538,9 +583,9 @@ def train(args):
     # *************************************
     # train the model until it has converged on the the labeled data
     # setup early stopping on convergence using LR reduction on plateau
-    plateau_scheduler = lr_scheduler.ReduceLROnPlateau(optimizer, mode='min', factor=0.0, patience=args.patience, threshold=args.loss_eps, max_num_lr_reductions=0)
+    plateau_scheduler_sl = lr_scheduler.ReduceLROnPlateau(optimizer, mode='min', factor=args.lr_reduction_factor, patience=args.patience, threshold=args.loss_eps, max_num_lr_reductions=args.num_lr_reductions)
     # train epochs until loss converges
-    while not plateau_scheduler.is_done() and epoch < MAX_EPOCHS:
+    while not plateau_scheduler_sl.is_done() and epoch < MAX_EPOCHS:
         if loaded_cached:
             break
         epoch += 1
@@ -553,7 +598,7 @@ def train(args):
         eval_model(model, val_dataset, criterion, train_stats, "val", epoch, None, args)
 
         val_loss = train_stats.get_epoch('val_loss', epoch=epoch)
-        plateau_scheduler.step(val_loss)
+        plateau_scheduler_sl.step(val_loss)
 
         # update global metadata stats
         train_stats.add_global('training_wall_time', train_stats.get('train_wall_time', aggregator='sum'))
@@ -564,7 +609,7 @@ def train(args):
         train_stats.export(args.output_filepath)
 
         # handle early stopping when loss converges
-        if plateau_scheduler.num_bad_epochs == 0:
+        if plateau_scheduler_sl.num_bad_epochs == 0:
             logger.info('Updating best model with epoch: {} loss: {}'.format(epoch, val_loss))
             best_model = copy.deepcopy(model)
             best_epoch = epoch
@@ -582,64 +627,67 @@ def train(args):
     # ******************************************
     # ******** Semi-Supervised Training ********
     # ******************************************
-    if args.re_pseudo_label_each_epoch:
-        # create a copy of the orig labeled dataset to revert to, when we want to reset the pseudo-labels
-        orig_train_dataset_labeled = copy.deepcopy(train_dataset_labeled)
-        orig_train_dataset_unlabeled = copy.deepcopy(train_dataset_unlabeled)
-    # re-setup LR reduction on plateau, so that it uses the learning rate reductions
-    plateau_scheduler = lr_scheduler.ReduceLROnPlateau(optimizer, mode='min', factor=args.lr_reduction_factor, patience=args.patience, threshold=args.loss_eps, max_num_lr_reductions=args.num_lr_reductions)
-
-    # train epochs until loss converges
     gmm = None
-    base_top_k = 2
-    starting_epoch = epoch
-    while not plateau_scheduler.is_done() and epoch < MAX_EPOCHS:
-        epoch += 1
-        logger.info("Epoch (semi-supervised): {}".format(epoch))
-
-        logger.info("  training against annotated and pseudo-labeled data.")
-        train_epoch(model, train_dataset_labeled, optimizer, criterion, epoch, train_stats, args)
-
-        logger.info("  building the GMM models on the labeled training data.")
-        gmm, gmm_skl = build_gmm(model, train_dataset_labeled, epoch, train_stats, args)
-
-        logger.info("  evaluating against validation data, using softmax and gmm")
-        eval_model(model, val_dataset, criterion, train_stats, "val", epoch, gmm, args)
-        eval_model(model, val_dataset, criterion, train_stats, "val_skl", epoch, gmm_skl, args)
-
+    if not args.disable_ssl:
         if args.re_pseudo_label_each_epoch:
-            # TODO test completely re-psuedo labeling every epoch, instead of it being a one way function
-            # reset the datasets to their origional state before pseudo-labeling
-            train_dataset_labeled = copy.deepcopy(orig_train_dataset_labeled)
-            train_dataset_unlabeled = copy.deepcopy(orig_train_dataset_unlabeled)
-            ssl_epoch_count = (epoch - starting_epoch)
-            top_k = base_top_k * ssl_epoch_count
-        else:
-            top_k = base_top_k
+            # create a copy of the orig labeled dataset to revert to, when we want to reset the pseudo-labels
+            orig_train_dataset_labeled = copy.deepcopy(train_dataset_labeled)
+            orig_train_dataset_unlabeled = copy.deepcopy(train_dataset_unlabeled)
+        # re-setup LR reduction on plateau, so that it uses the learning rate reductions
+        plateau_scheduler = lr_scheduler.ReduceLROnPlateau(optimizer, mode='min', factor=args.lr_reduction_factor, patience=args.patience, threshold=args.loss_eps, max_num_lr_reductions=args.num_lr_reductions)
 
-        logger.info("  pseudo-labeling unannotated examples.")
-        # This moves instances from the unlabeled population into the labeled population
-        psuedolabel_data(model, train_dataset_labeled, train_dataset_unlabeled, gmm, epoch, train_stats, top_k, args)
+        # train epochs until loss converges
+        base_top_k = 2
+        starting_epoch = epoch
+        while not plateau_scheduler.is_done() and epoch < MAX_EPOCHS:
+            epoch += 1
+            logger.info("Epoch (semi-supervised): {}".format(epoch))
 
-        val_loss = train_stats.get_epoch('val_loss', epoch=epoch)
-        plateau_scheduler.step(val_loss)
+            logger.info("  training against annotated and pseudo-labeled data.")
+            train_epoch(model, train_dataset_labeled, optimizer, criterion, epoch, train_stats, args)
 
-        # update global metadata stats
-        train_stats.add_global('training_wall_time', train_stats.get('train_wall_time', aggregator='sum'))
-        train_stats.add_global('val_wall_time', train_stats.get('val_wall_time', aggregator='sum'))
-        train_stats.add_global('num_epochs_trained', epoch)
+            logger.info("  building the GMM models on the labeled training data.")
+            gmm = build_gmm(model, train_dataset_labeled, epoch, train_stats, args)
 
-        # write copy of current metadata metrics to disk
-        train_stats.export(args.output_filepath)
+            logger.info("  evaluating against validation data, using softmax and gmm")
+            eval_model(model, val_dataset, criterion, train_stats, "val", epoch, gmm, args)
+            # eval_model(model, val_dataset, criterion, train_stats, "val_skl", epoch, gmm_skl, args)
 
-        # handle early stopping when loss converges
-        if plateau_scheduler.num_bad_epochs == 0:
-            logger.info('Updating best model with epoch: {} loss: {}'.format(epoch, val_loss))
-            best_model = copy.deepcopy(model)
-            best_epoch = epoch
+            if args.re_pseudo_label_each_epoch:
+                # TODO test completely re-psuedo labeling every epoch, instead of it being a one way function
+                # reset the datasets to their origional state before pseudo-labeling
+                train_dataset_labeled = copy.deepcopy(orig_train_dataset_labeled)
+                train_dataset_unlabeled = copy.deepcopy(orig_train_dataset_unlabeled)
+                ssl_epoch_count = (epoch - starting_epoch)
+                top_k = base_top_k * ssl_epoch_count
+            else:
+                top_k = base_top_k
 
-            # update the global metrics with the best epoch
-            train_stats.update_global(epoch)
+            logger.info("  pseudo-labeling unannotated examples.")
+            # This moves instances from the unlabeled population into the labeled population
+            psuedolabel_data(model, train_dataset_labeled, train_dataset_unlabeled, gmm, epoch, train_stats, top_k, args)
+
+            train_stats.add(epoch, 'train_labeled_dataset_size', len(train_dataset_labeled))
+
+            val_loss = train_stats.get_epoch('val_loss', epoch=epoch)
+            plateau_scheduler.step(val_loss)
+
+            # update global metadata stats
+            train_stats.add_global('training_wall_time', train_stats.get('train_wall_time', aggregator='sum'))
+            train_stats.add_global('val_wall_time', train_stats.get('val_wall_time', aggregator='sum'))
+            train_stats.add_global('num_epochs_trained', epoch)
+
+            # write copy of current metadata metrics to disk
+            train_stats.export(args.output_filepath)
+
+            # handle early stopping when loss converges
+            if plateau_scheduler.num_bad_epochs == 0:
+                logger.info('Updating best model with epoch: {} loss: {}'.format(epoch, val_loss))
+                best_model = copy.deepcopy(model)
+                best_epoch = epoch
+
+                # update the global metrics with the best epoch
+                train_stats.update_global(epoch)
 
 
     logger.info('Evaluating model against test dataset using softmax and gmm')

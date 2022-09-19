@@ -111,20 +111,20 @@ def select():
 
 if __name__ == '__main__':
 
-    n = 0
+    n = 1
 
     fp = os.path.join(FOLDER_PATH, "id-{:08}".format(n))
 
     args = dict()
     args['arch'] = 'wide_resnet'
-    args['num_workers'] = 4
+    args['num_workers'] = 0
     args['output_filepath'] = fp
     args['batch_size'] = 128
     args['learning_rate'] = 3e-4
     args['loss_eps'] = 1e-4
     args['num_lr_reductions'] = 2
     args['lr_reduction_factor'] = 0.2
-    args['patience'] = 50
+    args['patience'] = 100
     args['weight_decay'] = 1e-5
     args['cycle_factor'] = 4
     args['starting_model'] = None
@@ -132,10 +132,13 @@ if __name__ == '__main__':
     args['optimizer'] = 'adamw'
     args['debug'] = False
     args['num_classes'] = 10
-    args['amp'] = True
+    args['disable_amp'] = False
     args['val_fraction'] = 0.1
     args['num_labeled_datapoints'] = 250
     args['re_pseudo_label_each_epoch'] = False
+    args['disable_ssl'] = False
+    args['pseudo_label_percentile_threshold'] = 0.99
+    args['inference_method'] = 'cauchy'
 
     if args['debug']:
         args['loss_eps'] = 0.1
