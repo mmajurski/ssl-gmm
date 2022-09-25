@@ -29,7 +29,7 @@ def main():
     parser.add_argument('--num_labeled_datapoints', default=250, type=int, help='number of labeled annotations in the dataset.')
     parser.add_argument('--starting_model', type=str, default=None, help='Pytorch model checkpoint to load instead of starting from random')
     parser.add_argument('--optimizer', type=str, default='adamw',help='optimizer if nothing is passed AdamW would be used (currently supported sgd,adamw)')
-    parser.add_argument('--cluster_per_class', default=2, type=int, help='number of clusters to create per class')
+    parser.add_argument('--cluster_per_class', default=1, type=int, help='number of clusters to create per class')
     args = parser.parse_args()
 
     if os.path.exists(args.output_filepath):
