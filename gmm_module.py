@@ -227,7 +227,7 @@ class GMM(torch.nn.Module):
         # equivalent of dividing by sum in the normal space
         # verify if we need to normalize in case of 1 cluster? as it is returning all 0s in log space (1 in normal)
         log_resp = weighted_log_prob - log_prob_norm
-        return log_prob_norm, log_resp , weighted_log_prob
+        return weighted_log_prob, log_prob_norm, log_resp
 
     def predict_cauchy_probability(self, x):
         if not torch.is_tensor(x):

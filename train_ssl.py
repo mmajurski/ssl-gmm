@@ -252,11 +252,12 @@ def pseudo_label_resp_filter_Pperc_sort_neumerator(labels, indices, resp, neumer
     neumerator = neumerator[filter]
     labels = labels[filter]
     indices = indices[filter]
+    # sorted_resp = sorted_resp[filter]
 
     max_neum, preds = torch.max(neumerator, dim=-1)
     sorted_neum, sorted_neum_idx = max_neum.sort(descending=True)
 
-    sorted_neum = sorted_neum.detach().cpu().numpy()
+    # sorted_neum = sorted_neum.detach().cpu().numpy()
     labels = labels[sorted_neum_idx].detach().cpu().numpy()
     indices = indices[sorted_neum_idx].detach().cpu().numpy()
     preds = preds[sorted_neum_idx].detach().cpu().numpy()
