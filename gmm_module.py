@@ -1,6 +1,7 @@
 import torch
 import numpy as np
 from math import gamma
+
 """
 ----------------:Change log:----------------
 - replaced squeeze() with squeeze(dim=0) to avoid unintentional squeezing in case of n_clusters being 1
@@ -11,6 +12,7 @@ from math import gamma
 - set resp_x = torch.matmul(resp.transpose(2, 1), x)
     as resp.transpose(0,1) was resulting in shape (N,1,k)
 """
+
 
 # TODO transfer everything to gpu
 # TODO add logger and log required params
@@ -50,10 +52,12 @@ class GMM(torch.nn.Module):
                 raise ValueError(
                     f"The parameter 'weights' should be normalized, but got sum(weights) = {self._pi.sum():.5f}")
             elif any(torch.less(self._pi, 0.0)) or any(torch.greater(self._pi, 1.0)):
-                raise ValueError(f"The parameter 'weights' should be in the range [0, 1], but got max value {self._pi.min().item():.5f}, min value {self._pi.min().item():.5f}")
+                raise ValueError(
+                    f"The parameter 'weights' should be in the range [0, 1], but got max value {self._pi.min().item():.5f}, min value {self._pi.min().item():.5f}")
             self._pi = torch.nn.Parameter(self._pi, requires_grad=False)
         else:
-            self._pi = torch.nn.Parameter(torch.Tensor(*self._pi_shape), requires_grad=False).fill_(1. / self.n_clusters)
+            self._pi = torch.nn.Parameter(torch.Tensor(*self._pi_shape), requires_grad=False).fill_(
+                1. / self.n_clusters)
         # validate or set initial cluster means
         if self._mu is not None:
             if self._mu.size() != self._mu_shape:
@@ -67,7 +71,9 @@ class GMM(torch.nn.Module):
                 raise ValueError("Invalid covariance matrices provided")
             self._sigma = torch.nn.Parameter(self._sigma, requires_grad=False)
         else:
-            self._sigma = torch.nn.Parameter(torch.eye(self.n_features).reshape(1, self.n_features, self.n_features).repeat(self.n_clusters, 1, 1), requires_grad=False)
+            self._sigma = torch.nn.Parameter(
+                torch.eye(self.n_features).reshape(1, self.n_features, self.n_features).repeat(self.n_clusters, 1, 1),
+                requires_grad=False)
 
         self.precision_cholesky = self._compute_precision_cholesky()
 
@@ -75,14 +81,14 @@ class GMM(torch.nn.Module):
         """
         var can be "mu", "sigma" or "pi"
         """
-        return getattr(self, '_'+var)
-
+        return getattr(self, '_' + var)
 
     def fit(self, x):
         """
         fit the GMM module to the data by training it for max_iter epochs or till it is converged
         returns: True if converged before reaching max epochs, False if ran max epochs and didn't converge
         """
+        x = x.double()
         # training for _max_iter epochs
         for epoch in range(self._max_iter):
 
@@ -128,6 +134,7 @@ class GMM(torch.nn.Module):
         return weighted_log_prob, log_prob_norm, log_resp
 
     def _e_step(self, x):
+        x = x.type(torch.float32)
         _, log_prob_norm, log_resp = self._estimate_log_prob_resp(x)
         return torch.mean(log_prob_norm), log_resp
 
@@ -139,7 +146,6 @@ class GMM(torch.nn.Module):
         # calculating pi and adding (10 * smallest possible value for resp) to avoid 0
         pi = torch.sum(resp, dim=0) + self._eps
         # pi = torch.add(torch.sum(resp, dim=0), 10 * torch.finfo(resp.dtype).eps)
-
 
         # means = sum(resp * x, dim=0) / pi
         resp_x = torch.matmul(resp.transpose(0, 1), x)
@@ -189,7 +195,6 @@ class GMM(torch.nn.Module):
     def _cauchy_estimate_log_prob(self, x):
         n_samples = x.size(dim=0)
 
-
         power_value = (1 + self.n_features) / 2
         numerator = np.log(gamma(power_value))
         denom_1 = np.log(gamma(1 / 2))
@@ -227,7 +232,7 @@ class GMM(torch.nn.Module):
         # equivalent of dividing by sum in the normal space
         # verify if we need to normalize in case of 1 cluster? as it is returning all 0s in log space (1 in normal)
         log_resp = weighted_log_prob - log_prob_norm
-        return log_prob_norm, log_resp , weighted_log_prob
+        return log_prob_norm, log_resp, weighted_log_prob
 
     def predict_cauchy_probability(self, x):
         if not torch.is_tensor(x):
@@ -235,7 +240,7 @@ class GMM(torch.nn.Module):
 
         log_prob_norm, log_resp, unnorm_log_resp = self._cauchy_estimate_log_prob_resp(x)
         return torch.exp(log_prob_norm), torch.exp(log_resp), unnorm_log_resp
-    
+
     def _compute_precision_cholesky(self):
         """
         Calculates precision_cholesky from _sigma (covariances)
