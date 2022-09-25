@@ -4,6 +4,7 @@ import pandas as pd
 import json
 
 ifp = './models'
+ifp = '/home/mmajurski/Downloads/models'
 
 n_vals = [250, 1000, 4000]
 p_vals = [0.99, 0.98, 0.95, 0.9, 0.75]
@@ -14,7 +15,7 @@ for n in n_vals:
     df_list = list()
     avg_df_list = list()
 
-    prefixes = ['only-supervised', 'ssl-resp', 'ssl-neum']
+    prefixes = ['only-supervised', 'ssl-resp', 'ssl-neum', 'ssl-resp-cauchy', 'ssl-neum-cauchy']
 
     for pre in prefixes:
         m_fp = os.path.join(ifp, '{}-{}-models'.format(pre, n))
@@ -130,5 +131,5 @@ for n in n_vals:
     full_df = full_df[cols]
 
 
-    full_df.to_csv('./models/summary-{}.csv'.format(n), index=False)
-    avg_full_df.to_csv('./models/summary-{}-avg.csv'.format(n), index=False)
+    full_df.to_csv(os.path.join(ifp, 'summary-{}.csv'.format(n)), index=False)
+    avg_full_df.to_csv(os.path.join(ifp, 'summary-{}-avg.csv'.format(n)), index=False)

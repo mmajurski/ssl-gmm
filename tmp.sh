@@ -2,19 +2,17 @@
 i=0
 n=250
 
-p=0.99
-python main.py --output-filepath=./models/ssl-perc${p}-${n}-models/id-000${i} --num_labeled_datapoints=${n} --pseudo-label-percentile-threshold=${p} &
+python main.py --output-filepath=./models/ssl-resp-cauchy-${n}-models/id-000${i} --num_labeled_datapoints=${n} --pseudo-label-percentile-threshold="resp" --inference-method=cauchy &
 sleep 0.2
 
-p=0.98
-python main.py --output-filepath=./models/ssl-perc${p}-${n}-models/id-000${i} --num_labeled_datapoints=${n} --pseudo-label-percentile-threshold=${p} &
+python main.py --output-filepath=./models/ssl-neum-cauchy-${n}-models/id-000${i} --num_labeled_datapoints=${n} --pseudo-label-percentile-threshold="neum" --inference-method=cauchy &
 sleep 0.2
 
 
 
 # Baselines (no SSL)
 for n in 250 1000 4000; do
-  for i in {0..5}; do
+  for i in {0..3}; do
     wait -n
     python main.py --disable-ssl --output-filepath=./models/only-supervised-${n}-models/id-000${i} --num_labeled_datapoints=${n} &
     sleep 0.2
@@ -27,6 +25,17 @@ for n in 250 1000 4000; do
     python main.py --output-filepath=./models/ssl-neum-${n}-models/id-000${i} --num_labeled_datapoints=${n} --pseudo-label-percentile-threshold="neum" &
     sleep 0.2
 
+    # ***********************
+
+    wait -n
+    python main.py --output-filepath=./models/ssl-resp-cauchy-${n}-models/id-000${i} --num_labeled_datapoints=${n} --pseudo-label-percentile-threshold="resp" --inference-method=cauchy &
+    sleep 0.2
+
+    wait -n
+    python main.py --output-filepath=./models/ssl-neum-cauchy-${n}-models/id-000${i} --num_labeled_datapoints=${n} --pseudo-label-percentile-threshold="neum" --inference-method=cauchy &
+    sleep 0.2
+
+    # ***********************
 
     wait -n
     p=0.99

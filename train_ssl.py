@@ -191,8 +191,10 @@ def psuedolabel_data(model, train_dataset_labeled, train_dataset_unlabeled, gmm,
         # get the average accuracy of the pseudo-labels (this data is not available in real SSL applications, since the unlabeled population would truly be unlabeled
         train_stats.add(epoch, 'pseudo_labeling_accuracy', float(np.nanmean(class_accuracy)))
         train_stats.add(epoch, 'num_added_pseudo_labels', int(np.sum(class_counter)))
+        train_stats.add(epoch, 'used_true_labels', int(np.sum(used_true_labels)))
+        train_stats.add(epoch, 'used_pseudo_labels', int(np.sum(used_pseudo_labels)))
 
-        train_stats.render_and_save_confusion_matrix(used_true_labels, used_pseudo_labels, args.output_filepath, 'pseudo_labeling_confusion_matrix', epoch)
+        #train_stats.render_and_save_confusion_matrix(used_true_labels, used_pseudo_labels, args.output_filepath, 'pseudo_labeling_confusion_matrix', epoch)
 
 
 def pseudo_label_denominator_filter(denominators, labels, indices, data_resp, data_weighted_probs):
