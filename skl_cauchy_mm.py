@@ -49,8 +49,8 @@ class CMM(sklearn.mixture.GaussianMixture):
         # equivalent of dividing by sum in the normal space
         # verify if we need to normalize in case of 1 cluster? as it is returning all 0s in log space (1 in normal)
         log_resp = weighted_log_prob - log_prob_norm
-        return log_prob_norm, log_resp, weighted_log_prob
+        return weighted_log_prob, log_prob_norm, log_resp
 
     def predict_cauchy_probability(self, x):
-        log_prob_norm, log_resp, unnorm_log_resp = self._cauchy_estimate_log_prob_resp(x)
-        return np.exp(log_prob_norm), np.exp(log_resp), unnorm_log_resp
+        unnorm_log_resp, log_prob_norm, log_resp = self._cauchy_estimate_log_prob_resp(x)
+        return unnorm_log_resp, np.exp(log_prob_norm), np.exp(log_resp)

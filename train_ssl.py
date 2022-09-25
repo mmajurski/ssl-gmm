@@ -220,11 +220,11 @@ def pseudo_label_denominator_filter_1perc(denominators, labels, indices, data_re
     return labels, indices, data_resp, data_weighted_probs
 
 
-def pseudo_label_numerator_filter_1perc(labels, indices, data_resp, data_weighted_probs, weighted=True):
+def pseudo_label_numerator_filter_1perc(labels, indices, data_resp, data_weighted_probs, weighted=True,cluster_per_class=1):
     data = data_resp if not weighted else data_weighted_probs
 
     max_numerator, preds = torch.max(data, dim=-1)
-    preds = torch.div(preds, 2, rounding_mode='floor')
+    preds = torch.div(preds, cluster_per_class, rounding_mode='floor')
     sorted_numerators, max_sorted_indices = max_numerator.sort(descending=False)
 
     idx = int(len(sorted_numerators) * 0.99)
@@ -239,7 +239,7 @@ def pseudo_label_numerator_filter_1perc(labels, indices, data_resp, data_weighte
     return labels, indices, preds
 
 
-def pseudo_label_resp_filter_Pperc_sort_neumerator(labels, indices, resp, neumerator, perc):
+def pseudo_label_resp_filter_Pperc_sort_neumerator(labels, indices, resp, neumerator, perc,cluster_per_class=1):
 
     max_resp, _ = torch.max(resp, dim=-1)
     sorted_resp, _ = max_resp.sort(descending=False)
@@ -253,7 +253,7 @@ def pseudo_label_resp_filter_Pperc_sort_neumerator(labels, indices, resp, neumer
     indices = indices[filter]
 
     max_neum, preds = torch.max(neumerator, dim=-1)
-    preds = torch.div(preds, 2, rounding_mode='floor')
+    preds = torch.div(preds, cluster_per_class, rounding_mode='floor')
     sorted_neum, sorted_neum_idx = max_neum.sort(descending=True)
 
     sorted_neum = sorted_neum.detach().cpu().numpy()
@@ -264,7 +264,7 @@ def pseudo_label_resp_filter_Pperc_sort_neumerator(labels, indices, resp, neumer
     return labels, indices, preds
 
 
-def pseudo_label_numerator_filter(labels, indices, data_resp, data_weighted_probs, weighted=True, thres=None):
+def pseudo_label_numerator_filter(labels, indices, data_resp, data_weighted_probs, weighted=True, thres=None,cluster_per_class=1):
     if thres is None:
         numerator_resp_threshold = 0.95
     else:
@@ -272,7 +272,7 @@ def pseudo_label_numerator_filter(labels, indices, data_resp, data_weighted_prob
 
     data = data_resp if not weighted else data_weighted_probs
     max_numerator, preds = torch.max(data, dim=-1)
-    preds = torch.div(preds, 2, rounding_mode='floor')
+    preds = torch.div(preds, cluster_per_class, rounding_mode='floor')
     sorted_numerators, max_sorted_indices = max_numerator.sort(descending=True)
 
     if not weighted:
