@@ -127,15 +127,13 @@ def psuedolabel_data(model, train_dataset_labeled, train_dataset_unlabeled, gmm,
 
     # filtered_labels, filtered_indicies, filtered_preds = pseudo_label_numerator_filter_1perc(filtered_labels, filtered_indicies, filtered_data_resp, filtered_data_weighted_prob, weighted=True)
 
-
-
     if args.pseudo_label_percentile_threshold == "resp":
-        filtered_labels, filtered_indicies, filtered_preds = pseudo_label_numerator_filter(filtered_labels, filtered_indicies, filtered_data_resp, filtered_data_weighted_prob, weighted=True, thres=0.0)
+        filtered_labels, filtered_indicies, filtered_preds = pseudo_label_numerator_filter(filtered_labels, filtered_indicies, filtered_data_resp, filtered_data_weighted_prob, weighted=True, thres=0.0,cluster_per_class=args.cluster_per_class)
     elif args.pseudo_label_percentile_threshold == "neum":
-        filtered_labels, filtered_indicies, filtered_preds = pseudo_label_numerator_filter(filtered_labels, filtered_indicies, filtered_data_resp, filtered_data_weighted_prob, weighted=False, thres=0.0)
+        filtered_labels, filtered_indicies, filtered_preds = pseudo_label_numerator_filter(filtered_labels, filtered_indicies, filtered_data_resp, filtered_data_weighted_prob, weighted=False, thres=0.0,cluster_per_class=args.cluster_per_class)
     else:
         # take to 1% of the resp, and then sort based on neumerator
-        filtered_labels, filtered_indicies, filtered_preds = pseudo_label_resp_filter_Pperc_sort_neumerator(filtered_labels, filtered_indicies, filtered_data_resp, filtered_data_weighted_prob, float(args.pseudo_label_percentile_threshold))
+        filtered_labels, filtered_indicies, filtered_preds = pseudo_label_resp_filter_Pperc_sort_neumerator(filtered_labels, filtered_indicies, filtered_data_resp, filtered_data_weighted_prob, float(args.pseudo_label_percentile_threshold),cluster_per_class=args.cluster_per_class)
 
 
 
@@ -222,10 +220,11 @@ def pseudo_label_denominator_filter_1perc(denominators, labels, indices, data_re
     return labels, indices, data_resp, data_weighted_probs
 
 
-def pseudo_label_numerator_filter_1perc(labels, indices, data_resp, data_weighted_probs, weighted=True):
+def pseudo_label_numerator_filter_1perc(labels, indices, data_resp, data_weighted_probs, weighted=True,cluster_per_class=1):
     data = data_resp if not weighted else data_weighted_probs
 
     max_numerator, preds = torch.max(data, dim=-1)
+    preds = torch.div(preds, cluster_per_class, rounding_mode='floor')
     sorted_numerators, max_sorted_indices = max_numerator.sort(descending=False)
 
     idx = int(len(sorted_numerators) * 0.99)
@@ -240,7 +239,7 @@ def pseudo_label_numerator_filter_1perc(labels, indices, data_resp, data_weighte
     return labels, indices, preds
 
 
-def pseudo_label_resp_filter_Pperc_sort_neumerator(labels, indices, resp, neumerator, perc):
+def pseudo_label_resp_filter_Pperc_sort_neumerator(labels, indices, resp, neumerator, perc,cluster_per_class=1):
 
     max_resp, _ = torch.max(resp, dim=-1)
     sorted_resp, _ = max_resp.sort(descending=False)
@@ -255,6 +254,7 @@ def pseudo_label_resp_filter_Pperc_sort_neumerator(labels, indices, resp, neumer
     # sorted_resp = sorted_resp[filter]
 
     max_neum, preds = torch.max(neumerator, dim=-1)
+    preds = torch.div(preds, cluster_per_class, rounding_mode='floor')
     sorted_neum, sorted_neum_idx = max_neum.sort(descending=True)
 
     # sorted_neum = sorted_neum.detach().cpu().numpy()
@@ -265,7 +265,7 @@ def pseudo_label_resp_filter_Pperc_sort_neumerator(labels, indices, resp, neumer
     return labels, indices, preds
 
 
-def pseudo_label_numerator_filter(labels, indices, data_resp, data_weighted_probs, weighted=True, thres=None):
+def pseudo_label_numerator_filter(labels, indices, data_resp, data_weighted_probs, weighted=True, thres=None,cluster_per_class=1):
     if thres is None:
         numerator_resp_threshold = 0.95
     else:
@@ -273,6 +273,7 @@ def pseudo_label_numerator_filter(labels, indices, data_resp, data_weighted_prob
 
     data = data_resp if not weighted else data_weighted_probs
     max_numerator, preds = torch.max(data, dim=-1)
+    preds = torch.div(preds, cluster_per_class, rounding_mode='floor')
     sorted_numerators, max_sorted_indices = max_numerator.sort(descending=True)
 
     if not weighted:
@@ -383,36 +384,40 @@ def build_gmm(model, pytorch_dataset, epoch, train_stats, args):
         c = unique_class_labels[i]
         bucketed_dataset_logits.append(dataset_logits[dataset_labels == c])
 
-    gmm_list = list()
-    # gmm_list_skl = list()
+    # gmm_list = list()
+    gmm_list_skl = list()
     for i in range(len(unique_class_labels)):
         class_c_logits = bucketed_dataset_logits[i]
-        gmm = GMM(n_features=class_c_logits.shape[1], n_clusters=1, tolerance=1e-4, max_iter=50)
-        gmm.fit(class_c_logits)
-        while np.any(np.isnan(gmm.get("sigma").detach().cpu().numpy())):
-            gmm = GMM(n_features=class_c_logits.shape[1], n_clusters=1, tolerance=1e-4, max_iter=50)
-            gmm.fit(class_c_logits)
-        gmm_list.append(gmm)
-        # gmm_skl = sklearn.mixture.GaussianMixture(n_components=1)
-        # gmm_skl.fit(class_c_logits.numpy())
-        # gmm_list_skl.append(gmm_skl)
+        # gmm = GMM(n_features=class_c_logits.shape[1], n_clusters=args.cluster_per_class, tolerance=1e-4, max_iter=50)
+        # gmm.fit(class_c_logits)
+        # while np.any(np.isnan(gmm.get("sigma").detach().cpu().numpy())):
+        #     gmm = GMM(n_features=class_c_logits.shape[1], n_clusters=args.cluster_per_class, tolerance=1e-4, max_iter=50)
+        #     gmm.fit(class_c_logits)
+        # gmm_list.append(gmm)
+        gmm_skl = sklearn.mixture.GaussianMixture(n_components=args.cluster_per_class)
+        gmm_skl.fit(class_c_logits.numpy())
+        gmm_list_skl.append(gmm_skl)
 
     class_preval = compute_class_prevalance(dataloader)
     logger.info(class_preval)
     class_preval = torch.tensor(list(class_preval.values()))
 
     # generate weights, mus and sigmas
-    weights = class_preval
-    mus = torch.cat([gmm.get("mu") for gmm in gmm_list])
-    sigmas = torch.cat([gmm.get("sigma") for gmm in gmm_list])
+    weights = class_preval.repeat_interleave(args.cluster_per_class)
+    pi = torch.cat([torch.FloatTensor(gmm.weights_) for gmm in gmm_list_skl])
+    weights *= pi
+    # mus = torch.cat([gmm.get("mu") for gmm in gmm_list])
+    mus = torch.cat([torch.FloatTensor(gmm.means_) for gmm in gmm_list_skl])
+    # sigmas = torch.cat([gmm.get("sigma") for gmm in gmm_list])
+    sigmas = torch.cat([torch.FloatTensor(gmm.covariances_) for gmm in gmm_list_skl])
     gmm = GMM(n_features=args.num_classes, n_clusters=weights.shape[0], weights=weights, mu=mus, sigma=sigmas)
 
-    # # merge the individual sklearn GMMs
+    # merge the individual sklearn GMMs
     # means = np.concatenate([gmm.means_ for gmm in gmm_list_skl])
     # covariances = np.concatenate([gmm.covariances_ for gmm in gmm_list_skl])
     # precisions = np.concatenate([gmm.precisions_ for gmm in gmm_list_skl])
     # precisions_chol = np.concatenate([gmm.precisions_cholesky_ for gmm in gmm_list_skl])
-    # gmm_skl = CMM(n_components=args.num_classes)
+    # gmm_skl = sklearn.mixture.GaussianMixture(n_components=args.num_classes * 2)
     # gmm_skl.weights_ = weights.numpy()
     # gmm_skl.means_ = means
     # gmm_skl.covariances_ = covariances
@@ -423,6 +428,7 @@ def build_gmm(model, pytorch_dataset, epoch, train_stats, args):
     train_stats.add(epoch, 'gmm_build_wall_time', wall_time)
 
     return gmm
+    # return gmm_skl
 
 
 def eval_model(model, pytorch_dataset, criterion, train_stats, split_name, epoch, gmm, args):
@@ -462,7 +468,7 @@ def eval_model(model, pytorch_dataset, criterion, train_stats, split_name, epoch
                     gmm_resp = gmm.predict_proba(gmm_inputs)  # N*1, N*K
                     if not isinstance(gmm_resp, np.ndarray):
                         gmm_resp = gmm_resp.detach().cpu().numpy()
-                    gmm_pred = np.argmax(gmm_resp, axis=-1)
+                    gmm_pred = np.argmax(gmm_resp, axis=-1) // args.cluster_per_class
                     gmm_preds.extend(gmm_pred)
 
                     if hasattr(gmm, 'predict_cauchy_probability'):
