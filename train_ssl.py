@@ -128,12 +128,12 @@ def psuedolabel_data(model, train_dataset_labeled, train_dataset_unlabeled, gmm,
     # filtered_labels, filtered_indicies, filtered_preds = pseudo_label_numerator_filter_1perc(filtered_labels, filtered_indicies, filtered_data_resp, filtered_data_weighted_prob, weighted=True)
 
     if args.pseudo_label_percentile_threshold == "resp":
-        filtered_labels, filtered_indicies, filtered_preds = pseudo_label_numerator_filter(filtered_labels, filtered_indicies, filtered_data_resp, filtered_data_weighted_prob, weighted=True, thres=0.0)
+        filtered_labels, filtered_indicies, filtered_preds = pseudo_label_numerator_filter(filtered_labels, filtered_indicies, filtered_data_resp, filtered_data_weighted_prob, weighted=True, thres=0.0,args.cluster_per_class)
     elif args.pseudo_label_percentile_threshold == "neum":
-        filtered_labels, filtered_indicies, filtered_preds = pseudo_label_numerator_filter(filtered_labels, filtered_indicies, filtered_data_resp, filtered_data_weighted_prob, weighted=False, thres=0.0)
+        filtered_labels, filtered_indicies, filtered_preds = pseudo_label_numerator_filter(filtered_labels, filtered_indicies, filtered_data_resp, filtered_data_weighted_prob, weighted=False, thres=0.0,args.cluster_per_class)
     else:
         # take to 1% of the resp, and then sort based on neumerator
-        filtered_labels, filtered_indicies, filtered_preds = pseudo_label_resp_filter_Pperc_sort_neumerator(filtered_labels, filtered_indicies, filtered_data_resp, filtered_data_weighted_prob, float(args.pseudo_label_percentile_threshold))
+        filtered_labels, filtered_indicies, filtered_preds = pseudo_label_resp_filter_Pperc_sort_neumerator(filtered_labels, filtered_indicies, filtered_data_resp, filtered_data_weighted_prob, float(args.pseudo_label_percentile_threshold),args.cluster_per_class)
 
 
 
