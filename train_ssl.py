@@ -128,12 +128,12 @@ def psuedolabel_data(model, train_dataset_labeled, train_dataset_unlabeled, gmm,
     # filtered_labels, filtered_indicies, filtered_preds = pseudo_label_numerator_filter_1perc(filtered_labels, filtered_indicies, filtered_data_resp, filtered_data_weighted_prob, weighted=True)
 
     if args.pseudo_label_percentile_threshold == "resp":
-        filtered_labels, filtered_indicies, filtered_preds = pseudo_label_numerator_filter(filtered_labels, filtered_indicies, filtered_data_resp, filtered_data_weighted_prob, weighted=True, thres=0.0,args.cluster_per_class)
+        filtered_labels, filtered_indicies, filtered_preds = pseudo_label_numerator_filter(filtered_labels, filtered_indicies, filtered_data_resp, filtered_data_weighted_prob, weighted=True, thres=0.0,cluster_per_class=args.cluster_per_class)
     elif args.pseudo_label_percentile_threshold == "neum":
-        filtered_labels, filtered_indicies, filtered_preds = pseudo_label_numerator_filter(filtered_labels, filtered_indicies, filtered_data_resp, filtered_data_weighted_prob, weighted=False, thres=0.0,args.cluster_per_class)
+        filtered_labels, filtered_indicies, filtered_preds = pseudo_label_numerator_filter(filtered_labels, filtered_indicies, filtered_data_resp, filtered_data_weighted_prob, weighted=False, thres=0.0,cluster_per_class=args.cluster_per_class)
     else:
         # take to 1% of the resp, and then sort based on neumerator
-        filtered_labels, filtered_indicies, filtered_preds = pseudo_label_resp_filter_Pperc_sort_neumerator(filtered_labels, filtered_indicies, filtered_data_resp, filtered_data_weighted_prob, float(args.pseudo_label_percentile_threshold),args.cluster_per_class)
+        filtered_labels, filtered_indicies, filtered_preds = pseudo_label_resp_filter_Pperc_sort_neumerator(filtered_labels, filtered_indicies, filtered_data_resp, filtered_data_weighted_prob, float(args.pseudo_label_percentile_threshold),cluster_per_class=args.cluster_per_class)
 
 
 
@@ -191,8 +191,10 @@ def psuedolabel_data(model, train_dataset_labeled, train_dataset_unlabeled, gmm,
         # get the average accuracy of the pseudo-labels (this data is not available in real SSL applications, since the unlabeled population would truly be unlabeled
         train_stats.add(epoch, 'pseudo_labeling_accuracy', float(np.nanmean(class_accuracy)))
         train_stats.add(epoch, 'num_added_pseudo_labels', int(np.sum(class_counter)))
+        train_stats.add(epoch, 'used_true_labels', int(np.sum(used_true_labels)))
+        train_stats.add(epoch, 'used_pseudo_labels', int(np.sum(used_pseudo_labels)))
 
-        train_stats.render_and_save_confusion_matrix(used_true_labels, used_pseudo_labels, args.output_filepath, 'pseudo_labeling_confusion_matrix', epoch)
+        #train_stats.render_and_save_confusion_matrix(used_true_labels, used_pseudo_labels, args.output_filepath, 'pseudo_labeling_confusion_matrix', epoch)
 
 
 def pseudo_label_denominator_filter(denominators, labels, indices, data_resp, data_weighted_probs):
@@ -251,12 +253,13 @@ def pseudo_label_resp_filter_Pperc_sort_neumerator(labels, indices, resp, neumer
     neumerator = neumerator[filter]
     labels = labels[filter]
     indices = indices[filter]
+    # sorted_resp = sorted_resp[filter]
 
     max_neum, preds = torch.max(neumerator, dim=-1)
     preds = torch.div(preds, cluster_per_class, rounding_mode='floor')
     sorted_neum, sorted_neum_idx = max_neum.sort(descending=True)
 
-    sorted_neum = sorted_neum.detach().cpu().numpy()
+    # sorted_neum = sorted_neum.detach().cpu().numpy()
     labels = labels[sorted_neum_idx].detach().cpu().numpy()
     indices = indices[sorted_neum_idx].detach().cpu().numpy()
     preds = preds[sorted_neum_idx].detach().cpu().numpy()
@@ -495,13 +498,17 @@ def eval_model(model, pytorch_dataset, criterion, train_stats, split_name, epoch
             gmm_accuracy = (gmm_preds == gt_labels).astype(float)
             gmm_accuracy = np.mean(gmm_accuracy)
             train_stats.add(epoch, '{}_gmm_accuracy'.format(split_name), gmm_accuracy)
-            train_stats.render_and_save_confusion_matrix(gt_labels, gmm_preds, args.output_filepath, '{}_gmm_confusion_matrix'.format(split_name), epoch)
+            train_stats.add(epoch, '{}_gmm_gt_labels'.format(split_name), gt_labels)
+            train_stats.add(epoch, '{}_gmm_preds'.format(split_name), gmm_preds)
+            # train_stats.render_and_save_confusion_matrix(gt_labels, gmm_preds, args.output_filepath, '{}_gmm_confusion_matrix'.format(split_name), epoch)
 
         if len(cauchy_preds) > 0:
             cauchy_accuracy = (cauchy_preds == gt_labels).astype(float)
             cauchy_accuracy = np.mean(cauchy_accuracy)
             train_stats.add(epoch, '{}_cauchy_accuracy'.format(split_name), cauchy_accuracy)
-            train_stats.render_and_save_confusion_matrix(gt_labels, cauchy_preds, args.output_filepath, '{}_cauchy_confusion_matrix'.format(split_name), epoch)
+            train_stats.add(epoch, '{}_cauchy_gt_labels'.format(split_name), gt_labels)
+            train_stats.add(epoch, '{}_cauchy_preds'.format(split_name), cauchy_preds)
+            #train_stats.render_and_save_confusion_matrix(gt_labels, cauchy_preds, args.output_filepath, '{}_cauchy_confusion_matrix'.format(split_name), epoch)
 
 
 def compute_class_prevalance(dataloader):

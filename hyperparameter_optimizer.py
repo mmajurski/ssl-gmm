@@ -137,7 +137,7 @@ if __name__ == '__main__':
     args['num_labeled_datapoints'] = 250
     args['re_pseudo_label_each_epoch'] = False
     args['disable_ssl'] = False
-    args['pseudo_label_percentile_threshold'] = 0.99
+    args['pseudo_label_percentile_threshold'] = 0.95
     args['inference_method'] = 'cauchy'
 
     if args['debug']:
