@@ -239,7 +239,7 @@ class GMM(torch.nn.Module):
             x = torch.tensor(x)
 
         unnorm_log_resp, log_prob_norm, log_resp = self._cauchy_estimate_log_prob_resp(x)
-        return unnorm_log_resp, torch.exp(log_prob_norm), torch.exp(log_resp)
+        return torch.exp(unnorm_log_resp), torch.exp(log_prob_norm), torch.exp(log_resp)
 
     def _compute_precision_cholesky(self):
         """

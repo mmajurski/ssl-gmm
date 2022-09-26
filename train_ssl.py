@@ -471,7 +471,7 @@ def eval_model(model, pytorch_dataset, criterion, train_stats, split_name, epoch
                     gmm_preds.extend(gmm_pred)
 
                     if hasattr(gmm, 'predict_cauchy_probability'):
-                        _, cauchy_resp, cauchy_unnorm_resp = gmm.predict_cauchy_probability(gmm_inputs)
+                        cauchy_unnorm_resp, _, cauchy_resp = gmm.predict_cauchy_probability(gmm_inputs)
                         if not isinstance(cauchy_resp, np.ndarray):
                             cauchy_resp = cauchy_resp.detach().cpu().numpy()
                         cauchy_pred = np.argmax(cauchy_resp, axis=-1)
