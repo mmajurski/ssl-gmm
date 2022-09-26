@@ -498,13 +498,17 @@ def eval_model(model, pytorch_dataset, criterion, train_stats, split_name, epoch
             gmm_accuracy = (gmm_preds == gt_labels).astype(float)
             gmm_accuracy = np.mean(gmm_accuracy)
             train_stats.add(epoch, '{}_gmm_accuracy'.format(split_name), gmm_accuracy)
-            train_stats.render_and_save_confusion_matrix(gt_labels, gmm_preds, args.output_filepath, '{}_gmm_confusion_matrix'.format(split_name), epoch)
+            train_stats.add(epoch, '{}_gmm_gt_labels'.format(split_name), gt_labels)
+            train_stats.add(epoch, '{}_gmm_preds'.format(split_name), gmm_preds)
+            # train_stats.render_and_save_confusion_matrix(gt_labels, gmm_preds, args.output_filepath, '{}_gmm_confusion_matrix'.format(split_name), epoch)
 
         if len(cauchy_preds) > 0:
             cauchy_accuracy = (cauchy_preds == gt_labels).astype(float)
             cauchy_accuracy = np.mean(cauchy_accuracy)
             train_stats.add(epoch, '{}_cauchy_accuracy'.format(split_name), cauchy_accuracy)
-            train_stats.render_and_save_confusion_matrix(gt_labels, cauchy_preds, args.output_filepath, '{}_cauchy_confusion_matrix'.format(split_name), epoch)
+            train_stats.add(epoch, '{}_cauchy_gt_labels'.format(split_name), gt_labels)
+            train_stats.add(epoch, '{}_cauchy_preds'.format(split_name), cauchy_preds)
+            #train_stats.render_and_save_confusion_matrix(gt_labels, cauchy_preds, args.output_filepath, '{}_cauchy_confusion_matrix'.format(split_name), epoch)
 
 
 def compute_class_prevalance(dataloader):
