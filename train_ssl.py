@@ -92,6 +92,7 @@ def psuedolabel_data(model, train_dataset_labeled, train_dataset_unlabeled, gmm,
             with torch.cuda.amp.autocast():
                 outputs = model(inputs)
                 gmm_inputs = outputs.detach().cpu()
+
                 if args.inference_method == 'gmm':
                     gmm_prob_weighted, gmm_prob_sum, gmm_resp = gmm.predict_probability(gmm_inputs)
                 elif args.inference_method == 'cauchy':
@@ -135,7 +136,60 @@ def psuedolabel_data(model, train_dataset_labeled, train_dataset_unlabeled, gmm,
         # take to 1% of the resp, and then sort based on neumerator
         filtered_labels, filtered_indicies, filtered_preds = pseudo_label_resp_filter_Pperc_sort_neumerator(filtered_labels, filtered_indicies, filtered_data_resp, filtered_data_weighted_prob, float(args.pseudo_label_percentile_threshold),cluster_per_class=args.cluster_per_class)
 
-
+    # if epoch % 10 == 0:
+    #     perc = float(args.pseudo_label_percentile_threshold)
+    #     max_resp, _ = torch.max(filtered_data_resp, dim=-1)
+    #     sorted_resp, _ = max_resp.sort(descending=False)
+    #     idx = int(len(sorted_resp) * perc)
+    #     threshold = float(sorted_resp[idx])
+    #
+    #     vals = max_resp.detach().cpu().numpy()
+    #     vals2 = filtered_data_resp.detach().cpu().numpy().reshape(-1)
+    #     from matplotlib import pyplot as plt
+    #     plt.figure(figsize=(8, 6))
+    #     plt.hist(vals, bins=100, alpha=0.5, label='resp')
+    #     plt.yscale("log")
+    #     plt.title("Max Resp Hist ({}th percentile = {})".format(perc, threshold))
+    #     plt.legend(loc='upper right')
+    #     plt.savefig('max-resp-hist-epoch{:03d}.png'.format(epoch))
+    #     plt.close()
+    #
+    #     sorted_resp, _ = vals2.sort(descending=False)
+    #     idx = int(len(sorted_resp) * perc)
+    #     threshold = float(sorted_resp[idx])
+    #     plt.figure(figsize=(8, 6))
+    #     plt.hist(vals2, bins=100, alpha=0.5, label='resp')
+    #     plt.yscale("log")
+    #     plt.title("Resp Hist ({}th percentile = {})".format(perc, threshold))
+    #     plt.legend(loc='upper right')
+    #     plt.savefig('resp-hist-epoch{:03d}.png'.format(epoch))
+    #     plt.close()
+    #
+    #     max_resp, _ = torch.max(filtered_data_weighted_prob, dim=-1)
+    #     sorted_resp, _ = max_resp.sort(descending=False)
+    #     idx = int(len(sorted_resp) * perc)
+    #     threshold = float(sorted_resp[idx])
+    #     vals = max_resp.detach().cpu().numpy()
+    #     vals2 = filtered_data_weighted_prob.detach().cpu().numpy().reshape(-1)
+    #
+    #     plt.figure(figsize=(8, 6))
+    #     plt.hist(vals, bins=100, alpha=0.5, label='resp')
+    #     plt.yscale("log")
+    #     plt.title("Max Numerator Hist ({}th percentile = {})".format(perc, threshold))
+    #     plt.legend(loc='upper right')
+    #     plt.savefig('max-neum-hist-epoch{:03d}.png'.format(epoch))
+    #     plt.close()
+    #
+    #     sorted_resp, _ = vals2.sort(descending=False)
+    #     idx = int(len(sorted_resp) * perc)
+    #     threshold = float(sorted_resp[idx])
+    #     plt.figure(figsize=(8, 6))
+    #     plt.hist(vals2, bins=100, alpha=0.5, label='resp')
+    #     plt.yscale("log")
+    #     plt.title("Numerator Hist ({}th percentile = {})".format(perc, threshold))
+    #     plt.legend(loc='upper right')
+    #     plt.savefig('resp-neum-epoch{:03d}.png'.format(epoch))
+    #     plt.close()
 
     # ratio based selection
     # filtered_labels, filtered_indicies, filtered_preds = pseudo_label_numerator_filter(filtered_labels, filtered_indicies, filtered_data_resp, filtered_data_weighted_prob, weighted=True, thres=0.0)
@@ -244,6 +298,7 @@ def pseudo_label_numerator_filter_1perc(labels, indices, data_resp, data_weighte
 def pseudo_label_resp_filter_Pperc_sort_neumerator(labels, indices, resp, neumerator, perc,cluster_per_class=1):
 
     max_resp, _ = torch.max(resp, dim=-1)
+
     sorted_resp, _ = max_resp.sort(descending=False)
 
     idx = int(len(sorted_resp) * perc)
@@ -474,7 +529,7 @@ def eval_model(model, pytorch_dataset, criterion, train_stats, split_name, epoch
                     gmm_preds.extend(gmm_pred)
 
                     if hasattr(gmm, 'predict_cauchy_probability'):
-                        _, cauchy_resp, cauchy_unnorm_resp = gmm.predict_cauchy_probability(gmm_inputs)
+                        cauchy_prob_weighted, cauchy_prob_sum, cauchy_resp = gmm.predict_cauchy_probability(gmm_inputs)
                         if not isinstance(cauchy_resp, np.ndarray):
                             cauchy_resp = cauchy_resp.detach().cpu().numpy()
                         cauchy_pred = np.argmax(cauchy_resp, axis=-1)

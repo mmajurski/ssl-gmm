@@ -124,7 +124,7 @@ if __name__ == '__main__':
     args['loss_eps'] = 1e-4
     args['num_lr_reductions'] = 2
     args['lr_reduction_factor'] = 0.2
-    args['patience'] = 100
+    args['patience'] = 50
     args['weight_decay'] = 1e-5
     args['cycle_factor'] = 4
     args['starting_model'] = None
@@ -139,6 +139,8 @@ if __name__ == '__main__':
     args['disable_ssl'] = False
     args['pseudo_label_percentile_threshold'] = 0.95
     args['inference_method'] = 'cauchy'
+    args['cluster_per_class'] = 1
+
 
     if args['debug']:
         args['loss_eps'] = 0.1
