@@ -53,4 +53,4 @@ class CMM(sklearn.mixture.GaussianMixture):
 
     def predict_cauchy_probability(self, x):
         unnorm_log_resp, log_prob_norm, log_resp = self._cauchy_estimate_log_prob_resp(x)
-        return unnorm_log_resp, np.exp(log_prob_norm), np.exp(log_resp)
+        return np.exp(unnorm_log_resp), np.exp(log_prob_norm), np.exp(log_resp)
