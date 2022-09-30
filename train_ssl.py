@@ -549,20 +549,23 @@ def eval_model(model, pytorch_dataset, criterion, train_stats, split_name, epoch
     if gmm is not None:
         gmm_preds = np.asarray(gmm_preds)
         cauchy_preds = np.asarray(cauchy_preds)
+        gt_labels_list = gt_labels.tolist()
+        gmm_preds_list = gmm_preds.tolist()
+        cauchy_preds_list = cauchy_preds.tolist()
         if len(gmm_preds) > 0:
             gmm_accuracy = (gmm_preds == gt_labels).astype(float)
             gmm_accuracy = np.mean(gmm_accuracy)
             train_stats.add(epoch, '{}_gmm_accuracy'.format(split_name), gmm_accuracy)
-            train_stats.add(epoch, '{}_gmm_gt_labels'.format(split_name), gt_labels)
-            train_stats.add(epoch, '{}_gmm_preds'.format(split_name), gmm_preds)
+            train_stats.add(epoch, '{}_gmm_gt_labels'.format(split_name), gt_labels_list)
+            train_stats.add(epoch, '{}_gmm_preds'.format(split_name), gmm_preds_list)
             # train_stats.render_and_save_confusion_matrix(gt_labels, gmm_preds, args.output_filepath, '{}_gmm_confusion_matrix'.format(split_name), epoch)
 
         if len(cauchy_preds) > 0:
             cauchy_accuracy = (cauchy_preds == gt_labels).astype(float)
             cauchy_accuracy = np.mean(cauchy_accuracy)
             train_stats.add(epoch, '{}_cauchy_accuracy'.format(split_name), cauchy_accuracy)
-            train_stats.add(epoch, '{}_cauchy_gt_labels'.format(split_name), gt_labels)
-            train_stats.add(epoch, '{}_cauchy_preds'.format(split_name), cauchy_preds)
+            train_stats.add(epoch, '{}_cauchy_gt_labels'.format(split_name), gt_labels_list)
+            train_stats.add(epoch, '{}_cauchy_preds'.format(split_name), cauchy_preds_list)
             #train_stats.render_and_save_confusion_matrix(gt_labels, cauchy_preds, args.output_filepath, '{}_cauchy_confusion_matrix'.format(split_name), epoch)
 
 
