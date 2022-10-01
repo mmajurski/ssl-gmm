@@ -76,13 +76,13 @@ def psuedolabel_data(model, train_dataset_labeled, train_dataset_unlabeled, gmm,
     # denominator_threshold = 0.0
     # # denominator_threshold = 500.0
     # resp_threshold = 0.95
-
+    model.eval()
     filtered_denominators = []
     filtered_labels = []
     filtered_indicies = []
     filtered_data_resp = []
     filtered_data_weighted_prob = []
-    model.eval()
+
     with torch.no_grad():
         for batch_idx, tensor_dict in enumerate(ul_dataloader):
             inputs = tensor_dict[0].cuda()
@@ -97,8 +97,10 @@ def psuedolabel_data(model, train_dataset_labeled, train_dataset_unlabeled, gmm,
                     gmm_prob_weighted, gmm_prob_sum, gmm_resp = gmm.predict_probability(gmm_inputs)
                 elif args.inference_method == 'cauchy':
                     gmm_prob_weighted, gmm_prob_sum, gmm_resp = gmm.predict_cauchy_probability(gmm_inputs)
+                elif args.inference_method == 'softmax':
+                    gmm_prob_weighted, gmm_prob_sum, gmm_resp = gmm_inputs, torch.sum(gmm_inputs, dim=1), gmm_inputs
                 else:
-                    raise RuntimeError("Invalid PL - inference method: {}. Expected gmm or cauchy".format(args.inference_method))
+                    raise RuntimeError("Invalid PL - inference method: {}. Expected gmm or cauchy or softmax".format(args.inference_method))
                 # threshold filtering
 
                 # list of boolean where value is False for items having lower prob_sum then threshold, True otherwise
@@ -128,7 +130,7 @@ def psuedolabel_data(model, train_dataset_labeled, train_dataset_unlabeled, gmm,
 
     # filtered_labels, filtered_indicies, filtered_preds = pseudo_label_numerator_filter_1perc(filtered_labels, filtered_indicies, filtered_data_resp, filtered_data_weighted_prob, weighted=True)
 
-    if args.pseudo_label_percentile_threshold == "resp":
+    if args.pseudo_label_percentile_threshold == "resp" or args.inference_method == 'softmax':
         filtered_labels, filtered_indicies, filtered_preds = pseudo_label_numerator_filter(filtered_labels, filtered_indicies, filtered_data_resp, filtered_data_weighted_prob, weighted=True, thres=0.0,cluster_per_class=args.cluster_per_class)
     elif args.pseudo_label_percentile_threshold == "neum":
         filtered_labels, filtered_indicies, filtered_preds = pseudo_label_numerator_filter(filtered_labels, filtered_indicies, filtered_data_resp, filtered_data_weighted_prob, weighted=False, thres=0.0,cluster_per_class=args.cluster_per_class)
@@ -556,16 +558,16 @@ def eval_model(model, pytorch_dataset, criterion, train_stats, split_name, epoch
             gmm_accuracy = (gmm_preds == gt_labels).astype(float)
             gmm_accuracy = np.mean(gmm_accuracy)
             train_stats.add(epoch, '{}_gmm_accuracy'.format(split_name), gmm_accuracy)
-            train_stats.add(epoch, '{}_gmm_gt_labels'.format(split_name), gt_labels_list)
-            train_stats.add(epoch, '{}_gmm_preds'.format(split_name), gmm_preds_list)
+            # train_stats.add(epoch, '{}_gmm_gt_labels'.format(split_name), gt_labels_list)
+            # train_stats.add(epoch, '{}_gmm_preds'.format(split_name), gmm_preds_list)
             # train_stats.render_and_save_confusion_matrix(gt_labels, gmm_preds, args.output_filepath, '{}_gmm_confusion_matrix'.format(split_name), epoch)
 
         if len(cauchy_preds) > 0:
             cauchy_accuracy = (cauchy_preds == gt_labels).astype(float)
             cauchy_accuracy = np.mean(cauchy_accuracy)
             train_stats.add(epoch, '{}_cauchy_accuracy'.format(split_name), cauchy_accuracy)
-            train_stats.add(epoch, '{}_cauchy_gt_labels'.format(split_name), gt_labels_list)
-            train_stats.add(epoch, '{}_cauchy_preds'.format(split_name), cauchy_preds_list)
+            # train_stats.add(epoch, '{}_cauchy_gt_labels'.format(split_name), gt_labels_list)
+            # train_stats.add(epoch, '{}_cauchy_preds'.format(split_name), cauchy_preds_list)
             #train_stats.render_and_save_confusion_matrix(gt_labels, cauchy_preds, args.output_filepath, '{}_cauchy_confusion_matrix'.format(split_name), epoch)
 
 
