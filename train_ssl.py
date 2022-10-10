@@ -223,8 +223,6 @@ def psuedolabel_data(model, train_dataset_labeled, train_dataset_unlabeled, gmm,
             plt.savefig(os.path.join(args.output_filepath, 'neum-hist-epoch{:03d}.png'.format(epoch)))
             plt.close()
 
-        exit(1)
-
     # ratio based selection
     # filtered_labels, filtered_indicies, filtered_preds = pseudo_label_numerator_filter(filtered_labels, filtered_indicies, filtered_data_resp, filtered_data_weighted_prob, weighted=True, thres=0.0)
     # # numerator based selection
@@ -756,8 +754,6 @@ def train(args):
     while not plateau_scheduler_sl.is_done() and epoch < MAX_EPOCHS:
         if loaded_cached:
             break
-        if epoch > 10:
-            break # TODO remove
         epoch += 1
         logger.info("Epoch (supervised): {}".format(epoch))
 
