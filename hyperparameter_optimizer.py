@@ -137,8 +137,9 @@ if __name__ == '__main__':
     args['num_labeled_datapoints'] = 250
     args['re_pseudo_label_each_epoch'] = False
     args['disable_ssl'] = False
-    args['pseudo_label_percentile_threshold'] = 0.95
     args['inference_method'] = 'gmm'
+    args['pseudo_label_threshold'] = 0.99
+    args['pseudo_label_method'] = 'filter_resp_percentile_sort_neum'
     args['cluster_per_class'] = 1
 
 
@@ -151,7 +152,7 @@ if __name__ == '__main__':
     n = 2
     fp = os.path.join(FOLDER_PATH, "id-{:08}".format(n))
     args['output_filepath'] = fp
-    args['inference_method'] = 'cauchy'
+    # args['inference_method'] = 'cauchy'
 
     train_ssl.train(argparse.Namespace(**args))
 

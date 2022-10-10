@@ -130,68 +130,100 @@ def psuedolabel_data(model, train_dataset_labeled, train_dataset_unlabeled, gmm,
 
     # filtered_labels, filtered_indicies, filtered_preds = pseudo_label_numerator_filter_1perc(filtered_labels, filtered_indicies, filtered_data_resp, filtered_data_weighted_prob, weighted=True)
 
-    if args.pseudo_label_percentile_threshold == "resp" or args.inference_method == 'softmax':
-        filtered_labels, filtered_indicies, filtered_preds = pseudo_label_numerator_filter(filtered_labels, filtered_indicies, filtered_data_resp, filtered_data_weighted_prob, weighted=True, thres=0.0,cluster_per_class=args.cluster_per_class)
-    elif args.pseudo_label_percentile_threshold == "neum":
-        filtered_labels, filtered_indicies, filtered_preds = pseudo_label_numerator_filter(filtered_labels, filtered_indicies, filtered_data_resp, filtered_data_weighted_prob, weighted=False, thres=0.0,cluster_per_class=args.cluster_per_class)
-    else:
+    if args.inference_method == 'softmax':
+        args.pseudo_label_method = 'sort_resp'
+
+    if args.pseudo_label_method == "sort_resp":
+        filtered_labels, filtered_indicies, filtered_preds = pseudo_label_sort_resp(filtered_labels, filtered_indicies, filtered_data_resp, filtered_data_weighted_prob, cluster_per_class=args.cluster_per_class)
+
+    elif args.pseudo_label_method == "sort_neum":
+        filtered_labels, filtered_indicies, filtered_preds = pseudo_label_sort_neum(filtered_labels, filtered_indicies, filtered_data_resp, filtered_data_weighted_prob, cluster_per_class=args.cluster_per_class)
+
+    elif args.pseudo_label_method == "filter_resp_sort_numerator":
+        # keep only resp > threshold, and then sort based on neumerator
+        filtered_labels, filtered_indicies, filtered_preds = pseudo_label_filter_resp_sort_numerator(filtered_labels, filtered_indicies, filtered_data_resp, filtered_data_weighted_prob, thres=float(args.pseudo_label_threshold), cluster_per_class=args.cluster_per_class)
+
+    elif args.pseudo_label_method == "filter_resp_sort_resp":
+        # keep only resp > threshold, and then sort based on neumerator
+        filtered_labels, filtered_indicies, filtered_preds = pseudo_label_filter_resp_sort_resp(filtered_labels, filtered_indicies, filtered_data_resp, filtered_data_weighted_prob, thres=float(args.pseudo_label_threshold), cluster_per_class=args.cluster_per_class)
+
+    elif args.pseudo_label_method == "filter_resp_percentile_sort_neum":
         # take to 1% of the resp, and then sort based on neumerator
-        filtered_labels, filtered_indicies, filtered_preds = pseudo_label_resp_filter_Pperc_sort_neumerator(filtered_labels, filtered_indicies, filtered_data_resp, filtered_data_weighted_prob, float(args.pseudo_label_percentile_threshold),cluster_per_class=args.cluster_per_class)
+        filtered_labels, filtered_indicies, filtered_preds = pseudo_label_filter_resp_percentile_sort_neum(filtered_labels, filtered_indicies, filtered_data_resp, filtered_data_weighted_prob, perc=float(args.pseudo_label_threshold), cluster_per_class=args.cluster_per_class)
 
-    if epoch % 50 == 0:
-        perc = float(args.pseudo_label_percentile_threshold)
-        max_resp, _ = torch.max(filtered_data_resp, dim=-1)
-        sorted_resp, _ = max_resp.sort(descending=False)
-        idx = int(len(sorted_resp) * perc)
-        threshold = float(sorted_resp[idx])
+    else:
+        raise RuntimeError("Unexpected pseudo-label selection algorithm: {}".format(args.pseudo_label_method))
 
-        vals = max_resp.detach().cpu().numpy()
+    if epoch % 10 == 0:
         from matplotlib import pyplot as plt
-        plt.figure(figsize=(8, 6))
-        plt.hist(vals, bins=100, alpha=0.5, label='resp')
-        plt.yscale("log")
-        plt.title("Max Resp Hist ({}th percentile = {})".format(perc, threshold))
-        plt.legend(loc='upper right')
-        plt.savefig(os.path.join(args.output_filepath, 'max-resp-hist-epoch{:03d}.png'.format(epoch)))
-        plt.close()
+        if args.pseudo_label_method == "sort_resp" or args.pseudo_label_method == "sort_neum":
+            acc = (filtered_labels == filtered_preds)
+            max_resp, _ = torch.max(filtered_data_resp, dim=-1)
+            max_resp = max_resp.detach().cpu().numpy()
 
-        vals2, _ = filtered_data_resp.reshape(-1).sort(descending=False)
-        vals2 = vals2.detach().cpu().numpy()
-        idx = int(len(vals2) * perc)
-        threshold = float(vals2[idx])
-        plt.figure(figsize=(8, 6))
-        plt.hist(vals2, bins=100, alpha=0.5, label='resp')
-        plt.yscale("log")
-        plt.title("Resp Hist ({}th percentile = {})".format(perc, threshold))
-        plt.legend(loc='upper right')
-        plt.savefig(os.path.join(args.output_filepath, 'resp-hist-epoch{:03d}.png'.format(epoch)))
-        plt.close()
+            plt.figure(figsize=(8, 6))
+            plt.scatter(max_resp, acc, alpha=0.01)
+            plt.title("Max Resp vs Pseudo-Label Accuracy")
+            plt.ylabel('Pseudo-Label Accuracy')
+            plt.xlabel('Max Resp')
+            plt.savefig(os.path.join(args.output_filepath, 'max-resp-vs-pl-acc-epoch{:03d}.png'.format(epoch)))
+            plt.close()
 
-        max_resp, _ = torch.max(filtered_data_weighted_prob, dim=-1)
-        sorted_resp, _ = max_resp.sort(descending=False)
-        idx = int(len(sorted_resp) * perc)
-        threshold = float(sorted_resp[idx])
-        vals = max_resp.detach().cpu().numpy()
+        if args.pseudo_label_method == "filter_resp_percentile_sort_neum":
+            perc = float(args.pseudo_label_percentile_threshold)
+            max_resp, _ = torch.max(filtered_data_resp, dim=-1)
+            sorted_resp, _ = max_resp.sort(descending=False)
+            idx = int(len(sorted_resp) * perc)
+            threshold = float(sorted_resp[idx])
 
-        plt.figure(figsize=(8, 6))
-        plt.hist(vals, bins=100, alpha=0.5, label='resp')
-        plt.yscale("log")
-        plt.title("Max Numerator Hist ({}th percentile = {})".format(perc, threshold))
-        plt.legend(loc='upper right')
-        plt.savefig(os.path.join(args.output_filepath, 'max-neum-hist-epoch{:03d}.png'.format(epoch)))
-        plt.close()
+            vals = max_resp.detach().cpu().numpy()
+            plt.figure(figsize=(8, 6))
+            plt.hist(vals, bins=100, alpha=0.5, label='resp')
+            plt.yscale("log")
+            plt.title("Max Resp Hist ({}th percentile = {})".format(perc, threshold))
+            plt.legend(loc='upper right')
+            plt.savefig(os.path.join(args.output_filepath, 'max-resp-hist-epoch{:03d}.png'.format(epoch)))
+            plt.close()
 
-        vals2, _ = filtered_data_weighted_prob.reshape(-1).sort(descending=False)
-        vals2 = vals2.detach().cpu().numpy()
-        idx = int(len(vals2) * perc)
-        threshold = float(vals2[idx])
-        plt.figure(figsize=(8, 6))
-        plt.hist(vals2, bins=100, alpha=0.5, label='resp')
-        plt.yscale("log")
-        plt.title("Numerator Hist ({}th percentile = {})".format(perc, threshold))
-        plt.legend(loc='upper right')
-        plt.savefig(os.path.join(args.output_filepath, 'neum-hist-epoch{:03d}.png'.format(epoch)))
-        plt.close()
+            vals2, _ = filtered_data_resp.reshape(-1).sort(descending=False)
+            vals2 = vals2.detach().cpu().numpy()
+            idx = int(len(vals2) * perc)
+            threshold = float(vals2[idx])
+            plt.figure(figsize=(8, 6))
+            plt.hist(vals2, bins=100, alpha=0.5, label='resp')
+            plt.yscale("log")
+            plt.title("Resp Hist ({}th percentile = {})".format(perc, threshold))
+            plt.legend(loc='upper right')
+            plt.savefig(os.path.join(args.output_filepath, 'resp-hist-epoch{:03d}.png'.format(epoch)))
+            plt.close()
+
+            max_resp, _ = torch.max(filtered_data_weighted_prob, dim=-1)
+            sorted_resp, _ = max_resp.sort(descending=False)
+            idx = int(len(sorted_resp) * perc)
+            threshold = float(sorted_resp[idx])
+            vals = max_resp.detach().cpu().numpy()
+
+            plt.figure(figsize=(8, 6))
+            plt.hist(vals, bins=100, alpha=0.5, label='resp')
+            plt.yscale("log")
+            plt.title("Max Numerator Hist ({}th percentile = {})".format(perc, threshold))
+            plt.legend(loc='upper right')
+            plt.savefig(os.path.join(args.output_filepath, 'max-neum-hist-epoch{:03d}.png'.format(epoch)))
+            plt.close()
+
+            vals2, _ = filtered_data_weighted_prob.reshape(-1).sort(descending=False)
+            vals2 = vals2.detach().cpu().numpy()
+            idx = int(len(vals2) * perc)
+            threshold = float(vals2[idx])
+            plt.figure(figsize=(8, 6))
+            plt.hist(vals2, bins=100, alpha=0.5, label='resp')
+            plt.yscale("log")
+            plt.title("Numerator Hist ({}th percentile = {})".format(perc, threshold))
+            plt.legend(loc='upper right')
+            plt.savefig(os.path.join(args.output_filepath, 'neum-hist-epoch{:03d}.png'.format(epoch)))
+            plt.close()
+
+        exit(1)
 
     # ratio based selection
     # filtered_labels, filtered_indicies, filtered_preds = pseudo_label_numerator_filter(filtered_labels, filtered_indicies, filtered_data_resp, filtered_data_weighted_prob, weighted=True, thres=0.0)
@@ -240,10 +272,39 @@ def psuedolabel_data(model, train_dataset_labeled, train_dataset_unlabeled, gmm,
             else:
                 class_accuracy[i] /= true_class_counter[i]
 
+        cur_added_true_class_counts = train_stats.get_epoch('total_pseudo_label_true_counts_per_class', epoch - 1)
+        cur_added_pred_class_counts = train_stats.get_epoch('total_pseudo_label_counts_per_class', epoch - 1)
+
+        if cur_added_true_class_counts is None:
+            train_stats.add(epoch, 'total_pseudo_label_true_counts_per_class', true_class_counter)
+        else:
+            vals = np.add(cur_added_true_class_counts, true_class_counter)  # elementwise sum
+            train_stats.add(epoch, 'total_pseudo_label_true_counts_per_class', vals.tolist())
+
+        if cur_added_pred_class_counts is None:
+            train_stats.add(epoch, 'total_pseudo_label_counts_per_class', class_counter)
+        else:
+            vals = np.add(cur_added_pred_class_counts, class_counter)  # elementwise sum
+            train_stats.add(epoch, 'total_pseudo_label_counts_per_class', vals.tolist())
+
+        vals = train_stats.get_epoch('total_pseudo_label_true_counts_per_class', epoch)
+        vals = vals / np.sum(vals)
+        train_stats.add(epoch, 'total_pseudo_label_true_percentage_per_class', vals.tolist())
+
+        vals = train_stats.get_epoch('total_pseudo_label_counts_per_class', epoch)
+        vals = vals / np.sum(vals)
+        train_stats.add(epoch, 'total_pseudo_label_percentage_per_class', vals.tolist())
+
+
         # update the training metadata
         train_stats.add(epoch, 'pseudo_label_counts_per_class', class_counter)
         train_stats.add(epoch, 'pseudo_label_true_counts_per_class', true_class_counter)
         train_stats.add(epoch, 'pseudo_labeling_accuracy_per_class', class_accuracy)
+
+        vals = np.asarray(class_counter) / np.sum(class_counter)
+        train_stats.add(epoch, 'pseudo_label_percentage_per_class', vals.tolist())
+        vals = np.asarray(true_class_counter) / np.sum(true_class_counter)
+        train_stats.add(epoch, 'pseudo_label_true_percentage_per_class', vals.tolist())
         # get the average accuracy of the pseudo-labels (this data is not available in real SSL applications, since the unlabeled population would truly be unlabeled
         train_stats.add(epoch, 'pseudo_labeling_accuracy', float(np.nanmean(class_accuracy)))
         train_stats.add(epoch, 'num_added_pseudo_labels', int(np.sum(class_counter)))
@@ -253,51 +314,18 @@ def psuedolabel_data(model, train_dataset_labeled, train_dataset_unlabeled, gmm,
         #train_stats.render_and_save_confusion_matrix(used_true_labels, used_pseudo_labels, args.output_filepath, 'pseudo_labeling_confusion_matrix', epoch)
 
 
-def pseudo_label_denominator_filter(denominators, labels, indices, data_resp, data_weighted_probs):
-    denominator_threshold = 0.0
-    denominator_filter = torch.squeeze(denominators > denominator_threshold)
-    labels = labels[denominator_filter]
-    data_resp = data_resp[denominator_filter]
-    indices = indices[denominator_filter]
-    data_weighted_probs = data_weighted_probs[denominator_filter]
-
-    return labels, indices, data_resp, data_weighted_probs
-
-
-def pseudo_label_denominator_filter_1perc(denominators, labels, indices, data_resp, data_weighted_probs):
-    vals = denominators.detach().cpu().numpy().squeeze()
-    vals.sort()
-    idx = int(len(vals) * 0.99)
-    denominator_threshold = float(vals[idx])
-    denominator_filter = torch.squeeze(denominators > denominator_threshold)
-    labels = labels[denominator_filter]
-    data_resp = data_resp[denominator_filter]
-    indices = indices[denominator_filter]
-    data_weighted_probs = data_weighted_probs[denominator_filter]
-
-    return labels, indices, data_resp, data_weighted_probs
+# def pseudo_label_denominator_filter(denominators, labels, indices, data_resp, data_weighted_probs):
+#     denominator_threshold = 0.0
+#     denominator_filter = torch.squeeze(denominators > denominator_threshold)
+#     labels = labels[denominator_filter]
+#     data_resp = data_resp[denominator_filter]
+#     indices = indices[denominator_filter]
+#     data_weighted_probs = data_weighted_probs[denominator_filter]
+#
+#     return labels, indices, data_resp, data_weighted_probs
 
 
-def pseudo_label_numerator_filter_1perc(labels, indices, data_resp, data_weighted_probs, weighted=True,cluster_per_class=1):
-    data = data_resp if not weighted else data_weighted_probs
-
-    max_numerator, preds = torch.max(data, dim=-1)
-    preds = torch.div(preds, cluster_per_class, rounding_mode='floor')
-    sorted_numerators, max_sorted_indices = max_numerator.sort(descending=False)
-
-    idx = int(len(sorted_numerators) * 0.99)
-    threshold = float(sorted_numerators[idx])
-    filter = torch.squeeze(sorted_numerators > threshold)
-    max_sorted_indices = max_sorted_indices[filter]
-
-    labels = labels[max_sorted_indices].detach().cpu().numpy()
-    indices = indices[max_sorted_indices].detach().cpu().numpy()
-    preds = preds[max_sorted_indices].detach().cpu().numpy()
-
-    return labels, indices, preds
-
-
-def pseudo_label_resp_filter_Pperc_sort_neumerator(labels, indices, resp, neumerator, perc,cluster_per_class=1):
+def pseudo_label_filter_resp_percentile_sort_neum(labels, indices, resp, neumerator, perc, cluster_per_class=1):
 
     max_resp, _ = torch.max(resp, dim=-1)
 
@@ -310,37 +338,104 @@ def pseudo_label_resp_filter_Pperc_sort_neumerator(labels, indices, resp, neumer
     neumerator = neumerator[filter]
     labels = labels[filter]
     indices = indices[filter]
-    # sorted_resp = sorted_resp[filter]
 
     max_neum, preds = torch.max(neumerator, dim=-1)
     preds = torch.div(preds, cluster_per_class, rounding_mode='floor')
     sorted_neum, sorted_neum_idx = max_neum.sort(descending=True)
 
-    # sorted_neum = sorted_neum.detach().cpu().numpy()
     labels = labels[sorted_neum_idx].detach().cpu().numpy()
     indices = indices[sorted_neum_idx].detach().cpu().numpy()
     preds = preds[sorted_neum_idx].detach().cpu().numpy()
 
     return labels, indices, preds
+#
+#
+# def pseudo_label_numerator_filter(labels, indices, data_resp, data_weighted_probs, weighted=True, thres=None,cluster_per_class=1):
+#     if thres is None:
+#         numerator_resp_threshold = 0.95
+#     else:
+#         numerator_resp_threshold = thres
+#
+#     data = data_resp if not weighted else data_weighted_probs
+#     max_numerator, preds = torch.max(data, dim=-1)
+#     preds = torch.div(preds, cluster_per_class, rounding_mode='floor')
+#     sorted_numerators, max_sorted_indices = max_numerator.sort(descending=True)
+#
+#     if not weighted:
+#         max_sorted_indices = max_sorted_indices[sorted_numerators > numerator_resp_threshold]
+#
+#     labels = labels[max_sorted_indices].detach().cpu().numpy()
+#     indices = indices[max_sorted_indices].detach().cpu().numpy()
+#     preds = preds[max_sorted_indices].detach().cpu().numpy()
+#
+#     return labels, indices, preds
 
 
-def pseudo_label_numerator_filter(labels, indices, data_resp, data_weighted_probs, weighted=True, thres=None,cluster_per_class=1):
-    if thres is None:
-        numerator_resp_threshold = 0.95
-    else:
-        numerator_resp_threshold = thres
+def pseudo_label_sort_resp(labels, indices, resp, neumerator, cluster_per_class=1):
 
-    data = data_resp if not weighted else data_weighted_probs
-    max_numerator, preds = torch.max(data, dim=-1)
+    max_resp, _ = torch.max(resp, dim=-1)
+
+    _, preds = torch.max(neumerator, dim=-1)
     preds = torch.div(preds, cluster_per_class, rounding_mode='floor')
-    sorted_numerators, max_sorted_indices = max_numerator.sort(descending=True)
+    _, sorted_idx = max_resp.sort(descending=True)
 
-    if not weighted:
-        max_sorted_indices = max_sorted_indices[sorted_numerators > numerator_resp_threshold]
+    labels = labels[sorted_idx].detach().cpu().numpy()
+    indices = indices[sorted_idx].detach().cpu().numpy()
+    preds = preds[sorted_idx].detach().cpu().numpy()
 
-    labels = labels[max_sorted_indices].detach().cpu().numpy()
-    indices = indices[max_sorted_indices].detach().cpu().numpy()
-    preds = preds[max_sorted_indices].detach().cpu().numpy()
+    return labels, indices, preds
+
+
+def pseudo_label_sort_neum(labels, indices, resp, neumerator, cluster_per_class=1):
+
+    max_resp, _ = torch.max(resp, dim=-1)
+
+    max_neum, preds = torch.max(neumerator, dim=-1)
+    preds = torch.div(preds, cluster_per_class, rounding_mode='floor')
+    _, sorted_idx = max_neum.sort(descending=True)
+
+    labels = labels[sorted_idx].detach().cpu().numpy()
+    indices = indices[sorted_idx].detach().cpu().numpy()
+    preds = preds[sorted_idx].detach().cpu().numpy()
+
+    return labels, indices, preds
+
+
+def pseudo_label_filter_resp_sort_numerator(labels, indices, resp, neumerator, thres, cluster_per_class=1):
+    max_resp, _ = torch.max(resp, dim=-1)
+    filter = torch.squeeze(max_resp >= thres)
+
+    neumerator = neumerator[filter]
+    labels = labels[filter]
+    indices = indices[filter]
+
+    max_neum, preds = torch.max(neumerator, dim=-1)
+    preds = torch.div(preds, cluster_per_class, rounding_mode='floor')
+    _, sorted_idx = max_neum.sort(descending=True)
+
+    labels = labels[sorted_idx].detach().cpu().numpy()
+    indices = indices[sorted_idx].detach().cpu().numpy()
+    preds = preds[sorted_idx].detach().cpu().numpy()
+
+    return labels, indices, preds
+
+
+def pseudo_label_filter_resp_sort_resp(labels, indices, resp, neumerator, thres, cluster_per_class=1):
+    max_resp, _ = torch.max(resp, dim=-1)
+    filter = torch.squeeze(max_resp >= thres)
+
+    neumerator = neumerator[filter]
+    labels = labels[filter]
+    indices = indices[filter]
+    max_resp = max_resp[filter]
+
+    _, preds = torch.max(neumerator, dim=-1)
+    preds = torch.div(preds, cluster_per_class, rounding_mode='floor')
+    _, sorted_idx = max_resp.sort(descending=True)
+
+    labels = labels[sorted_idx].detach().cpu().numpy()
+    indices = indices[sorted_idx].detach().cpu().numpy()
+    preds = preds[sorted_idx].detach().cpu().numpy()
 
     return labels, indices, preds
 
@@ -661,6 +756,8 @@ def train(args):
     while not plateau_scheduler_sl.is_done() and epoch < MAX_EPOCHS:
         if loaded_cached:
             break
+        if epoch > 10:
+            break # TODO remove
         epoch += 1
         logger.info("Epoch (supervised): {}".format(epoch))
 

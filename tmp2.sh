@@ -16,59 +16,61 @@ source /mnt/isgnas/home/mmajursk/anaconda3/etc/profile.d/conda.sh
 conda activate gmm
 i=$1
 n=$2
-
 c=2
 
-python main.py --output-filepath=./models/ssl-resp-n${n}-c${c}-models/id-000${i} --num_labeled_datapoints=${n} --pseudo-label-percentile-threshold="resp" --cluster_per_class=${c} &
-sleep 0.2
 
-python main.py --output-filepath=./models/ssl-neum-n${n}-c${c}-models/id-000${i} --num_labeled_datapoints=${n} --pseudo-label-percentile-threshold="neum" --cluster_per_class=${c} &
-sleep 0.2
+# --pseudo-label-method
+# --pseudo-label-threshold
+# --inference-method
 
-# ***********************
-
-python main.py --output-filepath=./models/ssl-resp-cauchy-n${n}-c${c}-models/id-000${i} --num_labeled_datapoints=${n} --pseudo-label-percentile-threshold="resp" --cluster_per_class=${c} --inference-method=cauchy &
-sleep 0.2
-
-python main.py --output-filepath=./models/ssl-neum-cauchy-n${n}-c${c}-models/id-000${i} --num_labeled_datapoints=${n} --pseudo-label-percentile-threshold="neum" --cluster_per_class=${c} --inference-method=cauchy &
-sleep 0.2
+# inference_method = {gmm, cauchy, softmax}
+#pseudo_label_method = {sort_resp, sort_neum, filter_resp_sort_numerator, filter_resp_sort_resp, filter_resp_percentile_sort_neum}
+#pseudo_label_threshold = {0.9, 0.95, 0.98, 0.99, 1.0}  # only apply this to those where 'filter' is in method
+#
+#for 'softmax', resp and neum are the same (i.e. just the logits)
 
 
-# Baselines (no SSL)
-for c in 2 4 8; do
-    wait -n
-    python main.py --output-filepath=./models/ssl-resp-n${n}-c${c}-models/id-000${i} --num_labeled_datapoints=${n} --pseudo-label-percentile-threshold="resp" --cluster_per_class=${c} &
-    sleep 0.2
+# setup 3 workers in the background
+sleep 1 &
+sleep 2 &
+sleep 3 &
 
-    wait -n
-    python main.py --output-filepath=./models/ssl-neum-n${n}-c${c}-models/id-000${i} --num_labeled_datapoints=${n} --pseudo-label-percentile-threshold="neum" --cluster_per_class=${c} &
-    sleep 0.2
+inf="softmax"
+for method in "sort_resp" "filter_resp_sort_resp" "filter_resp_percentile_sort_neum"; do
 
-    # ***********************
+    if [[ $method == *"filter"* ]]; then
+      for thres in "0.99" "0.98" "0.95" "0.9"; do
+        wait -n
+        python main.py --output-filepath=./models/ssl-${inf}-thres${thres}-n${n}-c${c}-models/id-000${i} --num_labeled_datapoints=${n} --pseudo-label-method=${method} --pseudo-label-threshold=${thres} --cluster_per_class=${c} --inference-method=${inf} &
+        sleep 0.2
 
-    wait -n
-    python main.py --output-filepath=./models/ssl-resp-cauchy-n${n}-c${c}-models/id-000${i} --num_labeled_datapoints=${n} --pseudo-label-percentile-threshold="resp" --cluster_per_class=${c} --inference-method=cauchy &
-    sleep 0.2
+      done
+    else
 
-    wait -n
-    python main.py --output-filepath=./models/ssl-neum-cauchy-n${n}-c${c}-models/id-000${i} --num_labeled_datapoints=${n} --pseudo-label-percentile-threshold="neum" --cluster_per_class=${c} --inference-method=cauchy &
-    sleep 0.2
-
-
-    # ***********************
-    for p in "0.99" "0.98" "0.95" "0.9" "0.75"; do
       wait -n
-      python main.py --output-filepath=./models/ssl-perc${p}-n${n}-c${c}-models/id-000${i} --num_labeled_datapoints=${n} --pseudo-label-percentile-threshold=${p} --cluster_per_class=${c} &
+      python main.py --output-filepath=./models/ssl-${inf}-n${n}-c${c}-models/id-000${i} --num_labeled_datapoints=${n} --pseudo-label-method=${method} --pseudo-label-threshold=${thres} --cluster_per_class=${c} --inference-method=${inf} &
       sleep 0.2
-    done
+    fi
+done
 
-    # ***********************
 
-    for p in "0.99" "0.98" "0.95" "0.9" "0.75"; do
-      wait -n
-      python main.py --output-filepath=./models/ssl-cauchy-perc${p}-n${n}-c${c}-models/id-000${i} --num_labeled_datapoints=${n} --pseudo-label-percentile-threshold=${p} --cluster_per_class=${c} --inference-method=cauchy &
-      sleep 0.2
-    done
+for inf in "gmm" "cauchy"; do
+  for method in "sort_resp" "sort_neum" "filter_resp_sort_numerator" "filter_resp_sort_resp" "filter_resp_percentile_sort_neum"; do
+
+        if [[ $method == *"filter"* ]]; then
+          for thres in "0.99" "0.98" "0.95" "0.9"; do
+            wait -n
+            python main.py --output-filepath=./models/ssl-${inf}-thres${thres}-n${n}-c${c}-models/id-000${i} --num_labeled_datapoints=${n} --pseudo-label-method=${method} --pseudo-label-threshold=${thres} --cluster_per_class=${c} --inference-method=${inf} &
+            sleep 0.2
+
+          done
+        else
+          wait -n
+          python main.py --output-filepath=./models/ssl-${inf}-thres${thres}-n${n}-c${c}-models/id-000${i} --num_labeled_datapoints=${n} --pseudo-label-method=${method} --pseudo-label-threshold=${thres} --cluster_per_class=${c} --inference-method=${inf} &
+          sleep 0.2
+        fi
+
+  done
 done
 
 wait

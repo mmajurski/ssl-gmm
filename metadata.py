@@ -57,7 +57,7 @@ class TrainingStats():
         return data
 
     def get_epoch(self, metric_name: str, epoch: int):
-        if epoch > len(self.epoch_data):
+        if epoch > len(self.epoch_data) or epoch < 0:
             # raise RuntimeError('Missing data for metric "{}" at epoch {} in epoch stats'.format(metric_name, epoch))
             return None  # use this if you want to silently fail
 
