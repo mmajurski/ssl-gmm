@@ -117,7 +117,7 @@ if __name__ == '__main__':
 
     args = dict()
     args['arch'] = 'wide_resnet'
-    args['num_workers'] = 0
+    args['num_workers'] = 4
     args['output_filepath'] = fp
     args['batch_size'] = 128
     args['learning_rate'] = 3e-4
@@ -138,7 +138,7 @@ if __name__ == '__main__':
     args['re_pseudo_label_each_epoch'] = False
     args['disable_ssl'] = False
     args['pseudo_label_percentile_threshold'] = 0.95
-    args['inference_method'] = 'cauchy'
+    args['inference_method'] = 'gmm'
     args['cluster_per_class'] = 1
 
 
@@ -146,9 +146,14 @@ if __name__ == '__main__':
         args['loss_eps'] = 0.1
         args['patience'] = 5
 
-    args = argparse.Namespace(**args)
+    # train_ssl.train(argparse.Namespace(**args))
 
-    train_ssl.train(args)
+    n = 2
+    fp = os.path.join(FOLDER_PATH, "id-{:08}".format(n))
+    args['output_filepath'] = fp
+    args['inference_method'] = 'cauchy'
+
+    train_ssl.train(argparse.Namespace(**args))
 
     #search()
     #select()
