@@ -16,7 +16,7 @@ source /mnt/isgnas/home/mmajursk/anaconda3/etc/profile.d/conda.sh
 conda activate gmm
 i=$1
 n=$2
-c=2
+c=1
 
 
 # --pseudo-label-method
