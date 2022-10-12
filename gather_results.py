@@ -5,10 +5,10 @@ import json
 
 
 def gather_models_results():
-    ifp = './models'
+    ifp = '/home/mmajurski/Downloads/models'
 
     n_vals = [250, 1000, 4000]
-    p_vals = [0.99, 0.98, 0.95, 0.9, 0.75]
+    p_vals = [0.99, 0.98, 0.95, 0.9]
     keys_to_remove = ['pseudo_label_counts_per_class','pseudo_label_true_counts_per_class','pseudo_labeling_accuracy_per_class']
 
     for n in n_vals:
@@ -16,7 +16,10 @@ def gather_models_results():
         df_list = list()
         avg_df_list = list()
 
-        prefixes = ['only-supervised', 'ssl-resp', 'ssl-neum', 'ssl-resp-cauchy', 'ssl-neum-cauchy']
+        prefixes = ['only-supervised',
+                    'ssl-gmm',
+                    'ssl-cauchy',
+                    'ssl-resp', 'ssl-neum', 'ssl-resp-cauchy', 'ssl-neum-cauchy']
 
         for pre in prefixes:
             m_fp = os.path.join(ifp, '{}-{}-models'.format(pre, n))

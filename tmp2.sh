@@ -41,14 +41,14 @@ for method in "sort_resp" "filter_resp_sort_resp" "filter_resp_percentile_sort_n
     if [[ $method == *"filter"* ]]; then
       for thres in "0.99" "0.98" "0.95" "0.9"; do
         wait -n
-        python main.py --output-filepath=./models/ssl-${inf}-thres${thres}-n${n}-c${c}-models/id-000${i} --num_labeled_datapoints=${n} --pseudo-label-method=${method} --pseudo-label-threshold=${thres} --cluster_per_class=${c} --inference-method=${inf} &
+        python main.py --output-filepath=./models/ssl-${inf}-method${method}-thres${thres}-n${n}-c${c}-models/id-000${i} --num_labeled_datapoints=${n} --pseudo-label-method=${method} --pseudo-label-threshold=${thres} --cluster_per_class=${c} --inference-method=${inf} &
         sleep 0.2
 
       done
     else
 
       wait -n
-      python main.py --output-filepath=./models/ssl-${inf}-n${n}-c${c}-models/id-000${i} --num_labeled_datapoints=${n} --pseudo-label-method=${method} --cluster_per_class=${c} --inference-method=${inf} &
+      python main.py --output-filepath=./models/ssl-${inf}-method${method}-n${n}-c${c}-models/id-000${i} --num_labeled_datapoints=${n} --pseudo-label-method=${method} --cluster_per_class=${c} --inference-method=${inf} &
       sleep 0.2
     fi
 done
@@ -60,13 +60,13 @@ for inf in "gmm" "cauchy"; do
         if [[ $method == *"filter"* ]]; then
           for thres in "0.99" "0.98" "0.95" "0.9"; do
             wait -n
-            python main.py --output-filepath=./models/ssl-${inf}-thres${thres}-n${n}-c${c}-models/id-000${i} --num_labeled_datapoints=${n} --pseudo-label-method=${method} --pseudo-label-threshold=${thres} --cluster_per_class=${c} --inference-method=${inf} &
+            python main.py --output-filepath=./models/ssl-${inf}-method${method}-thres${thres}-n${n}-c${c}-models/id-000${i} --num_labeled_datapoints=${n} --pseudo-label-method=${method} --pseudo-label-threshold=${thres} --cluster_per_class=${c} --inference-method=${inf} &
             sleep 0.2
 
           done
         else
           wait -n
-          python main.py --output-filepath=./models/ssl-${inf}-n${n}-c${c}-models/id-000${i} --num_labeled_datapoints=${n} --pseudo-label-method=${method} --cluster_per_class=${c} --inference-method=${inf} &
+          python main.py --output-filepath=./models/ssl-${inf}-method${method}-n${n}-c${c}-models/id-000${i} --num_labeled_datapoints=${n} --pseudo-label-method=${method} --cluster_per_class=${c} --inference-method=${inf} &
           sleep 0.2
         fi
 
