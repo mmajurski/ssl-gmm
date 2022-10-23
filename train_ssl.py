@@ -149,7 +149,8 @@ def psuedolabel_data(model, train_dataset_labeled, train_dataset_unlabeled, gmm,
 
     elif args.pseudo_label_method == "filter_resp_percentile_sort_neum":
         # take to 1% of the resp, and then sort based on neumerator
-        filtered_labels, filtered_indicies, filtered_preds = pseudo_label_filter_resp_percentile_sort_neum(filtered_labels, filtered_indicies, filtered_data_resp, filtered_data_weighted_prob, perc=float(args.pseudo_label_threshold), cluster_per_class=args.cluster_per_class)
+        filtered_labels, filtered_indicies, filtered_preds, percentile_distribution_dict = pseudo_label_filter_resp_percentile_sort_neum(filtered_labels, filtered_indicies, filtered_data_resp, filtered_data_weighted_prob, perc=float(args.pseudo_label_threshold), cluster_per_class=args.cluster_per_class)
+        train_stats.add(epoch, 'percentile_distribution', percentile_distribution_dict)
 
     else:
         raise RuntimeError("Unexpected pseudo-label selection algorithm: {}".format(args.pseudo_label_method))
@@ -178,9 +179,9 @@ def psuedolabel_data(model, train_dataset_labeled, train_dataset_unlabeled, gmm,
 
             vals = max_resp.detach().cpu().numpy()
             plt.figure(figsize=(8, 6))
-            plt.hist(vals, bins=100, alpha=0.5, label='resp')
+            plt.hist(vals, bins=100, label='max_resp')
             plt.yscale("log")
-            plt.title("Max Resp Hist ({}th percentile = {})".format(perc, threshold))
+            plt.title("Max Resp Hist ({}th percentile = {:.16g})".format(perc, threshold))
             plt.legend(loc='upper right')
             plt.savefig(os.path.join(args.output_filepath, 'max-resp-hist-epoch{:03d}.png'.format(epoch)))
             plt.close()
@@ -190,23 +191,23 @@ def psuedolabel_data(model, train_dataset_labeled, train_dataset_unlabeled, gmm,
             idx = int(len(vals2) * perc)
             threshold = float(vals2[idx])
             plt.figure(figsize=(8, 6))
-            plt.hist(vals2, bins=100, alpha=0.5, label='resp')
+            plt.hist(vals2, bins=100, label='resp')
             plt.yscale("log")
-            plt.title("Resp Hist ({}th percentile = {})".format(perc, threshold))
+            plt.title("Resp Hist ({}th percentile = {:.16g})".format(perc, threshold))
             plt.legend(loc='upper right')
             plt.savefig(os.path.join(args.output_filepath, 'resp-hist-epoch{:03d}.png'.format(epoch)))
             plt.close()
 
-            max_resp, _ = torch.max(filtered_data_weighted_prob, dim=-1)
-            sorted_resp, _ = max_resp.sort(descending=False)
-            idx = int(len(sorted_resp) * perc)
-            threshold = float(sorted_resp[idx])
-            vals = max_resp.detach().cpu().numpy()
+            max_neum, _ = torch.max(filtered_data_weighted_prob, dim=-1)
+            sorted_neum, _ = max_neum.sort(descending=False)
+            idx = int(len(sorted_neum) * perc)
+            threshold = float(sorted_neum[idx])
+            vals = max_neum.detach().cpu().numpy()
 
             plt.figure(figsize=(8, 6))
-            plt.hist(vals, bins=100, alpha=0.5, label='resp')
+            plt.hist(vals, bins=100, label='max_neum')
             plt.yscale("log")
-            plt.title("Max Numerator Hist ({}th percentile = {})".format(perc, threshold))
+            plt.title("Max Numerator Hist ({}th percentile = {:.16g})".format(perc, threshold))
             plt.legend(loc='upper right')
             plt.savefig(os.path.join(args.output_filepath, 'max-neum-hist-epoch{:03d}.png'.format(epoch)))
             plt.close()
@@ -216,9 +217,9 @@ def psuedolabel_data(model, train_dataset_labeled, train_dataset_unlabeled, gmm,
             idx = int(len(vals2) * perc)
             threshold = float(vals2[idx])
             plt.figure(figsize=(8, 6))
-            plt.hist(vals2, bins=100, alpha=0.5, label='resp')
+            plt.hist(vals2, bins=100, label='neum')
             plt.yscale("log")
-            plt.title("Numerator Hist ({}th percentile = {})".format(perc, threshold))
+            plt.title("Numerator Hist ({}th percentile = {:.16g})".format(perc, threshold))
             plt.legend(loc='upper right')
             plt.savefig(os.path.join(args.output_filepath, 'neum-hist-epoch{:03d}.png'.format(epoch)))
             plt.close()
@@ -329,9 +330,18 @@ def pseudo_label_filter_resp_percentile_sort_neum(labels, indices, resp, neumera
 
     sorted_resp, _ = max_resp.sort(descending=False)
 
+    percentile_distribution_dict = dict()
+    for p in range(1, 100):
+        p = (float(p) / 100.0)
+        idx = int(len(sorted_resp) * p)
+        threshold = float(sorted_resp[idx])
+        percentile_distribution_dict[p] = threshold
+        logger.info("{}th Percentile Threshold = {:.16g}".format(p, threshold))
+
     idx = int(len(sorted_resp) * perc)
     threshold = float(sorted_resp[idx])
     filter = torch.squeeze(max_resp >= threshold)
+    logger.info("Percentile Threshold ({}th) of resp values for PL = {:.16g}".format(perc, threshold))
 
     neumerator = neumerator[filter]
     labels = labels[filter]
@@ -345,7 +355,7 @@ def pseudo_label_filter_resp_percentile_sort_neum(labels, indices, resp, neumera
     indices = indices[sorted_neum_idx].detach().cpu().numpy()
     preds = preds[sorted_neum_idx].detach().cpu().numpy()
 
-    return labels, indices, preds
+    return labels, indices, preds, percentile_distribution_dict
 #
 #
 # def pseudo_label_numerator_filter(labels, indices, data_resp, data_weighted_probs, weighted=True, thres=None,cluster_per_class=1):

@@ -111,7 +111,7 @@ def select():
 
 if __name__ == '__main__':
 
-    n = 1
+    n = 0
 
     fp = os.path.join(FOLDER_PATH, "id-{:08}".format(n))
 
@@ -139,8 +139,8 @@ if __name__ == '__main__':
     args['disable_ssl'] = False
     args['inference_method'] = 'gmm'
     args['pseudo_label_threshold'] = 0.99
-    args['pseudo_label_method'] = 'filter_resp_sort_neum'
-    args['pseudo_label_k'] = 10
+    args['pseudo_label_method'] = 'filter_resp_percentile_sort_neum'
+    args['pseudo_label_k'] = 2
     args['cluster_per_class'] = 1
 
 
@@ -149,13 +149,13 @@ if __name__ == '__main__':
         args['patience'] = 5
 
     # train_ssl.train(argparse.Namespace(**args))
-
-    for n in range(6):
-        fp = os.path.join(FOLDER_PATH, "id-{:08}".format(n))
-        args['output_filepath'] = fp
+    #
+    # for n in range(6):
+    #     fp = os.path.join(FOLDER_PATH, "id-{:08}".format(n))
+    #     args['output_filepath'] = fp
     # args['inference_method'] = 'cauchy'
 
-        train_ssl.train(argparse.Namespace(**args))
+    train_ssl.train(argparse.Namespace(**args))
 
     #search()
     #select()
