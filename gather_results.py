@@ -5,116 +5,111 @@ import json
 
 
 def gather_models_results():
-    ifp = '/home/mmajurski/Downloads/models'
+    ifp = './models'
 
+    n_clusters = 1
     n_vals = [250, 1000, 4000]
-    p_vals = [0.99, 0.98, 0.95, 0.9]
-    keys_to_remove = ['pseudo_label_counts_per_class','pseudo_label_true_counts_per_class','pseudo_labeling_accuracy_per_class']
+    p_vals = [0.9, 0.95, 0.98, 0.99]
+    methods = ["sort_resp", "sort_neum", "filter_resp_sort_numerator", "filter_resp_sort_resp", "filter_resp_percentile_sort_neum"]
+    inf_types = ["softmax", "gmm", "cauchy"]
+
+    keys_to_remove = ['pseudo_label_counts_per_class', 'pseudo_label_true_counts_per_class', 'pseudo_labeling_accuracy_per_class', 'total_pseudo_label_true_counts_per_class', 'total_pseudo_label_counts_per_class', 'total_pseudo_label_true_percentage_per_class', 'total_pseudo_label_percentage_per_class', 'pseudo_label_percentage_per_class', 'pseudo_label_true_percentage_per_class', 'pseudo_labeling_accuracy', 'used_true_labels', 'used_pseudo_labels']
+
+    # TODO concatenate all epochs together for PL accuracy, and figure out which method has the highest average PL accuracy  (which should result in the best models)
 
     for n in n_vals:
-
         df_list = list()
         avg_df_list = list()
 
-        prefixes = ['only-supervised',
-                    'ssl-gmm',
-                    'ssl-cauchy',
-                    'ssl-resp', 'ssl-neum', 'ssl-resp-cauchy', 'ssl-neum-cauchy']
+        # gather the fully supervised results
+        m_fp = os.path.join(ifp, '{}-{}-models'.format("only-supervised", n))
+        if not os.path.exists(m_fp):
+            print('missing folder: {}'.format(m_fp))
+            continue
+        fns = [fn for fn in os.listdir(m_fp) if fn.startswith('id-')]
+        acc_list = list()
+        for fn in fns:
+            if os.path.exists(os.path.join(m_fp, fn)) and os.path.exists(os.path.join(m_fp, fn, 'stats.json')):
+                with open(os.path.join(m_fp, fn, 'stats.json')) as json_file:
+                    stats_dict = json.load(json_file)
+                for k in keys_to_remove:
+                    if k in stats_dict:
+                        del stats_dict[k]
+                stats_dict['PL-method'] = "only-supervised"
+                stats_dict['INF-method'] = "softmax"
+                stats_dict['PL-thres'] = None
+                stats_dict['N-SSL'] = n
+                if 'test_softmax_accuracy' in stats_dict:
+                    acc_list.append(stats_dict['test_softmax_accuracy'])
+                cd = pd.json_normalize(stats_dict)
+                df_list.append(cd)
 
-        for pre in prefixes:
-            m_fp = os.path.join(ifp, '{}-{}-models'.format(pre, n))
-            if not os.path.exists(m_fp):
-                print('missing folder: {}'.format(m_fp))
-                continue
-            fns = [fn for fn in os.listdir(m_fp) if fn.startswith('id-')]
-            acc_list = list()
-            for fn in fns:
-                if os.path.exists(os.path.join(m_fp, fn)) and os.path.exists(os.path.join(m_fp, fn, 'stats.json')):
-                    with open(os.path.join(m_fp, fn, 'stats.json')) as json_file:
-                        stats_dict = json.load(json_file)
-                    for k in keys_to_remove:
-                        if k in stats_dict:
-                            del stats_dict[k]
-                    stats_dict['PL-method'] = pre
-                    stats_dict['N-SSL'] = n
-                    if 'test_softmax_accuracy' in stats_dict:
-                        acc_list.append(stats_dict['test_softmax_accuracy'])
-                    cd = pd.json_normalize(stats_dict)
-                    df_list.append(cd)
-
-            avg_stats_dict = dict()
-            avg_stats_dict['PL-method'] = pre
-            avg_stats_dict['N-SSL'] = n
+        avg_stats_dict = dict()
+        avg_stats_dict['PL-method'] = "only-supervised"
+        avg_stats_dict['INF-method'] = "softmax"
+        avg_stats_dict['PL-thres'] = None
+        avg_stats_dict['N-SSL'] = n
+        if len(acc_list) > 0:
             avg_stats_dict['mean_test_accuracy'] = np.mean(acc_list)
             avg_stats_dict['std_accuracy'] = np.std(acc_list)
-            avg_stats_dict['counts'] = len(acc_list)
-            cd = pd.json_normalize(avg_stats_dict)
-            avg_df_list.append(cd)
+            avg_stats_dict['median_test_accuracy'] = np.median(acc_list)
+            avg_stats_dict['max_test_accuracy'] = np.max(acc_list)
+        avg_stats_dict['counts'] = len(acc_list)
+        cd = pd.json_normalize(avg_stats_dict)
+        avg_df_list.append(cd)
 
 
-        # gather percentile results
-        for p in p_vals:
-            m_fp = os.path.join(ifp, 'ssl-perc{}-{}-models'.format(p, n))
-            if not os.path.exists(m_fp):
-                print('missing folder: {}'.format(m_fp))
-                continue
-            fns = [fn for fn in os.listdir(os.path.join(m_fp)) if fn.startswith('id-')]
-            acc_list = list()
-            for fn in fns:
-                if os.path.exists(os.path.join(m_fp, fn)) and os.path.exists(os.path.join(m_fp, fn, 'stats.json')):
-                    with open(os.path.join(m_fp, fn, 'stats.json')) as json_file:
-                        stats_dict = json.load(json_file)
-                    for k in keys_to_remove:
-                        if k in stats_dict:
-                            del stats_dict[k]
-                    stats_dict['PL-method'] = 'percResp-sortNeum'
-                    stats_dict['N-SSL'] = n
-                    stats_dict['percentile'] = p
-                    if 'test_softmax_accuracy' in stats_dict:
-                        acc_list.append(stats_dict['test_softmax_accuracy'])
-                    cd = pd.json_normalize(stats_dict)
-                    df_list.append(cd)
+        for m in methods:
+            for inf in inf_types:
+                if inf == "softmax" and ("neum" in m or "numerator" in m):
+                    continue
 
-            avg_stats_dict = dict()
-            avg_stats_dict['PL-method'] = 'percResp-sortNeum'
-            avg_stats_dict['N-SSL'] = n
-            avg_stats_dict['percentile'] = p
-            avg_stats_dict['mean_test_accuracy'] = np.mean(acc_list)
-            avg_stats_dict['std_accuracy'] = np.std(acc_list)
-            avg_stats_dict['counts'] = len(acc_list)
-            cd = pd.json_normalize(avg_stats_dict)
-            avg_df_list.append(cd)
+                lcl_p_vals = [None]
+                if "filter" in m:
+                    lcl_p_vals = p_vals
 
-        for p in p_vals:
-            m_fp = os.path.join(ifp, 'ssl-cauchy-perc{}-{}-models'.format(p, n))
-            if not os.path.exists(m_fp):
-                print('missing folder: {}'.format(m_fp))
-                continue
-            fns = [fn for fn in os.listdir(os.path.join(m_fp)) if fn.startswith('id-')]
-            acc_list = list()
-            for fn in fns:
-                if os.path.exists(os.path.join(m_fp, fn)) and os.path.exists(os.path.join(m_fp, fn, 'stats.json')):
-                    with open(os.path.join(m_fp, fn, 'stats.json')) as json_file:
-                        stats_dict = json.load(json_file)
-                    for k in keys_to_remove:
-                        if k in stats_dict:
-                            del stats_dict[k]
-                    stats_dict['PL-method'] = 'percResp-sortNeum-cauchy'
-                    stats_dict['N-SSL'] = n
-                    stats_dict['percentile'] = p
-                    if 'test_softmax_accuracy' in stats_dict:
-                        acc_list.append(stats_dict['test_softmax_accuracy'])
-                    cd = pd.json_normalize(stats_dict)
-                    df_list.append(cd)
-            avg_stats_dict = dict()
-            avg_stats_dict['PL-method'] = 'percResp-sortNeum-cauchy'
-            avg_stats_dict['N-SSL'] = n
-            avg_stats_dict['percentile'] = p
-            avg_stats_dict['mean_test_accuracy'] = np.mean(acc_list)
-            avg_stats_dict['std_accuracy'] = np.std(acc_list)
-            avg_stats_dict['counts'] = len(acc_list)
-            cd = pd.json_normalize(avg_stats_dict)
-            avg_df_list.append(cd)
+                for p in lcl_p_vals:
+                    if p is None:
+                        m_fp = "ssl-{}-method{}-n{}-c{}-models".format(inf, m, n, n_clusters)
+                    else:
+                        m_fp = "ssl-{}-method{}-thres{}-n{}-c{}-models".format(inf, m, p, n, n_clusters)
+
+                    m_fp = os.path.join(ifp, m_fp)
+                    if not os.path.exists(m_fp):
+                        print('missing folder: {}'.format(m_fp))
+                        continue
+
+                    fns = [fn for fn in os.listdir(m_fp) if fn.startswith('id-')]
+                    acc_list = list()
+                    for fn in fns:
+                        if os.path.exists(os.path.join(m_fp, fn)) and os.path.exists(os.path.join(m_fp, fn, 'stats.json')):
+                            with open(os.path.join(m_fp, fn, 'stats.json')) as json_file:
+                                stats_dict = json.load(json_file)
+                            for k in keys_to_remove:
+                                if k in stats_dict:
+                                    del stats_dict[k]
+                            stats_dict['PL-method'] = m
+                            stats_dict['INF-method'] = inf
+                            stats_dict['PL-thres'] = p
+                            stats_dict['N-SSL'] = n
+                            if 'test_softmax_accuracy' in stats_dict:
+                                acc_list.append(stats_dict['test_softmax_accuracy'])
+                            cd = pd.json_normalize(stats_dict)
+                            df_list.append(cd)
+
+                    avg_stats_dict = dict()
+                    avg_stats_dict['PL-method'] = m
+                    avg_stats_dict['INF-method'] = inf
+                    avg_stats_dict['PL-thres'] = p
+                    avg_stats_dict['N-SSL'] = n
+                    if len(acc_list) > 0:
+                        avg_stats_dict['mean_test_accuracy'] = np.mean(acc_list)
+                        avg_stats_dict['std_accuracy'] = np.std(acc_list)
+                        avg_stats_dict['median_test_accuracy'] = np.median(acc_list)
+                        avg_stats_dict['max_test_accuracy'] = np.max(acc_list)
+                    avg_stats_dict['counts'] = len(acc_list)
+                    cd = pd.json_normalize(avg_stats_dict)
+                    avg_df_list.append(cd)
 
         full_df = pd.concat(df_list, axis=0)
         avg_full_df = pd.concat(avg_df_list, axis=0)
@@ -126,12 +121,14 @@ def gather_models_results():
                 cols.remove(c)
 
         cols.remove('PL-method')
+        cols.remove('INF-method')
         cols.remove('N-SSL')
-        cols.remove('percentile')
+        cols.remove('PL-thres')
 
         cols.insert(0, 'PL-method')
-        cols.insert(1, 'N-SSL')
-        cols.insert(2, 'percentile')
+        cols.insert(1, 'INF-method')
+        cols.insert(2, 'N-SSL')
+        cols.insert(3, 'PL-thres')
         full_df = full_df[cols]
 
 
@@ -308,4 +305,4 @@ def gather_models_multi_cluster_results():
         avg_full_df.to_csv(os.path.join(ifp, 'summary-{}-avg.csv'.format(n)), index=False)
 
 
-gather_models_multi_cluster_results()
+gather_models_results()

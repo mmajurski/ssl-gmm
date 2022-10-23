@@ -7,7 +7,7 @@ import matplotlib.pyplot as plt
 
 import train_ssl
 
-FOLDER_PATH = './models'
+FOLDER_PATH = './models-topk'
 
 
 def search():
@@ -56,7 +56,7 @@ def search():
     args['num_classes'] = 10
     args['amp'] = True
     args['val_fraction'] = 0.1
-    # args['num_labeled_datapoints'] = 250
+    args['num_labeled_datapoints'] = 250
 
     if args['debug']:
         args['loss_eps'] = 0.1
@@ -139,7 +139,8 @@ if __name__ == '__main__':
     args['disable_ssl'] = False
     args['inference_method'] = 'gmm'
     args['pseudo_label_threshold'] = 0.99
-    args['pseudo_label_method'] = 'filter_resp_percentile_sort_neum'
+    args['pseudo_label_method'] = 'filter_resp_sort_neum'
+    args['pseudo_label_k'] = 10
     args['cluster_per_class'] = 1
 
 
@@ -149,12 +150,12 @@ if __name__ == '__main__':
 
     # train_ssl.train(argparse.Namespace(**args))
 
-    n = 2
-    fp = os.path.join(FOLDER_PATH, "id-{:08}".format(n))
-    args['output_filepath'] = fp
+    for n in range(6):
+        fp = os.path.join(FOLDER_PATH, "id-{:08}".format(n))
+        args['output_filepath'] = fp
     # args['inference_method'] = 'cauchy'
 
-    train_ssl.train(argparse.Namespace(**args))
+        train_ssl.train(argparse.Namespace(**args))
 
     #search()
     #select()

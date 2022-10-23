@@ -25,6 +25,7 @@ def main():
     parser.add_argument('--re-pseudo-label-each-epoch', action='store_true')
     parser.add_argument('--disable-ssl', action='store_true')
     parser.add_argument('--pseudo-label-method', default="resp", type=str, help='method/algorithm to use for selecting valid psudo-label samples.')
+    parser.add_argument('--pseudo-label-k', default=2, type=int, help="number of samples to be pseudo-labeled per class per epoch.")
     parser.add_argument('--pseudo-label-threshold', default=0.99, type=float, help='Threshold when filtering pseudo-labeling.')
     parser.add_argument('--num_classes', default=10, type=int, help='number of classes in the dataset.')
     parser.add_argument('--num_labeled_datapoints', default=250, type=int, help='number of labeled annotations in the dataset.')

@@ -154,7 +154,7 @@ def psuedolabel_data(model, train_dataset_labeled, train_dataset_unlabeled, gmm,
     else:
         raise RuntimeError("Unexpected pseudo-label selection algorithm: {}".format(args.pseudo_label_method))
 
-    if epoch % 10 == 0:
+    if epoch % 50 == 0:
         from matplotlib import pyplot as plt
         if args.pseudo_label_method == "sort_resp" or args.pseudo_label_method == "sort_neum":
             acc = (filtered_labels == filtered_preds)
@@ -170,7 +170,7 @@ def psuedolabel_data(model, train_dataset_labeled, train_dataset_unlabeled, gmm,
             plt.close()
 
         if args.pseudo_label_method == "filter_resp_percentile_sort_neum":
-            perc = float(args.pseudo_label_percentile_threshold)
+            perc = float(args.pseudo_label_threshold)
             max_resp, _ = torch.max(filtered_data_resp, dim=-1)
             sorted_resp, _ = max_resp.sort(descending=False)
             idx = int(len(sorted_resp) * perc)
@@ -803,7 +803,7 @@ def train(args):
         plateau_scheduler = lr_scheduler.ReduceLROnPlateau(optimizer, mode='min', factor=args.lr_reduction_factor, patience=args.patience, threshold=args.loss_eps, max_num_lr_reductions=args.num_lr_reductions)
 
         # train epochs until loss converges
-        base_top_k = 2
+        base_top_k = args.pseudo_label_k
         starting_epoch = epoch
         while not plateau_scheduler.is_done() and epoch < MAX_EPOCHS:
             epoch += 1
