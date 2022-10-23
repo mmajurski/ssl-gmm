@@ -149,8 +149,7 @@ def psuedolabel_data(model, train_dataset_labeled, train_dataset_unlabeled, gmm,
 
     elif args.pseudo_label_method == "filter_resp_percentile_sort_neum":
         # take to 1% of the resp, and then sort based on neumerator
-        filtered_labels, filtered_indicies, filtered_preds, percentile_distribution_dict = pseudo_label_filter_resp_percentile_sort_neum(filtered_labels, filtered_indicies, filtered_data_resp, filtered_data_weighted_prob, perc=float(args.pseudo_label_threshold), cluster_per_class=args.cluster_per_class)
-        train_stats.add(epoch, 'percentile_distribution', percentile_distribution_dict)
+        filtered_labels, filtered_indicies, filtered_preds = pseudo_label_filter_resp_percentile_sort_neum(filtered_labels, filtered_indicies, filtered_data_resp, filtered_data_weighted_prob, perc=float(args.pseudo_label_threshold), cluster_per_class=args.cluster_per_class)
 
     else:
         raise RuntimeError("Unexpected pseudo-label selection algorithm: {}".format(args.pseudo_label_method))
@@ -330,13 +329,11 @@ def pseudo_label_filter_resp_percentile_sort_neum(labels, indices, resp, neumera
 
     sorted_resp, _ = max_resp.sort(descending=False)
 
-    percentile_distribution_dict = dict()
-    for p in range(1, 100):
+    for p in range(50, 100):
         p = (float(p) / 100.0)
         idx = int(len(sorted_resp) * p)
-        threshold = float(sorted_resp[idx])
-        percentile_distribution_dict[p] = threshold
-        logger.info("{}th Percentile Threshold = {:.16g}".format(p, threshold))
+        t = float(sorted_resp[idx])
+        logger.info("{}th Percentile Threshold = {:.16g}".format(p, t))
 
     idx = int(len(sorted_resp) * perc)
     threshold = float(sorted_resp[idx])
@@ -355,7 +352,7 @@ def pseudo_label_filter_resp_percentile_sort_neum(labels, indices, resp, neumera
     indices = indices[sorted_neum_idx].detach().cpu().numpy()
     preds = preds[sorted_neum_idx].detach().cpu().numpy()
 
-    return labels, indices, preds, percentile_distribution_dict
+    return labels, indices, preds
 #
 #
 # def pseudo_label_numerator_filter(labels, indices, data_resp, data_weighted_probs, weighted=True, thres=None,cluster_per_class=1):
