@@ -1,5 +1,6 @@
 import argparse
 import os
+import shutil
 
 import train
 import train_ssl
@@ -33,8 +34,13 @@ def main():
     parser.add_argument('--cluster_per_class', default=1, type=int, help='number of clusters to create per class')
     args = parser.parse_args()
 
+
     if os.path.exists(args.output_filepath):
-        return
+        if not os.path.exists(os.path.join(args.output_filepath, 'model.pt')):
+            # model file is missing so delete the output folder
+            shutil.rmtree(args.output_filepath)
+        else:
+            return
 
     if not os.path.exists(args.output_filepath):
         os.makedirs(args.output_filepath)
