@@ -2,7 +2,7 @@
 # **************************
 # MODIFY THESE OPTIONS
 
-#SBATCH --partition=heimdall
+#SBATCH --partition=isg
 #SBATCH --nodes=1
 #SBATCH --nice
 #SBATCH --oversubscribe
@@ -34,7 +34,7 @@ c=1
 sleep 1 &
 sleep 2 &
 sleep 3 &
-sleep 4 &
+sleep 3 &
 
 inf="softmax"
 for method in "sort_resp" "filter_resp_sort_resp" "filter_resp_percentile_sort_neum"; do
