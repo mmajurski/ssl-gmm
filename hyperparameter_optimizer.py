@@ -142,6 +142,7 @@ if __name__ == '__main__':
     args['pseudo_label_method'] = 'filter_resp_percentile_sort_neum'
     args['pseudo_label_k'] = 2
     args['cluster_per_class'] = 1
+    args['strong_augmentation'] = True
 
 
     if args['debug']:

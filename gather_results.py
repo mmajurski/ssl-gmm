@@ -9,8 +9,9 @@ def gather_models_results():
 
     n_clusters = 1
     n_vals = [250, 1000, 4000]
-    p_vals = [0.9, 0.95, 0.98, 0.99]
-    methods = ["sort_resp", "sort_neum", "filter_resp_sort_numerator", "filter_resp_sort_resp", "filter_resp_percentile_sort_neum"]
+    p_vals = [0.8, 0.85, 0.9, 0.91, 0.92, 0.93, 0.94, 0.95, 0.96, 0.97, 0.98, 0.99]
+    # methods = ["sort_resp", "sort_neum", "filter_resp_sort_numerator", "filter_resp_sort_resp", "filter_resp_percentile_sort_neum"]
+    methods = ["sort_resp", "sort_neum", "filter_resp_sort_numerator", "filter_resp_sort_resp"]
     inf_types = ["softmax", "gmm", "cauchy"]
 
     keys_to_remove = ['pseudo_label_counts_per_class', 'pseudo_label_true_counts_per_class', 'pseudo_labeling_accuracy_per_class', 'total_pseudo_label_true_counts_per_class', 'total_pseudo_label_counts_per_class', 'total_pseudo_label_true_percentage_per_class', 'total_pseudo_label_percentage_per_class', 'pseudo_label_percentage_per_class', 'pseudo_label_true_percentage_per_class', 'pseudo_labeling_accuracy', 'used_true_labels', 'used_pseudo_labels']
@@ -39,6 +40,9 @@ def gather_models_results():
                 stats_dict['INF-method'] = "softmax"
                 stats_dict['PL-thres'] = None
                 stats_dict['N-SSL'] = n
+                if stats_dict['epoch'] >=2000:
+                    print(os.path.exists(os.path.join(m_fp, fn)))
+                    raise RuntimeError("Model hit epoch limit")
                 if 'test_softmax_accuracy' in stats_dict:
                     acc_list.append(stats_dict['test_softmax_accuracy'])
                 cd = pd.json_normalize(stats_dict)
@@ -50,10 +54,22 @@ def gather_models_results():
         avg_stats_dict['PL-thres'] = None
         avg_stats_dict['N-SSL'] = n
         if len(acc_list) > 0:
-            avg_stats_dict['mean_test_accuracy'] = np.mean(acc_list)
-            avg_stats_dict['std_accuracy'] = np.std(acc_list)
+            # avg_stats_dict['mean_test_accuracy'] = np.mean(acc_list)
+            # avg_stats_dict['std_accuracy'] = np.std(acc_list)
             avg_stats_dict['median_test_accuracy'] = np.median(acc_list)
-            avg_stats_dict['max_test_accuracy'] = np.max(acc_list)
+
+            # acc_list.sort()
+            # acc_list = np.asarray(acc_list)
+            # q1 = acc_list[int(np.round(0.25*len(acc_list)))]
+            # q3 = acc_list[int(np.round(0.75 * len(acc_list)))]
+            # q2 = np.median(acc_list)
+            # iqr = q3 - q1
+            # lth = q2 - iqr
+            # uth = q2 + iqr
+            # acc_list = acc_list[acc_list >= lth]
+            # acc_list = acc_list[acc_list <= uth]
+            # avg_stats_dict['1.5iqr_mean_test_accuracy'] = np.mean(acc_list)
+            # avg_stats_dict['1.5iqr_std_accuracy'] = np.std(acc_list)
         avg_stats_dict['counts'] = len(acc_list)
         cd = pd.json_normalize(avg_stats_dict)
         avg_df_list.append(cd)
@@ -92,6 +108,10 @@ def gather_models_results():
                             stats_dict['INF-method'] = inf
                             stats_dict['PL-thres'] = p
                             stats_dict['N-SSL'] = n
+                            if stats_dict['epoch'] >= 2000:
+                                print(os.path.exists(os.path.join(m_fp, fn)))
+                                raise RuntimeError("Model hit epoch limit")
+
                             if 'test_softmax_accuracy' in stats_dict:
                                 acc_list.append(stats_dict['test_softmax_accuracy'])
                             cd = pd.json_normalize(stats_dict)
@@ -103,10 +123,22 @@ def gather_models_results():
                     avg_stats_dict['PL-thres'] = p
                     avg_stats_dict['N-SSL'] = n
                     if len(acc_list) > 0:
-                        avg_stats_dict['mean_test_accuracy'] = np.mean(acc_list)
-                        avg_stats_dict['std_accuracy'] = np.std(acc_list)
+                        # avg_stats_dict['mean_test_accuracy'] = np.mean(acc_list)
+                        # avg_stats_dict['std_accuracy'] = np.std(acc_list)
                         avg_stats_dict['median_test_accuracy'] = np.median(acc_list)
-                        avg_stats_dict['max_test_accuracy'] = np.max(acc_list)
+
+                        # acc_list.sort()
+                        # acc_list = np.asarray(acc_list)
+                        # q1 = acc_list[int(np.round(0.25 * len(acc_list)))]
+                        # q3 = acc_list[int(np.round(0.75 * len(acc_list)))]
+                        # q2 = np.median(acc_list)
+                        # iqr = q3 - q1
+                        # lth = q2 - iqr
+                        # uth = q2 + iqr
+                        # acc_list = acc_list[acc_list >= lth]
+                        # acc_list = acc_list[acc_list <= uth]
+                        # avg_stats_dict['1.5iqr_mean_test_accuracy'] = np.mean(acc_list)
+                        # avg_stats_dict['1.5iqr_std_accuracy'] = np.std(acc_list)
                     avg_stats_dict['counts'] = len(acc_list)
                     cd = pd.json_normalize(avg_stats_dict)
                     avg_df_list.append(cd)
@@ -134,6 +166,23 @@ def gather_models_results():
 
         full_df.to_csv(os.path.join(ifp, 'summary-{}.csv'.format(n)), index=False)
         avg_full_df.to_csv(os.path.join(ifp, 'summary-{}-avg.csv'.format(n)), index=False)
+
+
+        from matplotlib import pyplot as plt
+        fig = plt.figure(figsize=(8, 4), dpi=200)
+        x = full_df['test_softmax_accuracy'].to_numpy()
+        y = full_df['INF-method'].to_numpy()
+        x2 = list()
+        for v in np.unique(y):
+            idx = y == v
+            x3 = list()
+            x3.extend(x[idx])
+            x2.append(x3)
+        plt.hist(x2, bins=50, stacked=True, density=True)
+        plt.legend(np.unique(y))
+        plt.savefig('test_accuracy_hist_{}.png'.format(n))
+
+
 
 
 def gather_models_multi_cluster_results():

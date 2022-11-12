@@ -48,7 +48,10 @@ def setup(args):
 
     # setup and load CIFAR10
     if args.num_classes == 10:
-        train_dataset = cifar_datasets.Cifar10(transform=cifar_datasets.Cifar10.TRANSFORM_TRAIN, train=True, subset=args.debug)
+        if args.strong_augmentation:
+            train_dataset = cifar_datasets.Cifar10(transform=cifar_datasets.Cifar10.TRANSFORM_STRONG_TRAIN, train=True, subset=args.debug)
+        else:
+            train_dataset = cifar_datasets.Cifar10(transform=cifar_datasets.Cifar10.TRANSFORM_TRAIN, train=True, subset=args.debug)
     else:
         raise RuntimeError("unsupported class count: {}".format(args.num_classes))
 

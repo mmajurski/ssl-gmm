@@ -44,7 +44,7 @@ class Cifar10(torch.utils.data.Dataset):
         torchvision.transforms.ToTensor(),
         torchvision.transforms.Normalize(mean=cifar10_mean, std=cifar10_std)
     ])
-    TRANSFORM_STRONG = torchvision.transforms.Compose([
+    TRANSFORM_STRONG_TRAIN = torchvision.transforms.Compose([
         torchvision.transforms.RandomHorizontalFlip(),
         torchvision.transforms.RandomCrop(size=32,
                                           padding=int(4),
