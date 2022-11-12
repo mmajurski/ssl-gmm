@@ -8,8 +8,6 @@ c=1
 # setup workers in the background
 sleep 1 &
 sleep 2 &
-sleep 3 &
-sleep 4 &
 
 for i in {0..10}; do
 
@@ -22,11 +20,6 @@ for i in {0..10}; do
 #pseudo_label_threshold = {0.9, 0.95, 0.98, 0.99, 1.0}  # only apply this to those where 'filter' is in method
 #
 #for 'softmax', resp and neum are the same (i.e. just the logits)
-
-
-  wait -n
-  python main.py --output-filepath=./models/only-supervised-n${n}-c${c}-models/id-000${i} --num_labeled_datapoints=${n} --cluster_per_class=${c} --inference-method=softmax --strong_augmentation --disable-ssl &
-  sleep 0.2
   
 
   inf="softmax"
@@ -35,14 +28,14 @@ for i in {0..10}; do
       if [[ $method == *"filter"* ]]; then
         for thres in "0.99" "0.98" "0.95" "0.9" "0.8"; do
           wait -n
-          python main.py --output-filepath=./models/ssl-${inf}-method${method}-thres${thres}-n${n}-c${c}-models/id-000${i} --num_labeled_datapoints=${n} --pseudo-label-method=${method} --pseudo-label-threshold=${thres} --cluster_per_class=${c} --inference-method=${inf} --strong_augmentation &
+          python main.py --output-filepath=./models-relabel/ssl-${inf}-method${method}-thres${thres}-n${n}-c${c}-models/id-000${i} --num_labeled_datapoints=${n} --pseudo-label-method=${method} --pseudo-label-threshold=${thres} --cluster_per_class=${c} --inference-method=${inf} --strong_augmentation --re-pseudo-label-each-epoch &
           sleep 0.2
 
         done
       else
 
         wait -n
-        python main.py --output-filepath=./models/ssl-${inf}-method${method}-n${n}-c${c}-models/id-000${i} --num_labeled_datapoints=${n} --pseudo-label-method=${method} --cluster_per_class=${c} --inference-method=${inf} --strong_augmentation &
+        python main.py --output-filepath=./models-relabel/ssl-${inf}-method${method}-n${n}-c${c}-models/id-000${i} --num_labeled_datapoints=${n} --pseudo-label-method=${method} --cluster_per_class=${c} --inference-method=${inf} --strong_augmentation --re-pseudo-label-each-epoch &
         sleep 0.2
       fi
   done
@@ -54,13 +47,13 @@ for i in {0..10}; do
           if [[ $method == *"filter"* ]]; then
             for thres in "0.99" "0.98" "0.95" "0.9" "0.8"; do
               wait -n
-              python main.py --output-filepath=./models/ssl-${inf}-method${method}-thres${thres}-n${n}-c${c}-models/id-000${i} --num_labeled_datapoints=${n} --pseudo-label-method=${method} --pseudo-label-threshold=${thres} --cluster_per_class=${c} --inference-method=${inf} --strong_augmentation &
+              python main.py --output-filepath=./models-relabel/ssl-${inf}-method${method}-thres${thres}-n${n}-c${c}-models/id-000${i} --num_labeled_datapoints=${n} --pseudo-label-method=${method} --pseudo-label-threshold=${thres} --cluster_per_class=${c} --inference-method=${inf} --strong_augmentation --re-pseudo-label-each-epoch &
               sleep 0.2
 
             done
           else
             wait -n
-            python main.py --output-filepath=./models/ssl-${inf}-method${method}-n${n}-c${c}-models/id-000${i} --num_labeled_datapoints=${n} --pseudo-label-method=${method} --cluster_per_class=${c} --inference-method=${inf} --strong_augmentation &
+            python main.py --output-filepath=./models-relabel/ssl-${inf}-method${method}-n${n}-c${c}-models/id-000${i} --num_labeled_datapoints=${n} --pseudo-label-method=${method} --cluster_per_class=${c} --inference-method=${inf} --strong_augmentation --re-pseudo-label-each-epoch &
             sleep 0.2
           fi
 
