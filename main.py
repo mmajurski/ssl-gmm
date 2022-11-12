@@ -33,9 +33,9 @@ def main():
     parser.add_argument('--starting_model', type=str, default=None, help='Pytorch model checkpoint to load instead of starting from random')
     parser.add_argument('--optimizer', type=str, default='adamw',help='optimizer if nothing is passed AdamW would be used (currently supported sgd,adamw)')
     parser.add_argument('--cluster_per_class', default=1, type=int, help='number of clusters to create per class')
-    # TODO
-    parser.add_argument('--consistency_regularization', help='enables consistency regularization', action='store_true')
     parser.add_argument('--strong_augmentation', help='enables strong augmentation', action='store_true')
+    # TODO
+    # parser.add_argument('--consistency_regularization', help='enables consistency regularization', action='store_true')
     args = parser.parse_args()
 
 
