@@ -14,9 +14,9 @@
 
 source /mnt/isgnas/home/mmajursk/anaconda3/etc/profile.d/conda.sh
 conda activate gmm
-i=$1
-n=$2
-c=1
+#i=$1
+#n=$2
+#c=1
 
 
 # --pseudo-label-method
@@ -35,6 +35,16 @@ sleep 1 &
 sleep 2 &
 sleep 3 &
 sleep 4 &
+sleep 5 &
+sleep 6 &
+
+
+
+for i in {0..9}; do
+
+for n in 250 1000 4000; do
+
+for c in 2 3 4 5; do
 
 inf="softmax"
 for method in "sort_resp" "filter_resp_sort_resp" "filter_resp_percentile_sort_neum"; do
@@ -72,6 +82,9 @@ for inf in "gmm" "cauchy"; do
         fi
 
   done
+done
+done
+done
 done
 
 wait

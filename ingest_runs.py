@@ -30,8 +30,8 @@ import shutil
 
 
 
-ifp = "/home/mmajurski/Downloads/models"
-ofp = "/home/mmajurski/github/ssl-gmm/models"
+ifp = "/home/mmajursk/Downloads/ssl-gmm-results/claude3/models-relabel"
+ofp = "/home/mmajursk/Downloads/re-pl-results/"
 fns = [fn for fn in os.listdir(ifp) if fn.startswith('ssl-')]
 fns.sort()
 

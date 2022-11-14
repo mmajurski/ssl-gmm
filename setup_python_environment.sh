@@ -9,7 +9,7 @@ conda create -n gmm python=3.8 -y
 conda activate gmm
 
 # install pytorch (best done through conda to handle cuda dependencies)
-conda install pytorch=1.11 torchvision=0.12 cudatoolkit=11.3 -c pytorch
+conda install pytorch=1.11 torchvision=0.12 cudatoolkit=11.3 -c pytorch -y
 
-conda install pandas matplotlib scikit-learn jsonpickle
+conda install pandas matplotlib scikit-learn jsonpickle -y
 
