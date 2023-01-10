@@ -20,7 +20,7 @@ from math import gamma
 
 class GMM(torch.nn.Module):
 
-    def __init__(self, n_features, n_clusters, tolerance=1e-5, max_iter=100, weights=None, mu=None, sigma=None):
+    def __init__(self, n_features, n_clusters, tolerance=1e-5, max_iter=100, weights=None, mu=None, sigma=None, isCauchy=False):
         """
             _pi = clusters _pi(probabilities)
             _mu = clusters means
@@ -41,6 +41,7 @@ class GMM(torch.nn.Module):
         self._sigma_shape = (self.n_clusters, self.n_features, self.n_features)
         self._converged = False
         self._eps = 1e-6
+        self._isCauchy = isCauchy
         self._init_params()
 
     def _init_params(self):
@@ -135,7 +136,10 @@ class GMM(torch.nn.Module):
 
     def _e_step(self, x):
         x = x.type(torch.float32)
-        _, log_prob_norm, log_resp = self._estimate_log_prob_resp(x)
+        if self.isCauchy:
+            _, log_prob_norm, log_resp = self._cauchy_estimate_log_prob_resp(x)
+        else:
+            _, log_prob_norm, log_resp = self._estimate_log_prob_resp(x)
         return torch.mean(log_prob_norm), log_resp
 
     def _estimate_parameters(self, x, resp):

@@ -550,10 +550,10 @@ def build_gmm(model, pytorch_dataset, epoch, train_stats, args):
     gmm_list_skl = list()
     for i in range(len(unique_class_labels)):
         class_c_logits = bucketed_dataset_logits[i]
-        # gmm = GMM(n_features=class_c_logits.shape[1], n_clusters=args.cluster_per_class, tolerance=1e-4, max_iter=50)
+        # gmm = GMM(n_features=class_c_logits.shape[1], n_clusters=args.cluster_per_class, tolerance=1e-4, max_iter=50, isCauchy= (args.inference_method == 'cauchy'))
         # gmm.fit(class_c_logits)
         # while np.any(np.isnan(gmm.get("sigma").detach().cpu().numpy())):
-        #     gmm = GMM(n_features=class_c_logits.shape[1], n_clusters=args.cluster_per_class, tolerance=1e-4, max_iter=50)
+        #     gmm = GMM(n_features=class_c_logits.shape[1], n_clusters=args.cluster_per_class, tolerance=1e-4, max_iter=50, isCauchy= (args.inference_method == 'cauchy'))
         #     gmm.fit(class_c_logits)
         # gmm_list.append(gmm)
         gmm_skl = sklearn.mixture.GaussianMixture(n_components=args.cluster_per_class)
