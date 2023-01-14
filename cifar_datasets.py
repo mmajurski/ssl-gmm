@@ -9,6 +9,7 @@ import torch
 import torchvision
 import logging
 import random
+import torchvision.transforms
 
 import fixmatch_augmentation
 
@@ -29,13 +30,14 @@ def worker_init_fn(worker_id):
     np.random.seed(np.random.get_state()[1][0] + worker_id)
 
 
+
 # TODO setup sumeet style data augmentation to improve the results
 
 class Cifar10(torch.utils.data.Dataset):
-    TRANSFORM_TRAIN = torchvision.transforms.Compose([
+    TRANSFORM_WEAK_TRAIN = torchvision.transforms.Compose([
         torchvision.transforms.RandomHorizontalFlip(),
         torchvision.transforms.RandomCrop(size=32,
-                                          padding=int(4),
+                                          padding=int(32*0.125),
                                           padding_mode='reflect'),
         torchvision.transforms.ToTensor(),
         torchvision.transforms.Normalize(mean=cifar10_mean, std=cifar10_std)
@@ -47,40 +49,46 @@ class Cifar10(torch.utils.data.Dataset):
     TRANSFORM_STRONG_TRAIN = torchvision.transforms.Compose([
         torchvision.transforms.RandomHorizontalFlip(),
         torchvision.transforms.RandomCrop(size=32,
-                                          padding=int(4),
+                                          padding=int(32*0.125),
                                           padding_mode='reflect'),
         fixmatch_augmentation.RandAugmentMC(n=2, m=10),
         torchvision.transforms.ToTensor(),
         torchvision.transforms.Normalize(mean=cifar10_mean, std=cifar10_std)
     ])
 
-    def __init__(self, transform=None, train:bool=True, subset=False, lcl_fldr:str='./data'):
+    TRANSFORM_FIXMATCH = fixmatch_augmentation.TransformFixMatch(mean=cifar10_mean, std=cifar10_std)
+
+    def __init__(self, transform=None, train:bool=True, subset=False, lcl_fldr:str='./data', empty=False):
 
         self.lcl_fldr = lcl_fldr
         self.transform = transform
-        if train:
-            _dataset = torchvision.datasets.CIFAR10(self.lcl_fldr, train=True, download=True)
+        if empty:
+            self.data = list()
+            self.targets = list()
         else:
-            _dataset = torchvision.datasets.CIFAR10(self.lcl_fldr, train=False, download=True)
+            if train:
+                _dataset = torchvision.datasets.CIFAR10(self.lcl_fldr, train=True, download=True)
+            else:
+                _dataset = torchvision.datasets.CIFAR10(self.lcl_fldr, train=False, download=True)
 
-        self.targets = _dataset.targets
-        # break the data up into a list instead of a single numpy block to allow deleting and addition
-        self.data = list()
-        data_len = _dataset.data.shape[0]
-        if subset:
-            # for debugging, keep just 10% of the data to accelerate things
-            data_len = int(0.1 * data_len)
+            self.targets = _dataset.targets
+            # break the data up into a list instead of a single numpy block to allow deleting and addition
+            self.data = list()
+            data_len = _dataset.data.shape[0]
+            if subset:
+                # for debugging, keep just 10% of the data to accelerate things
+                data_len = int(0.1 * data_len)
 
-        for i in range(data_len):
-            self.data.append(_dataset.data[i, :, :, :])
+            for i in range(data_len):
+                self.data.append(_dataset.data[i, :, :, :])
 
-        # cleanup the tmp CIFAR object
-        del _dataset
+            # cleanup the tmp CIFAR object
+            del _dataset
 
     def __len__(self) -> int:
         return len(self.data)
 
-    def __getitem__(self, index: int) -> Tuple[Any, Any]:
+    def __getitem__(self, index: int) -> Tuple[Any, Any, int]:
         """
         Args:
             index (int): Index
@@ -114,23 +122,6 @@ class Cifar10(torch.utils.data.Dataset):
         img = copy.deepcopy(self.data[index])
         target = copy.deepcopy(self.targets[index])
         return img, target
-
-    def remove_datapoints_by_index(self, indicies):
-        indicies.sort(reverse=True)
-        # delete in reverse order so the index number align as we expect them
-        for i in indicies:
-            del self.data[i]
-            del self.targets[i]
-
-    def add_datapoint(self, img, target):
-        if not isinstance(img, np.ndarray):
-            raise RuntimeError("Added image must be numpy array with shape [h,w,c]")
-        if not len(img.shape) == 3:
-            raise RuntimeError("Added image must be numpy array with shape [h,w,c]")
-        if not (isinstance(target, int) or isinstance(target, np.integer)):
-            raise RuntimeError("Added target must be integer")
-        self.data.append(img)
-        self.targets.append(int(target))
 
     def set_transforms(self, transforms):
         self.transform = transforms
@@ -197,10 +188,23 @@ class Cifar10(torch.utils.data.Dataset):
 
         return train_dataset, val_dataset
 
+    def append_dataset(self, pytorch_dataset):
+        for i in range(len(pytorch_dataset)):
+            data = pytorch_dataset.data[i]
+            target = pytorch_dataset.targets[i]
+
+            self.data.append(data)
+            self.targets.append(target)
+
+    def add(self, data, target):
+        self.data.append(data)
+        self.targets.append(target)
+
 
 
 class Cifar100(Cifar10):
-    TRANSFORM_TRAIN = torchvision.transforms.Compose([
+
+    TRANSFORM_WEAK_TRAIN = torchvision.transforms.Compose([
         torchvision.transforms.RandomHorizontalFlip(),
         torchvision.transforms.RandomCrop(size=32,
                                           padding=int(32 * 0.125),
@@ -209,6 +213,15 @@ class Cifar100(Cifar10):
         torchvision.transforms.Normalize(mean=cifar100_mean, std=cifar100_std)
     ])
     TRANSFORM_TEST = torchvision.transforms.Compose([
+        torchvision.transforms.ToTensor(),
+        torchvision.transforms.Normalize(mean=cifar100_mean, std=cifar100_std)
+    ])
+    TRANSFORM_STRONG_TRAIN = torchvision.transforms.Compose([
+        torchvision.transforms.RandomHorizontalFlip(),
+        torchvision.transforms.RandomCrop(size=32,
+                                          padding=int(32 * 0.125),
+                                          padding_mode='reflect'),
+        fixmatch_augmentation.RandAugmentMC(n=2, m=10),
         torchvision.transforms.ToTensor(),
         torchvision.transforms.Normalize(mean=cifar100_mean, std=cifar100_std)
     ])

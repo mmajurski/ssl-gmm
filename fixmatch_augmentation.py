@@ -6,6 +6,9 @@ import logging
 import random
 
 import numpy as np
+import torch
+import torchvision
+import torchvision.transforms
 import PIL
 import PIL.ImageOps
 import PIL.ImageEnhance
@@ -182,3 +185,28 @@ class RandAugmentMC(object):
                 img = op(img, v=v, max_v=max_v, bias=bias)
         img = CutoutAbs(img, int(32*0.5))
         return img
+
+
+# from https://github.com/kekmodel/FixMatch-pytorch
+class TransformFixMatch(object):
+    def __init__(self, mean, std):
+        self.weak = torchvision.transforms.Compose([
+            torchvision.transforms.RandomHorizontalFlip(),
+            torchvision.transforms.RandomCrop(size=32,
+                                  padding=int(32*0.125),
+                                  padding_mode='reflect')])
+        self.strong = torchvision.transforms.Compose([
+            torchvision.transforms.RandomHorizontalFlip(),
+            torchvision.transforms.RandomCrop(size=32,
+                                  padding=int(32*0.125),
+                                  padding_mode='reflect'),
+            RandAugmentMC(n=2, m=10)])
+        self.normalize = torchvision.transforms.Compose([
+            torchvision.transforms.ToTensor(),
+            torchvision.transforms.Normalize(mean=mean, std=std)])
+        self.to_tensor = torchvision.transforms.ToTensor()
+
+    def __call__(self, x):
+        weak = self.weak(x)
+        strong = self.strong(x)
+        return self.normalize(weak), self.normalize(strong), self.to_tensor(strong)
