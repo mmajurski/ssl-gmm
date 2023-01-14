@@ -11,11 +11,12 @@ def validate_output_directory(args):
         # if we are in debug mode delete any existing output data.
         if os.path.exists(args.output_dirpath):
             shutil.rmtree(args.output_dirpath)
-
-        os.makedirs(args.output_dirpath)
     else:
-        # if we are not in debug mode, preserve all output data
-        raise RuntimeError("Output dirpath exists, exiting.")
+        if os.path.exists(args.output_dirpath):
+            # if we are not in debug mode, preserve all output data
+            raise RuntimeError("Output dirpath {} exists, exiting.".format(args.output_dirpath))
+
+    os.makedirs(args.output_dirpath)
 
 
 def check_for_ide_debug_mode(args):
@@ -49,7 +50,7 @@ def main():
     parser.add_argument('--inference-method', default='gmm', type=str, help='whether to use gmm or cauchy for inference.')
     parser.add_argument('--disable-ssl', action='store_true')
     parser.add_argument('--pseudo-label-method', default="resp", type=str, help='method/algorithm to use for selecting valid psudo-label samples.')
-    parser.add_argument('--pseudo-label-threshold', default=0.99, type=float, help='Threshold when filtering pseudo-labeling.')
+    parser.add_argument('--pseudo-label-threshold', default=0.95, type=float, help='Threshold when filtering pseudo-labeling.')
     parser.add_argument('--soft-pseudo-label', help='enables soft pseudo-labels', action='store_true')
     parser.add_argument('--num_classes', default=10, type=int, help='number of classes in the dataset.')
     parser.add_argument('--num_labeled_datapoints', default=250, type=int, help='number of labeled annotations in the dataset.')
