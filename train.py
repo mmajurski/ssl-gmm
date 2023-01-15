@@ -8,6 +8,7 @@ import json
 import logging
 import sklearn.mixture
 import psutil
+from matplotlib import pyplot as plt
 
 import cifar_datasets
 import metadata
@@ -20,8 +21,35 @@ import fixmatch_augmentation
 import utils
 
 
+
 MAX_EPOCHS = 2000
 
+
+
+def plot_loss_acc(train_stats, args):
+    plt.figure(figsize=(8, 6))
+    y = train_stats.get('train_loss')
+    plt.plot(y)
+    y = train_stats.get('val_loss')
+    plt.plot(y)
+    plt.title("Train and Val Loss")
+    plt.legend(['train', 'val'])
+    plt.ylabel('Loss')
+    plt.xlabel('Epoch')
+    plt.savefig(os.path.join(args.output_dirpath, 'loss.png'))
+    plt.close()
+
+    plt.figure(figsize=(8, 6))
+    y = train_stats.get('train_accuracy')
+    plt.plot(y)
+    y = train_stats.get('val_softmax_accuracy')
+    plt.plot(y)
+    plt.title("Train and Val Softmax Accuracy")
+    plt.legend(['train','val'])
+    plt.ylabel('Accuracy')
+    plt.xlabel('Epoch')
+    plt.savefig(os.path.join(args.output_dirpath, 'accuracy.png'))
+    plt.close()
 
 
 def setup(args):
@@ -239,7 +267,8 @@ def train_epoch(model, pytorch_dataset_labeled, optimizer, criterion, epoch, tra
     avg_accuracy = np.mean(accuracy_list)
     wall_time = time.time() - start_time
 
-    logging.info("epoch has {} batches with nan loss.".format(loss_nan_count))
+    if loss_nan_count > 0:
+        logging.info("epoch has {} batches with nan loss.".format(loss_nan_count))
 
     train_stats.add(epoch, 'train_wall_time', wall_time)
     train_stats.add(epoch, 'train_loss', avg_loss)
@@ -303,7 +332,7 @@ def eval_model(model, pytorch_dataset, criterion, train_stats, split_name, epoch
                 gpu_mem_percent_used = [np.round(100 * x, 1) for x in gpu_mem_percent_used]
                 logging.info('  batch {}/{}  loss: {:8.8g}  cpu_mem: {:2.1f}%  gpu_mem: {}% of {}MiB'.format(batch_idx, batch_count, batch_loss.item(), cpu_mem_percent_used, gpu_mem_percent_used, memory_total_info))
 
-    avg_loss = np.mean(loss_list)
+    avg_loss = np.nanmean(loss_list)
     gt_labels = np.asarray(gt_labels)
     softmax_preds = np.asarray(softmax_preds)
     softmax_accuracy = np.mean((softmax_preds == gt_labels).astype(float))
@@ -479,8 +508,10 @@ def train(args):
         epoch += 1
         logging.info("Epoch (supervised): {}".format(epoch))
 
+        plot_loss_acc(train_stats, args)
+
         logging.info("  training against fully labeled dataset.")
-        train_epoch(model, train_dataset_labeled, optimizer, criterion, epoch, train_stats, args, nb_reps=100)
+        train_epoch(model, train_dataset_labeled, optimizer, criterion, epoch, train_stats, args) #, nb_reps=10)
 
         logging.info("  evaluating against validation data.")
         eval_model(model, val_dataset, criterion, train_stats, "val", epoch, None, args)
@@ -522,6 +553,8 @@ def train(args):
         while not plateau_scheduler.is_done() and epoch < MAX_EPOCHS:
             epoch += 1
             logging.info("Epoch (semi-supervised): {}".format(epoch))
+
+            plot_loss_acc(train_stats, args)
 
             logging.info("  pseudo-labeling unannotated examples.")
             # This moves instances from the unlabeled population into the labeled population
