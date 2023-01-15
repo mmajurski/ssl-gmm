@@ -45,13 +45,13 @@ class TrainingStats():
             else:
                 data.append(epoch_metrics[metric_name])
         if aggregator is not None:
-            data = np.asarray(data)
+            data = np.asarray(data, dtype=float)  # by force cast to float, None becomes nan
             if aggregator == 'mean':
-                data = np.mean(data)
+                data = np.nanmean(data)
             elif aggregator == 'median':
-                data = np.median(data)
+                data = np.nanmedian(data)
             elif aggregator == 'sum':
-                data = np.sum(data)
+                data = np.nansum(data)
             else:
                 raise RuntimeError('Invalid aggregator: {}'.format(aggregator))
         return data

@@ -156,10 +156,18 @@ def train_epoch(model, pytorch_dataset_labeled, optimizer, criterion, epoch, tra
     model.train()
     scaler = torch.cuda.amp.GradScaler()
 
-    # TODO interleave the labeled and pseudo labeled
     if dataset_pseudo_labeled is not None:
+        if len(dataset_pseudo_labeled) == 0:
+            logging.info("No valid pseudo-labels for epoch {}. Skipping Semi-Supervised training for this epoch.".format(epoch))
+            return
+
         # create a copy of the labeled dataset to append the pseudolabels to
         effective_dataset = copy.deepcopy(pytorch_dataset_labeled)
+        if args.soft_pseudo_label:
+            for i in range(len(effective_dataset.targets)):
+                v = np.zeros((args.num_classes), dtype=float)
+                v[effective_dataset.targets[i]] = 1
+                effective_dataset.targets[i] = v
         effective_dataset.append_dataset(dataset_pseudo_labeled)
     else:
         # default back to using just the labeled dataset
@@ -200,6 +208,9 @@ def train_epoch(model, pytorch_dataset_labeled, optimizer, criterion, epoch, tra
                 optimizer.step()
 
             pred = torch.argmax(outputs, dim=-1)
+            if args.soft_pseudo_label:
+                # convert soft labels into hard for accuracy
+                labels = torch.argmax(labels, dim=-1)
             accuracy = torch.sum(pred == labels) / len(pred)
 
             # nan loss values are ignored when using AMP, so ignore them for the average
@@ -355,9 +366,9 @@ def psuedolabel_data_fixmatch(model, pytorch_dataset_unlabeled, epoch, train_sta
                         if valid_pl[idx]:
                             img = inputs_strong[idx,].detach().cpu().numpy()
                             if args.soft_pseudo_label:
-                                tgt = pred[idx]
+                                tgt = np.asarray(logits[idx], dtype=float)
                             else:
-                                tgt = logits[idx,]
+                                tgt = pred[idx]
 
                             pseudo_labeled_dataset.add(img, tgt)
 
@@ -365,7 +376,7 @@ def psuedolabel_data_fixmatch(model, pytorch_dataset_unlabeled, epoch, train_sta
 
 
 
-
+    # TODO add logging and metric capture, now that the code works
     return pseudo_labeled_dataset
 
 
@@ -422,7 +433,7 @@ def train(args):
     # *************************************
     # ******** Supervised Training ********
     # *************************************
-    # train the model until it has converged on the the labeled data
+    # train the model until it has converged on the labeled data
     # setup early stopping on convergence using LR reduction on plateau
     plateau_scheduler_sl = lr_scheduler.ReduceLROnPlateau(optimizer, mode='min', factor=args.lr_reduction_factor, patience=args.patience, threshold=args.loss_eps, max_num_lr_reductions=args.num_lr_reductions)
     # train epochs until loss converges

@@ -209,4 +209,4 @@ class TransformFixMatch(object):
     def __call__(self, x):
         weak = self.weak(x)
         strong = self.strong(x)
-        return self.normalize(weak), self.normalize(strong), self.to_tensor(strong)
+        return self.normalize(weak), self.normalize(strong), torch.as_tensor(np.array(strong))
