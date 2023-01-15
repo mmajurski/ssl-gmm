@@ -3,7 +3,7 @@
 __pycache__/
 data/
 # ignore all model directories
-*model*/
+model*/
 
 *.pyc
 *.png

@@ -29,6 +29,7 @@ def setup(args):
     model = None
     if args.starting_model is not None:
         # warning, this over rides the args.arch selection
+        logging.info("Loading requested starting model from '{}'".format(args.starting_model))
         model = torch.load(args.starting_model)
     else:
         if args.arch == 'resnet18':
@@ -151,8 +152,8 @@ def build_gmm(model, pytorch_dataset, epoch, train_stats, args):
 
 def train_epoch(model, pytorch_dataset_labeled, optimizer, criterion, epoch, train_stats, args, dataset_pseudo_labeled=None, scheduler=None, nb_reps=1):
 
-    avg_loss = 0
-    avg_accuracy = 0
+    loss_list = list()
+    accuracy_list = list()
     model.train()
     scaler = torch.cuda.amp.GradScaler()
 
@@ -178,6 +179,7 @@ def train_epoch(model, pytorch_dataset_labeled, optimizer, criterion, epoch, tra
 
     batch_count = nb_reps * len(dataloader)
     start_time = time.time()
+    loss_nan_count = 0
 
     for rep_count in range(nb_reps):
         for batch_idx, tensor_dict in enumerate(dataloader):
@@ -203,8 +205,8 @@ def train_epoch(model, pytorch_dataset_labeled, optimizer, criterion, epoch, tra
                     scaler.update()
             else:
                 outputs = model(inputs)
-                loss = criterion(outputs, labels)
-                loss.backward()
+                batch_loss = criterion(outputs, labels)
+                batch_loss.backward()
                 optimizer.step()
 
             pred = torch.argmax(outputs, dim=-1)
@@ -215,10 +217,16 @@ def train_epoch(model, pytorch_dataset_labeled, optimizer, criterion, epoch, tra
 
             # nan loss values are ignored when using AMP, so ignore them for the average
             if not np.isnan(batch_loss.detach().cpu().numpy()):
-                avg_loss += batch_loss.item()
-                avg_accuracy += accuracy.item()
+                loss_list.append(batch_loss.item())
+                accuracy_list.append(accuracy.item())
                 if scheduler is not None:
                     scheduler.step()
+            else:
+                loss_nan_count += 1
+
+                if loss_nan_count > 100:
+                    logging.info("Loss is consistently nan (>100x per epoch), terminating train.")
+                    return
 
             if batch_idx % 100 == 0:
                 # log loss and current GPU utilization
@@ -227,9 +235,11 @@ def train_epoch(model, pytorch_dataset_labeled, optimizer, criterion, epoch, tra
                 gpu_mem_percent_used = [np.round(100 * x, 1) for x in gpu_mem_percent_used]
                 logging.info('  batch {}/{}  loss: {:8.8g}  lr: {:4.4g}  cpu_mem: {:2.1f}%  gpu_mem: {}% of {}MiB'.format(batch_idx, batch_count, batch_loss.item(), optimizer.param_groups[0]['lr'], cpu_mem_percent_used, gpu_mem_percent_used, memory_total_info))
 
-    avg_loss /= batch_count
-    avg_accuracy /= batch_count
+    avg_loss = np.mean(loss_list)
+    avg_accuracy = np.mean(accuracy_list)
     wall_time = time.time() - start_time
+
+    logging.info("epoch has {} batches with nan loss.".format(loss_nan_count))
 
     train_stats.add(epoch, 'train_wall_time', wall_time)
     train_stats.add(epoch, 'train_loss', avg_loss)
@@ -247,7 +257,7 @@ def eval_model(model, pytorch_dataset, criterion, train_stats, split_name, epoch
     model.cuda()
     start_time = time.time()
 
-    loss = list()
+    loss_list = list()
     gt_labels = list()
     softmax_preds = list()
 
@@ -266,7 +276,7 @@ def eval_model(model, pytorch_dataset, criterion, train_stats, split_name, epoch
             with torch.cuda.amp.autocast():
                 outputs = model(inputs)
                 batch_loss = criterion(outputs, labels)
-                loss.append(batch_loss.item())
+                loss_list.append(batch_loss.item())
                 pred = torch.argmax(outputs, dim=-1).detach().cpu().numpy()
                 softmax_preds.extend(pred)
 
@@ -293,7 +303,7 @@ def eval_model(model, pytorch_dataset, criterion, train_stats, split_name, epoch
                 gpu_mem_percent_used = [np.round(100 * x, 1) for x in gpu_mem_percent_used]
                 logging.info('  batch {}/{}  loss: {:8.8g}  cpu_mem: {:2.1f}%  gpu_mem: {}% of {}MiB'.format(batch_idx, batch_count, batch_loss.item(), cpu_mem_percent_used, gpu_mem_percent_used, memory_total_info))
 
-    avg_loss = np.mean(loss)
+    avg_loss = np.mean(loss_list)
     gt_labels = np.asarray(gt_labels)
     softmax_preds = np.asarray(softmax_preds)
     softmax_accuracy = np.mean((softmax_preds == gt_labels).astype(float))
@@ -344,12 +354,21 @@ def psuedolabel_data_fixmatch(model, pytorch_dataset_unlabeled, epoch, train_sta
 
     pseudo_label_threshold = np.asarray(args.pseudo_label_threshold)
     model.eval()
+    pl_counts_per_class = list()
+    true_class_counter_per_class = list()
+    pl_accuracy_per_class = list()
+    pl_accuracy = list()
+    for i in range(len(args.num_classes)):
+        pl_counts_per_class.append(0)
+        true_class_counter_per_class.append(0)
+        pl_accuracy_per_class.append(0)
+
     with torch.no_grad():
         for batch_idx, tensor_dict in enumerate(dataloader):
             inputs_weak, inputs_strong_normalized, inputs_strong = tensor_dict[0]
 
             inputs_weak = inputs_weak.cuda()
-            # labels = tensor_dict[1].cuda()
+            labels = tensor_dict[1].cuda()
             # index = tensor_dict[2].cpu().detach()
 
             with torch.cuda.amp.autocast():
@@ -364,17 +383,36 @@ def psuedolabel_data_fixmatch(model, pytorch_dataset_unlabeled, epoch, train_sta
                 if np.any(valid_pl):
                     for idx in range(len(valid_pl)):
                         if valid_pl[idx]:
+                            pl_class = pred[idx]
+                            true_class = labels[idx]
+                            pl_counts_per_class[pl_class] += 1
+                            acc = int(pl_class == true_class)
+                            pl_accuracy.append(acc)
+                            pl_accuracy_per_class[true_class] += 1
+                            if acc:
+                                true_class_counter_per_class[true_class] += 1
+
                             img = inputs_strong[idx,].detach().cpu().numpy()
                             if args.soft_pseudo_label:
                                 tgt = np.asarray(logits[idx], dtype=float)
                             else:
-                                tgt = pred[idx]
+                                tgt = pl_class
 
                             pseudo_labeled_dataset.add(img, tgt)
 
+    pl_accuracy = np.mean(pl_accuracy)
 
+    # update the training metadata
+    train_stats.add(epoch, 'pseudo_label_counts_per_class', pl_counts_per_class)
+    train_stats.add(epoch, 'pseudo_labeling_accuracy_per_class', pl_accuracy_per_class)
 
-
+    vals = np.asarray(pl_counts_per_class) / np.sum(pl_counts_per_class)
+    train_stats.add(epoch, 'pseudo_label_percentage_per_class', vals.tolist())
+    vals = np.asarray(true_class_counter_per_class) / np.sum(true_class_counter_per_class)
+    train_stats.add(epoch, 'pseudo_label_true_percentage_per_class', vals.tolist())
+    # get the average accuracy of the pseudo-labels (this data is not available in real SSL applications, since the unlabeled population would truly be unlabeled
+    train_stats.add(epoch, 'pseudo_labeling_accuracy', float(np.nanmean(pl_accuracy)))
+    train_stats.add(epoch, 'num_added_pseudo_labels', int(np.sum(pseudo_labeled_dataset)))
 
     # TODO add logging and metric capture, now that the code works
     return pseudo_labeled_dataset
