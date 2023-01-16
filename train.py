@@ -22,7 +22,7 @@ import utils
 
 
 
-MAX_EPOCHS = 2000
+MAX_EPOCHS = 10000
 
 
 
@@ -47,9 +47,9 @@ def plot_loss_acc(train_stats, args, best_epoch):
     plt.ylabel('Loss')
     plt.xlabel('Epoch')
     plt.savefig(os.path.join(args.output_dirpath, 'loss.png'))
-    plt.close()
+    plt.clf()
 
-    plt.figure(figsize=(8, 6))
+
     y = train_stats.get('train_accuracy')
     plt.plot(y)
     y = train_stats.get('val_softmax_accuracy')
@@ -65,6 +65,30 @@ def plot_loss_acc(train_stats, args, best_epoch):
     plt.ylabel('Accuracy')
     plt.xlabel('Epoch')
     plt.savefig(os.path.join(args.output_dirpath, 'accuracy.png'))
+    plt.clf()
+
+
+    y = train_stats.get('pseudo_labeling_accuracy')
+    if len(y) > 0:
+        plt.plot(y)
+
+        plt.title("PL Accuracy")
+        plt.ylabel('Accuracy')
+        plt.xlabel('Epoch')
+        plt.savefig(os.path.join(args.output_dirpath, 'pl_accuracy.png'))
+        plt.clf()
+
+    y = train_stats.get('num_pseudo_labels')
+    if len(y) > 0:
+        plt.plot(y)
+
+        plt.title("PL Count")
+        plt.ylabel('Count')
+        plt.xlabel('Epoch')
+        plt.savefig(os.path.join(args.output_dirpath, 'num_pseudo_labels.png'))
+        plt.clf()
+
+
     plt.close()
 
 
@@ -462,6 +486,10 @@ def psuedolabel_data_fixmatch(model, pytorch_dataset_unlabeled, epoch, train_sta
     pl_accuracy_per_class[np.isnan(pl_accuracy_per_class)] = 0.0
     pl_accuracy_per_class = pl_accuracy_per_class.tolist()
 
+    # get the average accuracy of the pseudo-labels (this data is not available in real SSL applications, since the unlabeled population would truly be unlabeled
+    train_stats.add(epoch, 'pseudo_labeling_accuracy', float(np.nanmean(pl_accuracy)))
+    train_stats.add(epoch, 'num_pseudo_labels', int(len(pseudo_labeled_dataset)))
+
     # update the training metadata
     train_stats.add(epoch, 'pseudo_label_counts_per_class', pl_counts_per_class)
     train_stats.add(epoch, 'pseudo_labeling_accuracy_per_class', pl_accuracy_per_class)
@@ -470,9 +498,7 @@ def psuedolabel_data_fixmatch(model, pytorch_dataset_unlabeled, epoch, train_sta
     train_stats.add(epoch, 'pseudo_label_percentage_per_class', vals.tolist())
     vals = np.asarray(tp_counter_per_class) / np.sum(tp_counter_per_class)
     train_stats.add(epoch, 'pseudo_label_gt_percentage_per_class', vals.tolist())
-    # get the average accuracy of the pseudo-labels (this data is not available in real SSL applications, since the unlabeled population would truly be unlabeled
-    train_stats.add(epoch, 'pseudo_labeling_accuracy', float(np.nanmean(pl_accuracy)))
-    train_stats.add(epoch, 'num_added_pseudo_labels', int(len(pseudo_labeled_dataset)))
+
 
     # TODO add logging and metric capture, now that the code works
     return pseudo_labeled_dataset
