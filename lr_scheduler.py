@@ -47,6 +47,8 @@ class ReduceLROnPlateau(torch.optim.lr_scheduler.ReduceLROnPlateau):
         self.lr_reduction_callback = lr_reduction_callback
         self.termination_callback = termination_callback
         self.best_metric_epoch = 0
+        self.num_bad_epochs = 0
+        self.is_bad_epoch = 0
         self.metric_values = list()
         self._last_lr = [group['lr'] for group in self.optimizer.param_groups]
 

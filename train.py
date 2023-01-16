@@ -102,7 +102,9 @@ def setup(args):
     else:
         raise RuntimeError("unsupported CIFAR class count: {}".format(args.num_classes))
 
-    train_dataset, val_dataset = train_dataset.train_val_split(val_fraction=args.val_fraction)
+    # split the data class balanced based on a total count.
+    # returns subset, remainder
+    val_dataset, train_dataset = train_dataset.data_split_class_balanced(subset_count=args.num_labeled_datapoints)
     # set the validation augmentation to just normalize (.dataset since val_dataset is a Subset, not a full dataset)
     val_dataset.set_transforms(cifar_datasets.Cifar10.TRANSFORM_TEST)
 
@@ -299,7 +301,6 @@ def eval_model(model, pytorch_dataset, criterion, train_stats, split_name, epoch
 
     batch_count = len(dataloader)
     model.eval()
-    model.cuda()
     start_time = time.time()
 
     loss_list = list()
@@ -318,28 +319,32 @@ def eval_model(model, pytorch_dataset, criterion, train_stats, split_name, epoch
             labels_cpu = labels.detach().cpu().numpy()
             gt_labels.extend(labels_cpu)
 
-            with torch.cuda.amp.autocast():
+            if args.amp:
+                with torch.cuda.amp.autocast():
+                    outputs = model(inputs)
+            else:
                 outputs = model(inputs)
-                batch_loss = criterion(outputs, labels)
-                loss_list.append(batch_loss.item())
-                pred = torch.argmax(outputs, dim=-1).detach().cpu().numpy()
-                softmax_preds.extend(pred)
 
-                if gmm is not None:
-                    # passing the logits acquired before the softmax to gmm as inputs
-                    gmm_inputs = outputs.detach().cpu().numpy()
-                    gmm_resp = gmm.predict_proba(gmm_inputs)  # N*1, N*K
-                    if not isinstance(gmm_resp, np.ndarray):
-                        gmm_resp = gmm_resp.detach().cpu().numpy()
-                    gmm_pred = np.argmax(gmm_resp, axis=-1) // args.cluster_per_class
-                    gmm_preds.extend(gmm_pred)
+            batch_loss = criterion(outputs, labels)
+            loss_list.append(batch_loss.item())
+            pred = torch.argmax(outputs, dim=-1).detach().cpu().numpy()
+            softmax_preds.extend(pred)
 
-                    if hasattr(gmm, 'predict_cauchy_probability'):
-                        cauchy_unnorm_resp, _, cauchy_resp = gmm.predict_cauchy_probability(gmm_inputs)
-                        if not isinstance(cauchy_resp, np.ndarray):
-                            cauchy_resp = cauchy_resp.detach().cpu().numpy()
-                        cauchy_pred = np.argmax(cauchy_resp, axis=-1)
-                        cauchy_preds.extend(cauchy_pred)
+            if gmm is not None:
+                # passing the logits acquired before the softmax to gmm as inputs
+                gmm_inputs = outputs.detach().cpu().numpy()
+                gmm_resp = gmm.predict_proba(gmm_inputs)  # N*1, N*K
+                if not isinstance(gmm_resp, np.ndarray):
+                    gmm_resp = gmm_resp.detach().cpu().numpy()
+                gmm_pred = np.argmax(gmm_resp, axis=-1) // args.cluster_per_class
+                gmm_preds.extend(gmm_pred)
+
+                if hasattr(gmm, 'predict_cauchy_probability'):
+                    cauchy_unnorm_resp, _, cauchy_resp = gmm.predict_cauchy_probability(gmm_inputs)
+                    if not isinstance(cauchy_resp, np.ndarray):
+                        cauchy_resp = cauchy_resp.detach().cpu().numpy()
+                    cauchy_pred = np.argmax(cauchy_resp, axis=-1)
+                    cauchy_preds.extend(cauchy_pred)
 
             if batch_idx % 100 == 0:
                 # log loss and current GPU utilization
@@ -400,12 +405,14 @@ def psuedolabel_data_fixmatch(model, pytorch_dataset_unlabeled, epoch, train_sta
     pseudo_label_threshold = np.asarray(args.pseudo_label_threshold)
     model.eval()
     pl_counts_per_class = list()
-    true_class_counter_per_class = list()
+    gt_counts_per_class = list()
+    tp_counter_per_class = list()
     pl_accuracy_per_class = list()
     pl_accuracy = list()
     for i in range(args.num_classes):
         pl_counts_per_class.append(0)
-        true_class_counter_per_class.append(0)
+        gt_counts_per_class.append(0)
+        tp_counter_per_class.append(0)
         pl_accuracy_per_class.append(0)
 
     with torch.no_grad():
@@ -435,11 +442,12 @@ def psuedolabel_data_fixmatch(model, pytorch_dataset_unlabeled, epoch, train_sta
                         pl_class = pred[idx]
                         true_class = labels[idx]
                         pl_counts_per_class[pl_class] += 1
+                        gt_counts_per_class[true_class] += 1
                         acc = int(pl_class == true_class)
                         pl_accuracy.append(acc)
                         pl_accuracy_per_class[true_class] += 1
                         if acc:
-                            true_class_counter_per_class[true_class] += 1
+                            tp_counter_per_class[true_class] += 1
 
                         img = inputs_strong[idx,].detach().cpu().numpy()
                         if args.soft_pseudo_label:
@@ -450,6 +458,9 @@ def psuedolabel_data_fixmatch(model, pytorch_dataset_unlabeled, epoch, train_sta
                         pseudo_labeled_dataset.add(img, tgt)
 
     pl_accuracy = np.mean(pl_accuracy)
+    pl_accuracy_per_class = np.asarray(tp_counter_per_class) / np.asarray(gt_counts_per_class)
+    pl_accuracy_per_class[np.isnan(pl_accuracy_per_class)] = 0.0
+    pl_accuracy_per_class = pl_accuracy_per_class.tolist()
 
     # update the training metadata
     train_stats.add(epoch, 'pseudo_label_counts_per_class', pl_counts_per_class)
@@ -457,11 +468,11 @@ def psuedolabel_data_fixmatch(model, pytorch_dataset_unlabeled, epoch, train_sta
 
     vals = np.asarray(pl_counts_per_class) / np.sum(pl_counts_per_class)
     train_stats.add(epoch, 'pseudo_label_percentage_per_class', vals.tolist())
-    vals = np.asarray(true_class_counter_per_class) / np.sum(true_class_counter_per_class)
-    train_stats.add(epoch, 'pseudo_label_true_percentage_per_class', vals.tolist())
+    vals = np.asarray(tp_counter_per_class) / np.sum(tp_counter_per_class)
+    train_stats.add(epoch, 'pseudo_label_gt_percentage_per_class', vals.tolist())
     # get the average accuracy of the pseudo-labels (this data is not available in real SSL applications, since the unlabeled population would truly be unlabeled
     train_stats.add(epoch, 'pseudo_labeling_accuracy', float(np.nanmean(pl_accuracy)))
-    train_stats.add(epoch, 'num_added_pseudo_labels', int(np.sum(pseudo_labeled_dataset)))
+    train_stats.add(epoch, 'num_added_pseudo_labels', int(len(pseudo_labeled_dataset)))
 
     # TODO add logging and metric capture, now that the code works
     return pseudo_labeled_dataset
@@ -572,6 +583,7 @@ def train(args):
         # train epochs until loss converges
         # reset model back to the "best" model
         model = copy.deepcopy(best_model)
+        model.cuda()  # move the model back to the GPU (saving moved the best model back to the cpu)
         while not plateau_scheduler.is_done() and epoch < MAX_EPOCHS:
             epoch += 1
             logging.info("Epoch (semi-supervised): {}".format(epoch))
