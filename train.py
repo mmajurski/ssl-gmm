@@ -26,12 +26,22 @@ MAX_EPOCHS = 2000
 
 
 
-def plot_loss_acc(train_stats, args):
+def plot_loss_acc(train_stats, args, best_epoch):
     plt.figure(figsize=(8, 6))
     y = train_stats.get('train_loss')
+    if len(y) == 0:
+        # skip if data is not valid
+        return
+
     plt.plot(y)
     y = train_stats.get('val_loss')
     plt.plot(y)
+
+    y = train_stats.get('train_loss')[best_epoch]
+    plt.plot(best_epoch, y, marker='*')
+    y = train_stats.get('val_loss')[best_epoch]
+    plt.plot(best_epoch, y, marker='*')
+
     plt.title("Train and Val Loss")
     plt.legend(['train', 'val'])
     plt.ylabel('Loss')
@@ -44,6 +54,12 @@ def plot_loss_acc(train_stats, args):
     plt.plot(y)
     y = train_stats.get('val_softmax_accuracy')
     plt.plot(y)
+
+    y = train_stats.get('train_accuracy')[best_epoch]
+    plt.plot(best_epoch, y, marker='*')
+    y = train_stats.get('val_softmax_accuracy')[best_epoch]
+    plt.plot(best_epoch, y, marker='*')
+
     plt.title("Train and Val Softmax Accuracy")
     plt.legend(['train','val'])
     plt.ylabel('Accuracy')
@@ -112,7 +128,7 @@ def build_gmm(model, pytorch_dataset, epoch, train_stats, args):
         labels = tensor_dict[1].cuda()
 
         # FP16 training
-        if not args.disable_amp:
+        if args.amp:
             with torch.cuda.amp.autocast():
                 outputs = model(inputs)
         else:
@@ -220,7 +236,7 @@ def train_epoch(model, pytorch_dataset_labeled, optimizer, criterion, epoch, tra
             labels = tensor_dict[1].cuda()
 
             # FP16 training
-            if not args.disable_amp:
+            if args.amp:
                 with torch.cuda.amp.autocast():
                     outputs = model(inputs)
                     batch_loss = criterion(outputs, labels)
@@ -387,7 +403,7 @@ def psuedolabel_data_fixmatch(model, pytorch_dataset_unlabeled, epoch, train_sta
     true_class_counter_per_class = list()
     pl_accuracy_per_class = list()
     pl_accuracy = list()
-    for i in range(len(args.num_classes)):
+    for i in range(args.num_classes):
         pl_counts_per_class.append(0)
         true_class_counter_per_class.append(0)
         pl_accuracy_per_class.append(0)
@@ -400,34 +416,38 @@ def psuedolabel_data_fixmatch(model, pytorch_dataset_unlabeled, epoch, train_sta
             labels = tensor_dict[1].cuda()
             # index = tensor_dict[2].cpu().detach()
 
-            with torch.cuda.amp.autocast():
+            if args.amp:
+                with torch.cuda.amp.autocast():
+                    logits = model(inputs_weak)
+            else:
                 logits = model(inputs_weak)
-                logits = logits / args.tau
-                logits = torch.softmax(logits, dim=-1)
-                logits = logits.detach().cpu().numpy()
 
-                pred = np.argmax(logits, axis=-1)
-                score = np.max(logits, axis=-1)
-                valid_pl = score > pseudo_label_threshold
-                if np.any(valid_pl):
-                    for idx in range(len(valid_pl)):
-                        if valid_pl[idx]:
-                            pl_class = pred[idx]
-                            true_class = labels[idx]
-                            pl_counts_per_class[pl_class] += 1
-                            acc = int(pl_class == true_class)
-                            pl_accuracy.append(acc)
-                            pl_accuracy_per_class[true_class] += 1
-                            if acc:
-                                true_class_counter_per_class[true_class] += 1
+            logits = logits / args.tau
+            logits = torch.softmax(logits, dim=-1)
+            logits = logits.detach().cpu().numpy()
 
-                            img = inputs_strong[idx,].detach().cpu().numpy()
-                            if args.soft_pseudo_label:
-                                tgt = np.asarray(logits[idx], dtype=float)
-                            else:
-                                tgt = pl_class
+            pred = np.argmax(logits, axis=-1)
+            score = np.max(logits, axis=-1)
+            valid_pl = score > pseudo_label_threshold
+            if np.any(valid_pl):
+                for idx in range(len(valid_pl)):
+                    if valid_pl[idx]:
+                        pl_class = pred[idx]
+                        true_class = labels[idx]
+                        pl_counts_per_class[pl_class] += 1
+                        acc = int(pl_class == true_class)
+                        pl_accuracy.append(acc)
+                        pl_accuracy_per_class[true_class] += 1
+                        if acc:
+                            true_class_counter_per_class[true_class] += 1
 
-                            pseudo_labeled_dataset.add(img, tgt)
+                        img = inputs_strong[idx,].detach().cpu().numpy()
+                        if args.soft_pseudo_label:
+                            tgt = np.asarray(logits[idx], dtype=float)
+                        else:
+                            tgt = pl_class
+
+                        pseudo_labeled_dataset.add(img, tgt)
 
     pl_accuracy = np.mean(pl_accuracy)
 
@@ -508,10 +528,10 @@ def train(args):
         epoch += 1
         logging.info("Epoch (supervised): {}".format(epoch))
 
-        plot_loss_acc(train_stats, args)
+        plot_loss_acc(train_stats, args, best_epoch)
 
         logging.info("  training against fully labeled dataset.")
-        train_epoch(model, train_dataset_labeled, optimizer, criterion, epoch, train_stats, args) #, nb_reps=10)
+        train_epoch(model, train_dataset_labeled, optimizer, criterion, epoch, train_stats, args, nb_reps=10)
 
         logging.info("  evaluating against validation data.")
         eval_model(model, val_dataset, criterion, train_stats, "val", epoch, None, args)
@@ -528,7 +548,8 @@ def train(args):
         train_stats.export(args.output_dirpath)
 
         # handle early stopping when loss converges
-        if plateau_scheduler_sl.num_bad_epochs == 0:
+        # if plateau_scheduler_sl.num_bad_epochs == 0:  # use if you only want literally the best epoch, instead of taking into account the loss eps
+        if not plateau_scheduler_sl.is_bad_epoch:
             logging.info('Updating best model with epoch: {} loss: {}'.format(epoch, val_loss))
             best_model = copy.deepcopy(model)
             best_epoch = epoch
@@ -549,12 +570,13 @@ def train(args):
         plateau_scheduler = lr_scheduler.ReduceLROnPlateau(optimizer, mode='min', factor=args.lr_reduction_factor, patience=args.patience, threshold=args.loss_eps, max_num_lr_reductions=args.num_lr_reductions)
 
         # train epochs until loss converges
-        starting_epoch = epoch
+        # reset model back to the "best" model
+        model = copy.deepcopy(best_model)
         while not plateau_scheduler.is_done() and epoch < MAX_EPOCHS:
             epoch += 1
             logging.info("Epoch (semi-supervised): {}".format(epoch))
 
-            plot_loss_acc(train_stats, args)
+            plot_loss_acc(train_stats, args, best_epoch)
 
             logging.info("  pseudo-labeling unannotated examples.")
             # This moves instances from the unlabeled population into the labeled population
@@ -581,7 +603,8 @@ def train(args):
             train_stats.export(args.output_dirpath)
 
             # handle early stopping when loss converges
-            if plateau_scheduler.num_bad_epochs == 0:
+            # if plateau_scheduler_sl.num_bad_epochs == 0:  # use if you only want literally the best epoch, instead of taking into account the loss eps
+            if not plateau_scheduler_sl.is_bad_epoch:
                 logging.info('Updating best model with epoch: {} loss: {}'.format(epoch, val_loss))
                 best_model = copy.deepcopy(model)
                 best_epoch = epoch

@@ -73,8 +73,10 @@ class ReduceLROnPlateau(torch.optim.lr_scheduler.ReduceLROnPlateau):
         # unpack numpy array, select first time since that value has happened
         self.best_metric_epoch = np.where(error_from_best == 0)[0][0]
 
-        # update the number of "bad" epochs. The (-1) handles 0 based indexing vs natural counting of epochs
+        # update the number of "bad" epochs. The (epoch-1) handles 0 based indexing vs natural counting of epochs
         self.num_bad_epochs = (epoch-1) - self.best_metric_epoch
+        # if this epoch is equivalent in loss to the best
+        self.is_bad_epoch = error_from_best[-1] != 0
 
         if self.num_bad_epochs > self.patience:
             self.num_lr_reductions += 1
