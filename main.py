@@ -36,7 +36,7 @@ def main():
     parser.add_argument('--arch', default='wide_resnet', type=str, help='Name of the image classification architecture to train')
     parser.add_argument('--num-workers', type=int, default=6, help='number of workers')
     parser.add_argument('--output-dirpath', default='./model', type=str, help='filepath to where the outputs will be saved.')
-    parser.add_argument('--batch-size', default=64, type=int, help='batch size')
+    parser.add_argument('--batch-size', default=32, type=int, help='batch size')
     parser.add_argument('--learning-rate', default=0.01, type=float, help='initial learning rate')  # 3e-4
     parser.add_argument('--tau', default=0.9, type=float, help='temperature value to sharpen the logits. Set to 1 to disable. If tau is 1, hard pseudo-labeling is used instead of soft pseudo-labeling.')
     parser.add_argument('--loss-eps', default=1e-4, type=float, help='loss value eps for determining early stopping loss equivalence.')

@@ -189,18 +189,21 @@ class RandAugmentMC(object):
 
 # from https://github.com/kekmodel/FixMatch-pytorch
 class TransformFixMatch(object):
-    def __init__(self, mean, std):
-        self.weak = torchvision.transforms.Compose([
+    WEAK = torchvision.transforms.Compose([
             torchvision.transforms.RandomHorizontalFlip(),
             torchvision.transforms.RandomCrop(size=32,
                                   padding=int(32*0.125),
                                   padding_mode='reflect')])
-        self.strong = torchvision.transforms.Compose([
+
+    STRONG = torchvision.transforms.Compose([
             torchvision.transforms.RandomHorizontalFlip(),
             torchvision.transforms.RandomCrop(size=32,
                                   padding=int(32*0.125),
                                   padding_mode='reflect'),
             RandAugmentMC(n=2, m=10)])
+    def __init__(self, mean, std):
+        self.weak = self.WEAK
+        self.strong = self.STRONG
         self.normalize = torchvision.transforms.Compose([
             torchvision.transforms.ToTensor(),
             torchvision.transforms.Normalize(mean=mean, std=std)])
@@ -210,3 +213,4 @@ class TransformFixMatch(object):
         weak = self.weak(x)
         strong = self.strong(x)
         return self.normalize(weak), self.normalize(strong), torch.as_tensor(np.array(strong))
+
