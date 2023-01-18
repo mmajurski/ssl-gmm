@@ -48,8 +48,6 @@ def main():
     parser.add_argument('--lr-reduction-factor', default=0.2, type=float)
     parser.add_argument('--amp', action='store_true')
     parser.add_argument('--inference-method', default='gmm', type=str, help='whether to use gmm or cauchy for inference.')
-    parser.add_argument('--disable-ssl', action='store_true')
-    parser.add_argument('--disable-sl', action='store_true')
     parser.add_argument('--pseudo-label-method', default="resp", type=str, help='method/algorithm to use for selecting valid psudo-label samples.')
     parser.add_argument('--pseudo-label-threshold', default=0.95, type=float, help='Threshold when filtering pseudo-labeling.')
     parser.add_argument('--soft-pseudo-label', help='enables soft pseudo-labels', action='store_true')

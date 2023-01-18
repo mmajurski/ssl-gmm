@@ -20,6 +20,7 @@ import flavored_wideresnet
 import fixmatch_augmentation
 import utils
 import trainer
+import trainer_fixmatch
 
 
 
@@ -109,7 +110,7 @@ def train(args):
 
     # setup the trainer
     # model_trainer = trainer.SupervisedTrainer(args)
-    model_trainer = trainer.FixMatchTrainer(args)
+    model_trainer = trainer_fixmatch.FixMatchTrainer(args)
 
     # setup the metadata capture object
     train_stats = metadata.TrainingStats()
