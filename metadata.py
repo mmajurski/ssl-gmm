@@ -91,7 +91,49 @@ class TrainingStats():
         plt.savefig(os.path.join(ofldr, "epoch{:04d}_".format(epoch) + metric_name + "_norm" + ".png"))
         plt.close(fig)
 
-    def plot_all_metrics(self, output_folder: str):
+    def plot_metric(self, metric_name: str, output_dirpath: str, best_epoch:int=None):
+        df = pd.DataFrame(self.epoch_data)
+
+        if metric_name not in df.columns:
+            return
+
+        x = df['epoch'].to_list()
+        y1 = df[metric_name].to_list()
+        if len(y1) == 0:
+            return
+        y2 = None
+        if 'train' in metric_name:
+            val_metric_name = metric_name.replace('train','val')
+            if val_metric_name in df.columns:
+                y2 = df[val_metric_name].to_list()
+
+        fig = plt.figure() #dpi=200)
+        plt.plot(x, y1)
+        if y2 is not None:
+            plt.plot(x, y2)
+            plt.legend(['train', 'val'])
+
+        if best_epoch is not None:
+            y1_best = y1[best_epoch]
+            plt.plot(best_epoch, y1_best, marker='*')
+            if y2 is not None:
+                y2_best = y2[best_epoch]
+                plt.plot(best_epoch, y2_best, marker='*')
+
+        # if 'loss' in metric_name:
+        #     # limit the y axis to 95% percentile
+        #     if y2 is not None:
+        #         y1.extend(y2)
+        #     y1 = [a for a in y1 if np.isfinite(a)]
+        #     p95 = np.percentile(y1, 95)
+        #     plt.ylim((0.95 * np.min(y1)), p95)
+
+        plt.title(metric_name)
+        plt.xlabel('Epoch')
+        plt.savefig(os.path.join(output_dirpath, '{}.png'.format(metric_name)))
+        plt.close(fig)
+
+    def plot_all_metrics(self, output_dirpath: str):
         df = pd.DataFrame(self.epoch_data)
         # plot all metrics if its useful (its usually not)
         fig = plt.figure(figsize=(8, 4), dpi=200)
@@ -106,7 +148,7 @@ class TrainingStats():
             ax.set_xlabel('Epoch')
             ax.set_ylabel(col)
             plt.tight_layout()
-            plt.savefig(os.path.join(output_folder, '{}.png'.format(col)))
+            plt.savefig(os.path.join(output_dirpath, '{}.png'.format(col)))
         plt.close(fig)
 
     def export(self, output_folder: str):

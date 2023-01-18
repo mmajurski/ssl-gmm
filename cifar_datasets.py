@@ -7,6 +7,7 @@ import numpy as np
 import PIL.Image
 import torch
 import torchvision
+import torch.utils.data
 import logging
 import random
 import torchvision.transforms
@@ -22,13 +23,6 @@ cifar100_mean = (0.5071, 0.4867, 0.4408)
 cifar100_std = (0.2675, 0.2565, 0.2761)
 normal_mean = (0.5, 0.5, 0.5)
 normal_std = (0.5, 0.5, 0.5)
-
-
-
-# due to pytorch + numpy bug
-# https://tanelp.github.io/posts/a-bug-that-plagues-thousands-of-open-source-ml-projects/
-def worker_init_fn(worker_id):
-    np.random.seed(np.random.get_state()[1][0] + worker_id)
 
 
 

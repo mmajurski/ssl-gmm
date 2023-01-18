@@ -3,6 +3,13 @@ import subprocess
 import torch
 
 
+
+# due to pytorch + numpy bug
+# https://tanelp.github.io/posts/a-bug-that-plagues-thousands-of-open-source-ml-projects/
+def worker_init_fn(worker_id):
+    np.random.seed(np.random.get_state()[1][0] + worker_id)
+
+
 def get_gpu_memory():
     command = "nvidia-smi --query-gpu=memory.used --format=csv"
     memory_used_info = subprocess.check_output(command.split()).decode('ascii').split('\n')[:-1][1:]
@@ -33,6 +40,7 @@ def compute_class_prevalance(dataloader):
         class_preval[c] = count/N
 
     return class_preval
+
 
 
 def interleave(x, size):

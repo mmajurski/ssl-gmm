@@ -207,10 +207,9 @@ class TransformFixMatch(object):
         self.normalize = torchvision.transforms.Compose([
             torchvision.transforms.ToTensor(),
             torchvision.transforms.Normalize(mean=mean, std=std)])
-        self.to_tensor = torchvision.transforms.ToTensor()
 
     def __call__(self, x):
         weak = self.weak(x)
         strong = self.strong(x)
-        return self.normalize(weak), self.normalize(strong), torch.as_tensor(np.array(strong))
+        return self.normalize(weak), self.normalize(strong)
 
