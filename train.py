@@ -29,7 +29,7 @@ MAX_EPOCHS = 10000
 def plot_loss_acc(train_stats, args, best_epoch):
     plt.figure(figsize=(8, 6))
     y = train_stats.get('train_loss')
-    if len(y) == 0:
+    if len(y) == 0 or y[0] is None:
         # skip if data is not valid
         return
 
@@ -329,9 +329,9 @@ def train_epoch_ul(model, pytorch_dataset_labeled, dataset_pseudo_labeled, optim
     scaler = torch.cuda.amp.GradScaler()
     mu = 7  # the unlabeled data is 7x the size of the labeled
 
-    if len(dataset_pseudo_labeled) < mu * args.batch_size:
-        logging.info("Not enough valid pseudo-labels for epoch {}. Skipping Semi-Supervised training for this epoch.".format(epoch))
-        return
+    # if len(dataset_pseudo_labeled) < mu * args.batch_size:
+    #     logging.info("Not enough valid pseudo-labels for epoch {}. Skipping Semi-Supervised training for this epoch.".format(epoch))
+    #     return
 
     # create a copy of the labeled dataset to append the pseudolabels to
     effective_dataset = copy.deepcopy(pytorch_dataset_labeled)
@@ -357,36 +357,52 @@ def train_epoch_ul(model, pytorch_dataset_labeled, dataset_pseudo_labeled, optim
     start_time = time.time()
     loss_nan_count = 0
 
-    batch_idx = -1
-    for rep_count in range(nb_reps):
-        # for batch_idx in range(batch_count):
-        #     tensor_dict_l = next(iter_l)
-        #     tensor_dict_ul = next(iter_ul)
+    iter_ul = iter(dataloader_ul)
 
-        for (tensor_dict_l, tensor_dict_ul) in zip(dataloader, dataloader_ul):
-            batch_idx += 1
+    for rep_count in range(nb_reps):
+
+        for batch_idx, tensor_dict_l in enumerate(dataloader):
+            # adjust for the rep offset
+            batch_idx = rep_count * len(dataloader) + batch_idx
             optimizer.zero_grad()
 
             inputs_l, targets_l, _ = tensor_dict_l
-            inputs_ul, targets_ul, _ = tensor_dict_ul
 
-            inputs = utils.interleave(torch.cat((inputs_l, inputs_ul)), mu + 1)
-            inputs = inputs.cuda()
-            targets_l = targets_l.cuda()
-            targets_ul = targets_ul.cuda()
+            try:
+                tensor_dict_ul = next(iter_ul)
+                inputs_ul, targets_ul, _ = tensor_dict_ul
+
+                inputs = utils.interleave(torch.cat((inputs_l, inputs_ul)), mu + 1)
+                inputs = inputs.cuda()
+                targets_l = targets_l.cuda()
+                targets_ul = targets_ul.cuda()
+
+            except:
+                inputs_ul = None
+                targets_ul = None
+
+                inputs = inputs_l
+                inputs = inputs.cuda()
+                targets_l = targets_l.cuda()
+
 
             # FP16 training
             if args.amp:
                 with torch.cuda.amp.autocast():
                     logits = model(inputs)
 
-                    logits = utils.de_interleave(logits, mu + 1)
-                    logits_l = logits[:args.batch_size]
-                    logits_u = logits[args.batch_size:]
+                    if inputs_ul is not None:
+                        logits = utils.de_interleave(logits, mu + 1)
+                        logits_l = logits[:args.batch_size]
+                        logits_u = logits[args.batch_size:]
 
-                    loss_l = criterion(logits_l, targets_l)
-                    loss_ul = criterion(logits_u, targets_ul)
-                    batch_loss = loss_l + loss_ul
+                        loss_l = criterion(logits_l, targets_l)
+                        loss_ul = criterion(logits_u, targets_ul)
+                        batch_loss = loss_l + loss_ul
+                    else:
+                        logits_l = logits
+                        batch_loss = criterion(logits_l, targets_l)
+
                     scaler.scale(batch_loss).backward()
                     # scaler.step() first unscales the gradients of the optimizer's assigned params.
                     # If these gradients do not contain infs or NaNs, optimizer.step() is then called,
@@ -396,27 +412,39 @@ def train_epoch_ul(model, pytorch_dataset_labeled, dataset_pseudo_labeled, optim
                     scaler.update()
             else:
                 logits = model(inputs)
-                logits = utils.de_interleave(logits, mu + 1)
-                logits_l = logits[:args.batch_size]
-                logits_u = logits[args.batch_size:]
+                if inputs_ul is not None:
+                    logits = utils.de_interleave(logits, mu + 1)
+                    logits_l = logits[:args.batch_size]
+                    logits_u = logits[args.batch_size:]
 
-                loss_l = criterion(logits_l, targets_l)
-                loss_ul = criterion(logits_u, targets_ul)
-                batch_loss = loss_l + loss_ul
+                    loss_l = criterion(logits_l, targets_l)
+                    loss_ul = criterion(logits_u, targets_ul)
+                    batch_loss = loss_l + loss_ul
+                else:
+                    logits_l = logits
+                    batch_loss = criterion(logits_l, targets_l)
 
                 batch_loss.backward()
                 optimizer.step()
 
             pred_l = torch.argmax(logits_l, dim=-1)
-            pred_ul = torch.argmax(logits_u, dim=-1)
+            if inputs_ul is not None:
+                pred_ul = torch.argmax(logits_u, dim=-1)
 
             if args.soft_pseudo_label:
                 # convert soft labels into hard for accuracy
                 targets_l = torch.argmax(targets_l, dim=-1)
-                targets_ul = torch.argmax(targets_ul, dim=-1)
-            accuracy_l = torch.sum(pred_l == targets_l) / len(pred_l)
-            accuracy_ul = torch.sum(pred_ul == targets_ul) / len(pred_l)
-            accuracy = torch.mean(torch.stack((accuracy_l, accuracy_ul)))
+                if inputs_ul is not None:
+                    targets_ul = torch.argmax(targets_ul, dim=-1)
+
+            acc_l = pred_l == targets_l
+            if inputs_ul is not None:
+                acc_ul = pred_ul == targets_ul
+                acc = torch.cat((acc_l, acc_ul)).type(torch.float64)
+            else:
+                acc = acc_l.type(torch.float64)
+
+            accuracy = torch.mean(acc)
 
             # nan loss values are ignored when using AMP, so ignore them for the average
             if not np.isnan(batch_loss.detach().cpu().numpy()):
@@ -679,40 +707,41 @@ def train(args):
     # train the model until it has converged on the labeled data
     # setup early stopping on convergence using LR reduction on plateau
     optimizer = get_optimizer(args, model)
-    plateau_scheduler_sl = lr_scheduler.ReduceLROnPlateau(optimizer, mode='min', factor=args.lr_reduction_factor, patience=args.patience, threshold=args.loss_eps, max_num_lr_reductions=args.num_lr_reductions)
+    plateau_scheduler_sl = lr_scheduler.ReduceLROnPlateau(optimizer, mode='min', factor=args.lr_reduction_factor, patience=10, threshold=args.loss_eps, max_num_lr_reductions=0)
     # train epochs until loss converges
-    while not plateau_scheduler_sl.is_done() and epoch < MAX_EPOCHS:
-        epoch += 1
-        logging.info("Epoch (supervised): {}".format(epoch))
+    if not args.disable_sl:  # if the user has not disabled supervised learning
+        while not plateau_scheduler_sl.is_done() and epoch < MAX_EPOCHS:
+            epoch += 1
+            logging.info("Epoch (supervised): {}".format(epoch))
 
-        plot_loss_acc(train_stats, args, best_epoch)
+            plot_loss_acc(train_stats, args, best_epoch)
 
-        logging.info("  training against fully labeled dataset.")
-        train_epoch(model, train_dataset_labeled, optimizer, criterion, epoch, train_stats, args, nb_reps=10)
+            logging.info("  training against fully labeled dataset.")
+            train_epoch(model, train_dataset_labeled, optimizer, criterion, epoch, train_stats, args, nb_reps=10)
 
-        logging.info("  evaluating against validation data.")
-        eval_model(model, val_dataset, criterion, train_stats, "val", epoch, None, args)
+            logging.info("  evaluating against validation data.")
+            eval_model(model, val_dataset, criterion, train_stats, "val", epoch, None, args)
 
-        val_loss = train_stats.get_epoch('val_loss', epoch=epoch)
-        plateau_scheduler_sl.step(val_loss)
+            val_loss = train_stats.get_epoch('val_loss', epoch=epoch)
+            plateau_scheduler_sl.step(val_loss)
 
-        # update global metadata stats
-        train_stats.add_global('training_wall_time', train_stats.get('train_wall_time', aggregator='sum'))
-        train_stats.add_global('val_wall_time', train_stats.get('val_wall_time', aggregator='sum'))
-        train_stats.add_global('num_epochs_trained', epoch)
+            # update global metadata stats
+            train_stats.add_global('training_wall_time', train_stats.get('train_wall_time', aggregator='sum'))
+            train_stats.add_global('val_wall_time', train_stats.get('val_wall_time', aggregator='sum'))
+            train_stats.add_global('num_epochs_trained', epoch)
 
-        # write copy of current metadata metrics to disk
-        train_stats.export(args.output_dirpath)
+            # write copy of current metadata metrics to disk
+            train_stats.export(args.output_dirpath)
 
-        # handle early stopping when loss converges
-        # if plateau_scheduler_sl.num_bad_epochs == 0:  # use if you only want literally the best epoch, instead of taking into account the loss eps
-        if plateau_scheduler_sl.is_equiv_to_best_epoch:
-            logging.info('Updating best model with epoch: {} loss: {}'.format(epoch, val_loss))
-            best_model = copy.deepcopy(model)
-            best_epoch = epoch
+            # handle early stopping when loss converges
+            # if plateau_scheduler_sl.num_bad_epochs == 0:  # use if you only want literally the best epoch, instead of taking into account the loss eps
+            if plateau_scheduler_sl.is_equiv_to_best_epoch:
+                logging.info('Updating best model with epoch: {} loss: {}'.format(epoch, val_loss))
+                best_model = copy.deepcopy(model)
+                best_epoch = epoch
 
-            # update the global metrics with the best epoch
-            train_stats.update_global(epoch)
+                # update the global metrics with the best epoch
+                train_stats.update_global(epoch)
 
 
     best_model.cpu()  # move to cpu before saving to simplify loading the model
@@ -738,6 +767,7 @@ def train(args):
 
             plot_loss_acc(train_stats, args, best_epoch)
 
+            # TODO rework this so train_epoch_ul is the main function that gets written based on PL methods. So that fixmatch can be dragged into the main train loop instead of being slower and separate?
             logging.info("  pseudo-labeling unannotated examples.")
             # TODO Rushabh, Summet & JD replace this function with the GMM and Cauchy PL methods
             # This moves instances from the unlabeled population into the labeled population
@@ -765,7 +795,7 @@ def train(args):
 
             # handle early stopping when loss converges
             # if plateau_scheduler_sl.num_bad_epochs == 0:  # use if you only want literally the best epoch, instead of taking into account the loss eps
-            if plateau_scheduler_sl.is_equiv_to_best_epoch:
+            if plateau_scheduler.is_equiv_to_best_epoch:
                 logging.info('Updating best model with epoch: {} loss: {}'.format(epoch, val_loss))
                 best_model = copy.deepcopy(model)
                 best_epoch = epoch
