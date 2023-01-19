@@ -33,6 +33,55 @@ def plot_selected_metrics(train_stats, args, best_epoch):
     train_stats.plot_metric('num_pseudo_labels', args.output_dirpath, best_epoch)
 
 
+def fully_supervised_pretrain(model, train_dataset_labeled, val_dataset, criterion, args, train_stats):
+
+    logging.info("Performing a fully supervised pre-train until the model converges on just the labeled samples")
+    model_trainer = trainer.SupervisedTrainer(args)
+
+    # train the model until it has converged on the labeled data
+    # setup early stopping on convergence using LR reduction on plateau
+    optimizer = model_trainer.get_optimizer(model)
+    plateau_scheduler = lr_scheduler.ReduceLROnPlateau(optimizer, mode='min', factor=args.lr_reduction_factor, patience=args.patience, threshold=args.loss_eps, max_num_lr_reductions=args.num_lr_reductions)
+    # train epochs until loss converges
+    epoch = -1
+    best_model = model
+    best_epoch = 0
+    while not plateau_scheduler.is_done() and epoch < trainer.MAX_EPOCHS:
+        epoch += 1
+        logging.info("Epoch (fully supervised): {}".format(epoch))
+
+        plot_selected_metrics(train_stats, args, best_epoch)
+
+        logging.info("  training")
+        model_trainer.train_epoch(model, train_dataset_labeled, optimizer, criterion, epoch, train_stats, nb_reps=args.nb_reps)
+
+        logging.info("  evaluating against validation data")
+        model_trainer.eval_model(model, val_dataset, criterion, train_stats, "val", epoch)
+
+        val_loss = train_stats.get_epoch('val_loss', epoch=epoch)
+        plateau_scheduler.step(val_loss)
+
+        # update global metadata stats
+        train_stats.add_global('training_wall_time', train_stats.get('train_wall_time', aggregator='sum'))
+        train_stats.add_global('val_wall_time', train_stats.get('val_wall_time', aggregator='sum'))
+        train_stats.add_global('num_epochs_trained', epoch)
+
+        # write copy of current metadata metrics to disk
+        train_stats.export(args.output_dirpath)
+
+        # handle early stopping when loss converges
+        # if plateau_scheduler_sl.num_bad_epochs == 0:  # use if you only want literally the best epoch, instead of taking into account the loss eps
+        if plateau_scheduler.is_equiv_to_best_epoch:
+            logging.info('Updating best model with epoch: {} loss: {}'.format(epoch, val_loss))
+            best_model = copy.deepcopy(model)
+            best_epoch = epoch
+
+            # update the global metrics with the best epoch
+            train_stats.update_global(epoch)
+
+    return best_model, train_stats
+
+
 def setup(args):
     # load stock models from https://pytorch.org/vision/stable/models.html
     model = None
@@ -120,6 +169,10 @@ def train(args):
     best_model = model
 
 
+    if args.supervised_pretrain:
+        model, train_stats = fully_supervised_pretrain(model, train_dataset_labeled, val_dataset, criterion, args, train_stats)
+
+
     # train the model until it has converged on the labeled data
     # setup early stopping on convergence using LR reduction on plateau
     optimizer = model_trainer.get_optimizer(model)
@@ -133,7 +186,7 @@ def train(args):
 
         logging.info("  training")
         # TODO work out how to incorporate the gmm into this. Ideally store it in the trainer class
-        model_trainer.train_epoch(model, train_dataset_labeled, optimizer, criterion, epoch, train_stats, nb_reps=20, unlabeled_dataset=train_dataset_unlabeled)
+        model_trainer.train_epoch(model, train_dataset_labeled, optimizer, criterion, epoch, train_stats, nb_reps=args.nb_reps, unlabeled_dataset=train_dataset_unlabeled)
 
         logging.info("  evaluating against validation data")
         model_trainer.eval_model(model, val_dataset, criterion, train_stats, "val", epoch)
