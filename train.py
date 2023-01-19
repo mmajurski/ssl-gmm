@@ -41,7 +41,7 @@ def fully_supervised_pretrain(model, train_dataset_labeled, val_dataset, criteri
     # train the model until it has converged on the labeled data
     # setup early stopping on convergence using LR reduction on plateau
     optimizer = model_trainer.get_optimizer(model)
-    plateau_scheduler = lr_scheduler.ReduceLROnPlateau(optimizer, mode='min', factor=args.lr_reduction_factor, patience=args.supervised_pretrain_patience, threshold=args.loss_eps, max_num_lr_reductions=args.num_lr_reductions)
+    plateau_scheduler = lr_scheduler.ReduceLROnPlateau(optimizer, mode='min', factor=args.lr_reduction_factor, patience=args.supervised_pretrain_patience, threshold=args.loss_eps, max_num_lr_reductions=1)
     # train epochs until loss converges
     epoch = -1
     best_model = model
@@ -79,7 +79,7 @@ def fully_supervised_pretrain(model, train_dataset_labeled, val_dataset, criteri
             # update the global metrics with the best epoch
             train_stats.update_global(epoch)
 
-    return best_model, train_stats
+    return best_model, train_stats, best_epoch, epoch
 
 
 def setup(args):
@@ -170,7 +170,7 @@ def train(args):
 
 
     if args.supervised_pretrain:
-        model, train_stats = fully_supervised_pretrain(model, train_dataset_labeled, val_dataset, criterion, args, train_stats)
+        model, train_stats, best_epoch, epoch = fully_supervised_pretrain(model, train_dataset_labeled, val_dataset, criterion, args, train_stats)
 
 
     # train the model until it has converged on the labeled data
