@@ -41,7 +41,7 @@ def fully_supervised_pretrain(model, train_dataset_labeled, val_dataset, criteri
     # train the model until it has converged on the labeled data
     # setup early stopping on convergence using LR reduction on plateau
     optimizer = model_trainer.get_optimizer(model)
-    plateau_scheduler = lr_scheduler.ReduceLROnPlateau(optimizer, mode='min', factor=args.lr_reduction_factor, patience=args.patience, threshold=args.loss_eps, max_num_lr_reductions=args.num_lr_reductions)
+    plateau_scheduler = lr_scheduler.ReduceLROnPlateau(optimizer, mode='min', factor=args.lr_reduction_factor, patience=args.supervised_pretrain_patience, threshold=args.loss_eps, max_num_lr_reductions=args.num_lr_reductions)
     # train epochs until loss converges
     epoch = -1
     best_model = model
