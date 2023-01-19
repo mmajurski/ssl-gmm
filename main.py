@@ -45,7 +45,7 @@ def main():
     parser.add_argument('--weight-decay', default=5e-3, type=float)  #1e-5
     parser.add_argument('--cycle-factor', default=4.0, type=float, help='Cycle factor for cyclic learning rate scheduler.')
     parser.add_argument('--num-lr-reductions', default=2, type=int)
-    parser.add_argument('--nb-reps', default=20, help='the number of reps through the labeled portion of the dataset to form an epoch', type=int)
+    parser.add_argument('--nb-reps', default=100, help='the number of reps through the labeled portion of the dataset to form an epoch', type=int)
     parser.add_argument('--lr-reduction-factor', default=0.2, type=float)
     parser.add_argument('--amp', action='store_true')
     parser.add_argument('--inference-method', default='gmm', type=str, help='whether to use gmm or cauchy for inference.')
