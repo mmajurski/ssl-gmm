@@ -81,7 +81,7 @@ class SupervisedTrainer:
                     optimizer.step()
 
                 pred = torch.argmax(outputs, dim=-1)
-                if self.args.soft_pseudo_label:
+                if self.args.soft_labels:
                     # convert soft labels into hard for accuracy
                     labels = torch.argmax(labels, dim=-1)
                 accuracy = torch.sum(pred == labels) / len(pred)

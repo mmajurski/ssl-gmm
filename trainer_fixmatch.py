@@ -2,6 +2,7 @@ import os
 import numpy as np
 import torch
 import torch.utils.data
+import torch.nn.functional
 import time
 import logging
 import psutil
@@ -87,8 +88,18 @@ class FixMatchTrainer(trainer.SupervisedTrainer):
 
                 logits_ul_weak = logits_ul_weak / self.args.tau
                 softmax_ul_weak = torch.softmax(logits_ul_weak, dim=-1)
-                # pred_weak = torch.argmax(softmax_ul_weak, dim=-1)
-                score_weak, pred_weak = torch.max(softmax_ul_weak, dim=-1)
+
+                if self.args.soft_labels:
+                    # convert hard labels in the fully labeled dataset into soft labels (i.e. one hot)
+                    targets_l = torch.nn.functional.one_hot(targets_l, num_classes=self.args.num_classes).type(torch.float)
+                    targets_l = targets_l.cuda()
+
+                    score_weak, pred_weak = torch.max(softmax_ul_weak, dim=-1)
+                    targets_weak_ul = softmax_ul_weak
+                else:
+                    score_weak, pred_weak = torch.max(softmax_ul_weak, dim=-1)
+                    targets_weak_ul = pred_weak
+
                 valid_pl = score_weak >= torch.tensor(self.args.pseudo_label_threshold)
 
                 # capture the number of PL for this batch
@@ -120,11 +131,22 @@ class FixMatchTrainer(trainer.SupervisedTrainer):
 
 
                 loss_l = criterion(logits_l, targets_l)
-                # use CE = -100 to invalidate certain labels
-                targets_ul[torch.logical_not(valid_pl)] = -100
-                loss_ul = criterion(logits_ul_strong, targets_ul)
+
+                if self.args.soft_labels:
+                    # remove the invalid elements before the loss is calculated
+                    logits_ul_strong = logits_ul_strong[valid_pl, :]
+                    targets_weak_ul = targets_weak_ul[valid_pl, :]
+                else:
+                    # use CE = -100 to invalidate certain labels
+                    # targets_weak_ul[torch.logical_not(valid_pl)] = -100
+                    logits_ul_strong = logits_ul_strong[valid_pl]
+                    targets_weak_ul = targets_weak_ul[valid_pl]
+
                 if pl_count > 0:
+                    loss_ul = criterion(logits_ul_strong, targets_weak_ul)
                     pl_loss_list.append(loss_ul.item())
+                else:
+                    loss_ul = torch.tensor(torch.nan).to(loss_l.device)
                 if not torch.isnan(loss_ul):
                     batch_loss = loss_l + loss_ul
                 else:
@@ -144,6 +166,8 @@ class FixMatchTrainer(trainer.SupervisedTrainer):
 
                 # nan loss values are ignored when using AMP, so ignore them for the average
                 if not np.isnan(batch_loss.detach().cpu().numpy()):
+                    if self.args.soft_labels:
+                        targets_l = torch.argmax(targets_l, dim=-1)
                     accuracy = torch.mean((torch.argmax(logits_l, dim=-1) == targets_l).type(torch.float))
                     loss_list.append(batch_loss.item())
                     accuracy_list.append(accuracy.item())

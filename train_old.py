@@ -280,7 +280,7 @@ def train_epoch(model, pytorch_dataset_labeled, optimizer, criterion, epoch, tra
                 optimizer.step()
 
             pred = torch.argmax(outputs, dim=-1)
-            if args.soft_pseudo_label:
+            if args.soft_labels:
                 # convert soft labels into hard for accuracy
                 labels = torch.argmax(labels, dim=-1)
             accuracy = torch.sum(pred == labels) / len(pred)
@@ -332,7 +332,7 @@ def train_epoch_ul(model, pytorch_dataset_labeled, dataset_pseudo_labeled, optim
 
     # create a copy of the labeled dataset to append the pseudolabels to
     effective_dataset = copy.deepcopy(pytorch_dataset_labeled)
-    if args.soft_pseudo_label:
+    if args.soft_labels:
         for i in range(len(effective_dataset.targets)):
             v = np.zeros((args.num_classes), dtype=float)
             v[effective_dataset.targets[i]] = 1
@@ -428,7 +428,7 @@ def train_epoch_ul(model, pytorch_dataset_labeled, dataset_pseudo_labeled, optim
             if inputs_ul is not None:
                 pred_ul = torch.argmax(logits_u, dim=-1)
 
-            if args.soft_pseudo_label:
+            if args.soft_labels:
                 # convert soft labels into hard for accuracy
                 targets_l = torch.argmax(targets_l, dim=-1)
                 if inputs_ul is not None:
@@ -632,7 +632,7 @@ def psuedolabel_data_fixmatch(model, pytorch_dataset_unlabeled, epoch, train_sta
                             tp_counter_per_class[true_class] += 1
 
                         img = inputs_strong[idx,].detach().cpu().numpy()
-                        if args.soft_pseudo_label:
+                        if args.soft_labels:
                             tgt = np.asarray(logits[idx], dtype=float)
                         else:
                             tgt = pl_class
