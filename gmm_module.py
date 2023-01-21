@@ -74,7 +74,7 @@ class GMM(torch.nn.Module):
         if self._pi is not None:
             if self._pi.size() != self._pi_shape:
                 raise ValueError("Invalid pi provided")
-            elif not torch.allclose(self._pi.sum(), torch.tensor(1.0, dtype=torch.float64)):
+            elif not torch.allclose(self._pi.sum(), torch.tensor(1.0, dtype=torch.float32)):
                 raise ValueError(
                     f"The parameter 'weights' should be normalized, but got sum(weights) = {self._pi.sum():.5f}")
             elif any(torch.less(self._pi, 0.0)) or any(torch.greater(self._pi, 1.0)):
