@@ -44,6 +44,31 @@ class GMM(torch.nn.Module):
         self._isCauchy = isCauchy
         self._init_params()
 
+    @property
+    def weights_(self):
+        return self._pi
+
+    @weights_.setter
+    def weights_(self, inp):
+        self._pi = inp
+
+
+    @property
+    def means_(self):
+        return self._mu
+
+    @weights_.setter
+    def means_(self, inp):
+        self._mu = inp
+
+    @property
+    def covariances_(self):
+        return self._sigma
+
+    @weights_.setter
+    def covariances_(self, inp):
+        self._sigma = inp
+
     def _init_params(self):
         # validate or set initial cluster _pi
         if self._pi is not None:
@@ -136,7 +161,7 @@ class GMM(torch.nn.Module):
 
     def _e_step(self, x):
         x = x.type(torch.float32)
-        if self.isCauchy:
+        if self._isCauchy:
             _, log_prob_norm, log_resp = self._cauchy_estimate_log_prob_resp(x)
         else:
             _, log_prob_norm, log_resp = self._estimate_log_prob_resp(x)
