@@ -123,13 +123,25 @@ class FixMatchTrainer_gmm(trainer.SupervisedTrainer):
                 weights = class_preval.repeat_interleave(self.args.cluster_per_class)
                 pi = torch.cat([torch.FloatTensor(gmm.weights_) for gmm in gmm_list])
                 weights *= pi
-                mus = torch.cat([torch.FloatTensor(gmm.means_) for gmm in gmm_list])
-                sigmas = torch.cat([torch.FloatTensor(gmm.covariances_) for gmm in gmm_list])
+                # mus = torch.cat([torch.FloatTensor(gmm.means_) for gmm in gmm_list])
+                # sigmas = torch.cat([torch.FloatTensor(gmm.covariances_) for gmm in gmm_list])
+                #
+                # # Uncomment following when SKL GMM is not used.
+                # # mus = torch.cat([gmm.get("mu") for gmm in gmm_list])
+                # # sigmas = torch.cat([gmm.get("sigma") for gmm in gmm_list])
+                # gmm = GMM(n_features=self.args.num_classes, n_clusters=weights.shape[0], weights=weights, mu=mus, sigma=sigmas)
 
-                # Uncomment following when SKL GMM is not used.
-                # mus = torch.cat([gmm.get("mu") for gmm in gmm_list])
-                # sigmas = torch.cat([gmm.get("sigma") for gmm in gmm_list])
-                gmm = GMM(n_features=self.args.num_classes, n_clusters=weights.shape[0], weights=weights, mu=mus, sigma=sigmas)
+                means = np.concatenate([gmm.means_ for gmm in gmm_list])
+                covariances = np.concatenate([gmm.covariances_ for gmm in gmm_list])
+                precisions = np.concatenate([gmm.precisions_ for gmm in gmm_list])
+                precisions_chol = np.concatenate([gmm.precisions_cholesky_ for gmm in gmm_list])
+                gmm = CMM(n_components=self.args.num_classes)
+                gmm.weights_ = weights.numpy()
+                gmm.means_ = means
+                gmm.covariances_ = covariances
+                gmm.precisions_ = precisions
+                gmm.precisions_cholesky_ = precisions_chol
+
 
                 logits_ul_weak = logits_ul_weak / self.args.tau
 
@@ -139,7 +151,8 @@ class FixMatchTrainer_gmm(trainer.SupervisedTrainer):
 
                 # TODO: check if we are supposed to train gmm or not
                 if self.args.inference_method == 'gmm':
-                    gmm_resp = gmm.predict_proba(gmm_inputs)  # N*1, N*K
+                    gmm_resp = gmm.predict_proba(gmm_inputs)  # N*1, N*
+                    gmm_resp = torch.from_numpy(gmm_resp)
                     score_weak, pred_weak = torch.max(gmm_resp, dim=-1)
 
                 # TODO: change this condition to check if we are supposed to create gmm or cmm
