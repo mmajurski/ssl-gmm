@@ -61,6 +61,7 @@ def main():
     parser.add_argument('--cluster-per-class', default=1, type=int, help='number of clusters to create per class')
     parser.add_argument('--strong-augmentation', help='enables strong augmentation', action='store_true')
     parser.add_argument('--debug', help='enables debugging mode', action='store_true')
+    parser.add_argument('--skl',help='uses sklearn implementation of Gaussian Mixture',action='store_false')
 
     args = parser.parse_args()
 

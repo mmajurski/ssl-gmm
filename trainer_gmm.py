@@ -17,10 +17,93 @@ from skl_cauchy_mm import CMM
 
 class FixMatchTrainer_gmm(trainer.SupervisedTrainer):
 
+    def build_gmm(self,model,pytorch_dataset,epoch,train_stats,skl=True):
+
+        model.eval()
+
+        dataloader = torch.utils.data.DataLoader(pytorch_dataset, batch_size=self.args.batch_size, shuffle=True,
+                                                 num_workers=self.args.num_workers,
+                                                 worker_init_fn=utils.worker_init_fn)
+        start_time = time.time()
+        dataset_logits = list()
+        dataset_labels = list()
+        for batch_idx, tensor_dict in enumerate(dataloader):
+            inputs = tensor_dict[0].cuda()
+            labels = tensor_dict[1].cuda()
+
+            if self.args.amp:
+                with torch.cuda.amp.autocast():
+                    outputs = model(inputs)
+            else:
+                outputs = model(inputs)
+
+            dataset_logits.append(outputs.detach().cpu())
+            dataset_labels.append(labels.detach().cpu())
+
+        bucketed_dataset_logits = list()
+        # join together the individual batches of numpy logit data
+        dataset_logits = torch.cat(dataset_logits)
+        dataset_labels = torch.cat(dataset_labels)
+        unique_class_labels = torch.unique(dataset_labels)
+
+        for i in range(len(unique_class_labels)):
+            c = unique_class_labels[i]
+            bucketed_dataset_logits.append(dataset_logits[dataset_labels == c])
+
+        gmm_list = list()
+
+        for i in range(len(unique_class_labels)):
+
+            class_c_logits = bucketed_dataset_logits[i]
+            if not skl:
+                gmm = GMM(n_features=class_c_logits.shape[1], n_clusters=1, tolerance=1e-4, max_iter=50)
+                gmm.fit(class_c_logits)
+                while np.any(np.isnan(gmm.get("sigma").detach().cpu().numpy())):
+                    gmm = GMM(n_features=class_c_logits.shape[1], n_clusters=1, tolerance=1e-4, max_iter=50)
+                    gmm.fit(class_c_logits)
+                gmm_list.append(gmm)
+            else:
+                gmm_skl = sklearn.mixture.GaussianMixture(n_components=1)
+                gmm_skl.fit(class_c_logits.numpy())
+                gmm_list.append(gmm_skl)
+
+        class_preval = utils.compute_class_prevalance(dataloader)
+        logging.info(class_preval)
+        class_preval = torch.tensor(list(class_preval.values()))
+
+        # generate weights, mus and sigmas
+        weights = class_preval.repeat_interleave(self.args.cluster_per_class)
+        pi = torch.cat([torch.FloatTensor(gmm.weights_) for gmm in gmm_list])
+        weights *= pi
+
+        if not skl:
+            mus = torch.cat([gmm.get("mu") for gmm in gmm_list])
+            sigmas = torch.cat([gmm.get("sigma") for gmm in gmm_list])
+            gmm = GMM(n_features=self.args.num_classes, n_clusters=weights.shape[0], weights=weights, mu=mus, sigma=sigmas)
+        # # merge the individual sklearn GMMs
+        else:
+            means = np.concatenate([gmm.means_ for gmm in gmm_list])
+            covariances = np.concatenate([gmm.covariances_ for gmm in gmm_list])
+            precisions = np.concatenate([gmm.precisions_ for gmm in gmm_list])
+            precisions_chol = np.concatenate([gmm.precisions_cholesky_ for gmm in gmm_list])
+            gmm = CMM(n_components=self.args.num_classes)
+            gmm.weights_ = weights.numpy()
+            gmm.means_ = means
+            gmm.covariances_ = covariances
+            gmm.precisions_ = precisions
+            gmm.precisions_cholesky_ = precisions_chol
+
+        wall_time = time.time() - start_time
+
+        train_stats.add(epoch, 'gmm_build_wall_time', wall_time)
+        return gmm
+
     def train_epoch(self, model, pytorch_dataset, optimizer, criterion, epoch, train_stats, nb_reps=1, unlabeled_dataset=None):
 
         if unlabeled_dataset is None:
             raise RuntimeError("Unlabeled dataset missing. Cannot use FixMatch train_epoch function without an unlabeled_dataset.")
+
+        gmm = self.build_gmm(model,pytorch_dataset,epoch,train_stats,skl=self.args.skl)
 
         model.train()
         loss_nan_count = 0
@@ -88,78 +171,24 @@ class FixMatchTrainer_gmm(trainer.SupervisedTrainer):
                 logits_ul_weak = logits_ul[:inputs_ul_weak.shape[0]]
                 logits_ul_strong = logits_ul[inputs_ul_weak.shape[0]:]
 
-                # creating gmm/cmm and bucketing data for training the same
-
-                #TODO: trasnfer this process into a new function
-                unique_targets_l = torch.unique(targets_l)
-                gmm_list = list()
-                gmm_list_skl= list()
-                class_preval = list()
-                N = targets_l.size(dim=-1)
-                for i in range(len(unique_targets_l)):
-                    c = unique_targets_l[i]
-                    mask = targets_l == c
-                    class_c_logits = logits_l[targets_l == c].detach().cpu()
-                    #class prevalence per batch only.
-                    class_count = torch.sum(mask)
-                    logging.info('class: {}, count: {}'.format(c,class_count))
-                    class_preval.append(class_count/N)
-
-
-                    # gmm = GMM(n_features=class_c_logits.shape[1], n_clusters=self.args.cluster_per_class, tolerance=1e-4, max_iter=50, isCauchy=(self.args.inference_method == 'cauchy'))
-                    # gmm.fit(class_c_logits)
-                    # while np.any(np.isnan(gmm.get("sigma").detach().cpu().numpy())):
-                    #     gmm = GMM(n_features=class_c_logits.shape[1], n_clusters=self.args.cluster_per_class, tolerance=1e-4, max_iter=50, isCauchy=(self.args.inference_method == 'cauchy'))
-                    #     gmm.fit(class_c_logits)
-                    # gmm_list.append(gmm)
-
-                    gmm_skl = sklearn.mixture.GaussianMixture(n_components=self.args.cluster_per_class)
-                    gmm_skl.fit(class_c_logits.numpy())
-                    gmm_list.append(gmm_skl)
-
-                # logging.info(class_preval)
-                class_preval = torch.tensor(class_preval)
-                # generate weights, mus and sigmas
-                weights = class_preval.repeat_interleave(self.args.cluster_per_class)
-                pi = torch.cat([torch.FloatTensor(gmm.weights_) for gmm in gmm_list])
-                weights *= pi
-                # mus = torch.cat([torch.FloatTensor(gmm.means_) for gmm in gmm_list])
-                # sigmas = torch.cat([torch.FloatTensor(gmm.covariances_) for gmm in gmm_list])
-                #
-                # # Uncomment following when SKL GMM is not used.
-                # # mus = torch.cat([gmm.get("mu") for gmm in gmm_list])
-                # # sigmas = torch.cat([gmm.get("sigma") for gmm in gmm_list])
-                # gmm = GMM(n_features=self.args.num_classes, n_clusters=weights.shape[0], weights=weights, mu=mus, sigma=sigmas)
-
-                means = np.concatenate([gmm.means_ for gmm in gmm_list])
-                covariances = np.concatenate([gmm.covariances_ for gmm in gmm_list])
-                precisions = np.concatenate([gmm.precisions_ for gmm in gmm_list])
-                precisions_chol = np.concatenate([gmm.precisions_cholesky_ for gmm in gmm_list])
-                gmm = CMM(n_components=self.args.num_classes)
-                gmm.weights_ = weights.numpy()
-                gmm.means_ = means
-                gmm.covariances_ = covariances
-                gmm.precisions_ = precisions
-                gmm.precisions_cholesky_ = precisions_chol
-
 
                 logits_ul_weak = logits_ul_weak / self.args.tau
 
                 # softmax_ul_weak = torch.softmax(logits_ul_weak, dim=-1) # NOT NEEDED FOR GMM
 
                 gmm_inputs = logits_ul_weak.detach().cpu()
+                if self.args.skl:
+                    gmm_inputs = gmm_inputs.numpy()
 
                 # TODO: check if we are supposed to train gmm or not
                 if self.args.inference_method == 'gmm':
-                    gmm_resp = gmm.predict_proba(gmm_inputs)  # N*1, N*
-                    gmm_resp = torch.from_numpy(gmm_resp)
-                    score_weak, pred_weak = torch.max(gmm_resp, dim=-1)
+                    resp = gmm.predict_proba(gmm_inputs)  # N*1, N*
 
-                # TODO: change this condition to check if we are supposed to create gmm or cmm
                 if self.args.inference_method == 'cauchy':
-                    cauchy_unnorm_resp, _, cauchy_resp = gmm.predict_cauchy_probability(gmm_inputs)
-                    score_weak, pred_weak = torch.max(cauchy_resp, dim=-1)
+                    cauchy_unnorm_resp, _, resp = gmm.predict_cauchy_probability(gmm_inputs)
 
+                resp = torch.from_numpy(resp)
+                score_weak, pred_weak = torch.max(resp, dim=-1)
 
 
                 # TODO: discuss if soft_labeling is to be incorporated and make changes accordingly
