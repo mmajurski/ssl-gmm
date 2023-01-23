@@ -21,6 +21,7 @@ import fixmatch_augmentation
 import utils
 import trainer
 import trainer_fixmatch
+import trainer_gmm
 
 
 
@@ -159,8 +160,8 @@ def train(args):
 
     # setup the trainer
     # model_trainer = trainer.SupervisedTrainer(args)
-    model_trainer = trainer_fixmatch.FixMatchTrainer(args)
-
+    # model_trainer = trainer_fixmatch.FixMatchTrainer(args)
+    model_trainer = trainer_gmm.FixMatchTrainer_gmm(args)
     # setup the metadata capture object
     train_stats = metadata.TrainingStats()
 
