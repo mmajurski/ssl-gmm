@@ -17,7 +17,7 @@ from skl_cauchy_mm import CMM
 
 class FixMatchTrainer_gmm(trainer.SupervisedTrainer):
 
-    def build_gmm(self,model,pytorch_dataset,epoch,train_stats,skl=True):
+    def build_gmm(self, model, pytorch_dataset, epoch, train_stats, skl=True):
 
         model.eval()
 

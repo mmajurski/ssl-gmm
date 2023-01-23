@@ -53,7 +53,7 @@ def main():
     parser.add_argument('--pseudo-label-threshold', default=0.95, type=float, help='Threshold when filtering pseudo-labeling.')
     parser.add_argument('--soft-labels', help='enables soft labels', action='store_true')
     parser.add_argument('--supervised-pretrain', help='enables a fully supervised pre-train before starting the SSL', action='store_true')
-    parser.add_argument('--supervised-pretrain-patience', default=10, type=int, help='number of epochs past optimal to explore before early stopping terminates training.')
+    parser.add_argument('--supervised-pretrain-patience', default=5, type=int, help='number of epochs past optimal to explore before early stopping terminates training.')
     parser.add_argument('--num-classes', default=10, type=int, help='number of classes in the dataset.')
     parser.add_argument('--num-labeled-datapoints', default=250, type=int, help='number of labeled annotations in the dataset.')
     parser.add_argument('--starting-model', type=str, default=None, help='Pytorch model checkpoint to load instead of starting from random')

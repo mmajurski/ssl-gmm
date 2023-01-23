@@ -98,7 +98,7 @@ class SupervisedTrainer:
                 else:
                     loss_nan_count += 1
 
-                    if loss_nan_count > 500:
+                    if loss_nan_count > min(100, int(0.25*batch_count)):
                         raise RuntimeError("Loss is consistently nan (>100x per epoch), terminating train.")
 
                 if batch_idx % 100 == 0:

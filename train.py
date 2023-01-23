@@ -172,6 +172,10 @@ def train(args):
 
     if args.supervised_pretrain:
         model, train_stats, best_epoch, epoch = fully_supervised_pretrain(model, train_dataset_labeled, val_dataset, criterion, args, train_stats)
+        best_net = copy.deepcopy(model)
+        best_net.cpu()
+        torch.save(best_net, 'fully-supervised.pt')
+
 
 
     # train the model until it has converged on the labeled data
@@ -187,7 +191,6 @@ def train(args):
         plot_selected_metrics(train_stats, args, best_epoch)
 
         logging.info("  training")
-        # TODO work out how to incorporate the gmm into this. Ideally store it in the trainer class
         model_trainer.train_epoch(model, train_dataset_labeled, optimizer, criterion, epoch, train_stats, nb_reps=args.nb_reps, unlabeled_dataset=train_dataset_unlabeled)
 
         logging.info("  evaluating against validation data")
