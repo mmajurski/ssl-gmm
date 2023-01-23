@@ -37,15 +37,15 @@ def main():
     parser.add_argument('--num-workers', type=int, default=6, help='number of workers')
     parser.add_argument('--output-dirpath', default='./model', type=str, help='filepath to where the outputs will be saved.')
     parser.add_argument('--batch-size', default=32, type=int, help='batch size')
-    parser.add_argument('--learning-rate', default=0.03, type=float, help='initial learning rate')  # 3e-4
+    parser.add_argument('--learning-rate', default=0.01, type=float, help='initial learning rate')  # 3e-4
     parser.add_argument('--tau', default=0.9, type=float, help='temperature value to sharpen the logits. Set to 1 to disable. If tau is 1, hard pseudo-labeling is used instead of soft pseudo-labeling.')
     parser.add_argument('--loss-eps', default=1e-4, type=float, help='loss value eps for determining early stopping loss equivalence.')
     # parser.add_argument('--val-fraction', default=0.1, type=float, help='fraction of the training data to use for validation.')
-    parser.add_argument('--patience', default=100, type=int, help='number of epochs past optimal to explore before early stopping terminates training.')
+    parser.add_argument('--patience', default=20, type=int, help='number of epochs past optimal to explore before early stopping terminates training.')
     parser.add_argument('--weight-decay', default=5e-3, type=float)  #1e-5
     parser.add_argument('--cycle-factor', default=4.0, type=float, help='Cycle factor for cyclic learning rate scheduler.')
     parser.add_argument('--num-lr-reductions', default=2, type=int)
-    parser.add_argument('--nb-reps', default=100, help='the number of reps through the labeled portion of the dataset to form an epoch', type=int)
+    parser.add_argument('--nb-reps', default=500, help='the number of reps through the labeled portion of the dataset to form an epoch', type=int)
     parser.add_argument('--lr-reduction-factor', default=0.2, type=float)
     parser.add_argument('--amp', action='store_true')
     parser.add_argument('--inference-method', default='gmm', type=str, help='whether to use gmm or cauchy for inference.')

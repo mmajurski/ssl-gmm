@@ -30,6 +30,10 @@ class FixMatchTrainer(trainer.SupervisedTrainer):
 
         batch_count = nb_reps * len(dataloader)
 
+        # cyclic learning rate with one up/down cycle per epoch.
+        factor = 4.0
+        cyclic_lr_scheduler = torch.optim.lr_scheduler.CyclicLR(optimizer, base_lr=(self.args.learning_rate / factor), max_lr=(self.args.learning_rate * factor), step_size_up=int(batch_count / 2), cycle_momentum=False)
+
         unlabeled_dataset.set_transforms(cifar_datasets.Cifar10.TRANSFORM_FIXMATCH)
         dataloader_ul = torch.utils.data.DataLoader(unlabeled_dataset, batch_size=mu*self.args.batch_size, shuffle=True, num_workers=self.args.num_workers, worker_init_fn=utils.worker_init_fn)
         iter_ul = iter(dataloader_ul)
@@ -171,6 +175,7 @@ class FixMatchTrainer(trainer.SupervisedTrainer):
                     accuracy = torch.mean((torch.argmax(logits_l, dim=-1) == targets_l).type(torch.float))
                     loss_list.append(batch_loss.item())
                     accuracy_list.append(accuracy.item())
+                    cyclic_lr_scheduler.step()
                 else:
                     loss_nan_count += 1
 
@@ -187,6 +192,7 @@ class FixMatchTrainer(trainer.SupervisedTrainer):
         if loss_nan_count > 0:
             logging.info("epoch has {} batches with nan loss.".format(loss_nan_count))
 
+        train_stats.add(epoch, 'learning_rate', optimizer.param_groups[0]['lr'])
         train_stats.add(epoch, 'train_wall_time', time.time() - start_time)
         train_stats.add(epoch, 'train_loss', np.mean(loss_list))
         train_stats.add(epoch, 'train_accuracy', np.mean(accuracy_list))

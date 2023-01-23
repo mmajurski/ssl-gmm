@@ -25,14 +25,14 @@ class SupervisedTrainer:
         # Setup optimizer
         if self.args.weight_decay is not None:
             if self.args.optimizer == 'sgd':
-                optimizer = torch.optim.SGD(model.parameters(), lr=self.args.learning_rate, weight_decay=self.args.weight_decay, momentum=0.9, nesterov=self.args.nesterov)
+                optimizer = torch.optim.SGD(model.parameters(), lr=self.args.learning_rate, weight_decay=self.args.weight_decay, momentum=0.9, nesterov=True)
             elif self.args.optimizer == 'adamw':
                 optimizer = torch.optim.AdamW(model.parameters(), lr=self.args.learning_rate, weight_decay=self.args.weight_decay)
             else:
                 raise RuntimeError("Invalid optimizer: {}".format(self.args.optimizer))
         else:
             if self.args.optimizer == 'sgd':
-                optimizer = torch.optim.SGD(model.parameters(), lr=self.args.learning_rate, momentum=0.9, nesterov=self.args.nesterov)
+                optimizer = torch.optim.SGD(model.parameters(), lr=self.args.learning_rate, momentum=0.9, nesterov=True)
             elif self.args.optimizer == 'adamw':
                 optimizer = torch.optim.AdamW(model.parameters(), lr=self.args.learning_rate)
             else:
@@ -49,6 +49,10 @@ class SupervisedTrainer:
         dataloader = torch.utils.data.DataLoader(pytorch_dataset, batch_size=self.args.batch_size, shuffle=True, num_workers=self.args.num_workers, worker_init_fn=utils.worker_init_fn)
 
         batch_count = nb_reps * len(dataloader)
+
+        factor = 4.0
+        cyclic_lr_scheduler = torch.optim.lr_scheduler.CyclicLR(optimizer, base_lr=(self.args.learning_rate / factor), max_lr=(self.args.learning_rate * factor), step_size_up=int(batch_count / 2), cycle_momentum=False)
+
         start_time = time.time()
         loss_nan_count = 0
 
@@ -90,10 +94,11 @@ class SupervisedTrainer:
                 if not np.isnan(batch_loss.detach().cpu().numpy()):
                     loss_list.append(batch_loss.item())
                     accuracy_list.append(accuracy.item())
+                    cyclic_lr_scheduler.step()
                 else:
                     loss_nan_count += 1
 
-                    if loss_nan_count > 100:
+                    if loss_nan_count > 500:
                         raise RuntimeError("Loss is consistently nan (>100x per epoch), terminating train.")
 
                 if batch_idx % 100 == 0:
@@ -110,6 +115,7 @@ class SupervisedTrainer:
         if loss_nan_count > 0:
             logging.info("epoch has {} batches with nan loss.".format(loss_nan_count))
 
+        train_stats.add(epoch, 'learning_rate', optimizer.param_groups[0]['lr'])
         train_stats.add(epoch, 'train_wall_time', wall_time)
         train_stats.add(epoch, 'train_loss', avg_loss)
         train_stats.add(epoch, 'train_accuracy', avg_accuracy)

@@ -182,6 +182,7 @@ def train(args):
         epoch += 1
         logging.info("Epoch: {}".format(epoch))
 
+
         plot_selected_metrics(train_stats, args, best_epoch)
 
         logging.info("  training")
