@@ -56,16 +56,20 @@ class FixMatchTrainer_gmm(trainer.SupervisedTrainer):
 
             class_c_logits = bucketed_dataset_logits[i]
             if not skl:
-                gmm = GMM(n_features=class_c_logits.shape[1], n_clusters=1, tolerance=1e-4, max_iter=50)
+                gmm = GMM(n_features=class_c_logits.shape[1], n_clusters=1, tolerance=1e-4, max_iter=50, isCauchy=self.args.inference_method == "cauchy")
                 gmm.fit(class_c_logits)
                 while np.any(np.isnan(gmm.get("sigma").detach().cpu().numpy())):
-                    gmm = GMM(n_features=class_c_logits.shape[1], n_clusters=1, tolerance=1e-4, max_iter=50)
+                    gmm = GMM(n_features=class_c_logits.shape[1], n_clusters=1, tolerance=1e-4, max_iter=50, isCauchy=self.args.inference_method == "cauchy")
                     gmm.fit(class_c_logits)
                 gmm_list.append(gmm)
-            else:
-                gmm_skl = sklearn.mixture.GaussianMixture(n_components=1)
+            elif self.args.inference_method == "gmm":
+                gmm_skl = CMM(n_components=1, isCauchy=False)
                 gmm_skl.fit(class_c_logits.numpy())
                 gmm_list.append(gmm_skl)
+            else:
+                gmm_skl = CMM(n_components=1, isCauchy=True)
+                gmm_skl.fit(class_c_logits.numpy())
+                gmm_list.append(gmm_skl)    
 
         class_preval = utils.compute_class_prevalance(dataloader)
         logging.info(class_preval)

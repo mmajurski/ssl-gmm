@@ -4,8 +4,31 @@ from math import gamma
 
 
 class CMM(sklearn.mixture.GaussianMixture):
-    def __init__(self, **kwargs):
+    def __init__(self, isCauchy, **kwargs):
         super().__init__(**kwargs)
+        self.isCauchy = isCauchy
+
+    def _e_step(self, X):
+        """E step.
+
+        Parameters
+        ----------
+        X : array-like of shape (n_samples, n_features)
+
+        Returns
+        -------
+        log_prob_norm : float
+            Mean of the logarithms of the probabilities of each sample in X
+
+        log_responsibility : array, shape (n_samples, n_components)
+            Logarithm of the posterior probabilities (or responsibilities) of
+            the point of each sample in X.
+        """
+        if self.isCauchy:
+            _, log_prob_norm, log_resp = self._cauchy_estimate_log_prob_resp(X)
+        else:
+            log_prob_norm, log_resp = self._estimate_log_prob_resp(X)
+        return np.mean(log_prob_norm), log_resp
 
     def _cauchy_estimate_log_prob(self, x):
         n_samples = x.shape[0]
