@@ -70,11 +70,15 @@ class GMM(torch.nn.Module):
         self._sigma = inp
 
     def _init_params(self):
+        if self.isCauchy:
+            sum_tensor = torch.tensor(1.0, dtype=torch.float64)
+        else:
+            sum_tensor = torch.tensor(1.0, dtype=torch.float32)
         # validate or set initial cluster _pi
         if self._pi is not None:
             if self._pi.size() != self._pi_shape:
                 raise ValueError("Invalid pi provided")
-            elif not torch.allclose(self._pi.sum(), torch.tensor(1.0, dtype=torch.float32)):
+            elif not torch.allclose(self._pi.sum(), sum_tensor):
                 raise ValueError(
                     f"The parameter 'weights' should be normalized, but got sum(weights) = {self._pi.sum():.5f}")
             elif any(torch.less(self._pi, 0.0)) or any(torch.greater(self._pi, 1.0)):

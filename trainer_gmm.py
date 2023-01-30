@@ -191,7 +191,7 @@ class FixMatchTrainer_gmm(trainer.SupervisedTrainer):
                 if self.args.inference_method == 'cauchy':
                     cauchy_unnorm_resp, _, resp = gmm.predict_cauchy_probability(gmm_inputs)
 
-                resp = torch.from_numpy(resp)
+                # resp = torch.from_numpy(resp)
                 score_weak, pred_weak = torch.max(resp, dim=-1)
 
 

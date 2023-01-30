@@ -48,7 +48,7 @@ def main():
     parser.add_argument('--nb-reps', default=500, help='the number of reps through the labeled portion of the dataset to form an epoch', type=int)
     parser.add_argument('--lr-reduction-factor', default=0.2, type=float)
     parser.add_argument('--amp', action='store_true')
-    parser.add_argument('--inference-method', default='gmm', type=str, help='whether to use gmm or cauchy for inference.')
+    parser.add_argument('--inference-method', default='cauchy', type=str, help='whether to use gmm or cauchy for inference.')
     parser.add_argument('--pseudo-label-method', default="resp", type=str, help='method/algorithm to use for selecting valid psudo-label samples.')
     parser.add_argument('--pseudo-label-threshold', default=0.95, type=float, help='Threshold when filtering pseudo-labeling.')
     parser.add_argument('--soft-labels', help='enables soft labels', action='store_true')
@@ -61,7 +61,7 @@ def main():
     parser.add_argument('--cluster-per-class', default=1, type=int, help='number of clusters to create per class')
     parser.add_argument('--strong-augmentation', help='enables strong augmentation', action='store_true')
     parser.add_argument('--debug', help='enables debugging mode', action='store_true')
-    parser.add_argument('--skl',help='uses sklearn implementation of Gaussian Mixture',action='store_false')
+    parser.add_argument('--skl',help='uses sklearn implementation of Gaussian Mixture',action='store_true')
 
     args = parser.parse_args()
 
