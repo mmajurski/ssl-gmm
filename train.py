@@ -171,14 +171,17 @@ def train(args):
 
 
     if args.supervised_pretrain:
-        model, train_stats, best_epoch, epoch = fully_supervised_pretrain(model, train_dataset_labeled, val_dataset, criterion, args, train_stats)
-        best_net = copy.deepcopy(model)
-        best_net.cpu()
-        torch.save(best_net, 'fully-supervised.pt')
+        fn = 'fully-supervised.pt'
+        if os.path.exists(fn):
+            model = torch.load(fn)
+        else:
+            model, train_stats, best_epoch, epoch = fully_supervised_pretrain(model, train_dataset_labeled, val_dataset, criterion, args, train_stats)
+            best_net = copy.deepcopy(model)
+            best_net.cpu()
+            torch.save(best_net, fn)
 
 
 
-    # train the model until it has converged on the labeled data
     # setup early stopping on convergence using LR reduction on plateau
     optimizer = model_trainer.get_optimizer(model)
     plateau_scheduler = lr_scheduler.ReduceLROnPlateau(optimizer, mode='min', factor=args.lr_reduction_factor, patience=args.patience, threshold=args.loss_eps, max_num_lr_reductions=args.num_lr_reductions)
@@ -187,10 +190,15 @@ def train(args):
         epoch += 1
         logging.info("Epoch: {}".format(epoch))
 
-
         plot_selected_metrics(train_stats, args, best_epoch)
 
         logging.info("  training")
+        # import cProfile
+        # import pstats
+        # profile = cProfile.Profile()
+        # profile.runcall(model_trainer.train_epoch, model, train_dataset_labeled, optimizer, criterion, epoch, train_stats, nb_reps=args.nb_reps, unlabeled_dataset=train_dataset_unlabeled)
+        # ps = pstats.Stats(profile)
+        # ps.print_stats()
         model_trainer.train_epoch(model, train_dataset_labeled, optimizer, criterion, epoch, train_stats, nb_reps=args.nb_reps, unlabeled_dataset=train_dataset_unlabeled)
 
         logging.info("  evaluating against validation data")

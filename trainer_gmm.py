@@ -90,7 +90,8 @@ class FixMatchTrainer_gmm(trainer.SupervisedTrainer):
             covariances = np.concatenate([gmm.covariances_ for gmm in gmm_list])
             precisions = np.concatenate([gmm.precisions_ for gmm in gmm_list])
             precisions_chol = np.concatenate([gmm.precisions_cholesky_ for gmm in gmm_list])
-            gmm = CMM(n_components=self.args.num_classes)
+            # TODO why do we have GMM and CMM classes, both with the isCauchy param? Seems like isCauchy=True for CMM and False for GMM
+            gmm = CMM(isCauchy=True, n_components=self.args.num_classes)
             gmm.weights_ = weights.numpy()
             gmm.means_ = means
             gmm.covariances_ = covariances
@@ -118,6 +119,10 @@ class FixMatchTrainer_gmm(trainer.SupervisedTrainer):
         dataloader = torch.utils.data.DataLoader(pytorch_dataset, batch_size=self.args.batch_size, shuffle=True, num_workers=self.args.num_workers, worker_init_fn=utils.worker_init_fn)
 
         batch_count = nb_reps * len(dataloader)
+
+        # cyclic learning rate with one up/down cycle per epoch.
+        factor = 4.0
+        cyclic_lr_scheduler = torch.optim.lr_scheduler.CyclicLR(optimizer, base_lr=(self.args.learning_rate / factor), max_lr=(self.args.learning_rate * factor), step_size_up=int(batch_count / 2), cycle_momentum=False)
 
         unlabeled_dataset.set_transforms(cifar_datasets.Cifar10.TRANSFORM_FIXMATCH)
         dataloader_ul = torch.utils.data.DataLoader(unlabeled_dataset, batch_size=mu*self.args.batch_size, shuffle=True, num_workers=self.args.num_workers, worker_init_fn=utils.worker_init_fn)
@@ -175,9 +180,6 @@ class FixMatchTrainer_gmm(trainer.SupervisedTrainer):
                 logits_ul_weak = logits_ul[:inputs_ul_weak.shape[0]]
                 logits_ul_strong = logits_ul[inputs_ul_weak.shape[0]:]
 
-
-                logits_ul_weak = logits_ul_weak / self.args.tau
-
                 # softmax_ul_weak = torch.softmax(logits_ul_weak, dim=-1) # NOT NEEDED FOR GMM
 
                 gmm_inputs = logits_ul_weak.detach().cpu()
@@ -190,6 +192,8 @@ class FixMatchTrainer_gmm(trainer.SupervisedTrainer):
 
                 if self.args.inference_method == 'cauchy':
                     cauchy_unnorm_resp, _, resp = gmm.predict_cauchy_probability(gmm_inputs)
+
+                resp = resp / self.args.tau
 
                 # resp = torch.from_numpy(resp)
                 score_weak, pred_weak = torch.max(resp, dim=-1)
@@ -277,6 +281,7 @@ class FixMatchTrainer_gmm(trainer.SupervisedTrainer):
                     accuracy = torch.mean((torch.argmax(logits_l, dim=-1) == targets_l).type(torch.float))
                     loss_list.append(batch_loss.item())
                     accuracy_list.append(accuracy.item())
+                    cyclic_lr_scheduler.step()
                 else:
                     loss_nan_count += 1
 

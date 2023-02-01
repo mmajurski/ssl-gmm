@@ -79,6 +79,7 @@ class WideResNet(nn.Module):
         self.bn1 = nn.BatchNorm2d(channels[3], momentum=0.001)
         # self.relu = nn.ReLU(inplace=True)  # published wideresnet network
         self.relu = nn.LeakyReLU(negative_slope=0.1, inplace=True)
+        # TODO replace with GMM
         self.fc = nn.Linear(channels[3], num_classes)
         self.channels = channels[3]
 

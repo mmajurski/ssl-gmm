@@ -70,10 +70,10 @@ class GMM(torch.nn.Module):
         self._sigma = inp
 
     def _init_params(self):
-        if self.isCauchy:
+        if self._isCauchy:
             sum_tensor = torch.tensor(1.0, dtype=torch.float64)
         else:
-            sum_tensor = torch.tensor(1.0, dtype=torch.float32)
+            sum_tensor = torch.tensor(1.0, dtype=torch.float64)
         # validate or set initial cluster _pi
         if self._pi is not None:
             if self._pi.size() != self._pi_shape:
