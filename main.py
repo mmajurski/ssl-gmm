@@ -73,6 +73,11 @@ def main():
     # handle setup or exit based on output directory existance and debug mode
     validate_output_directory(args)
 
+    #Temp argument adjustment For GMM use Skl version and for CMM our implementation
+    if args.inference_method == 'cauchy':
+        args.skl = False
+    elif args.inference_method == 'gmm':
+        args.skl = True
 
     train.train(args)
 
