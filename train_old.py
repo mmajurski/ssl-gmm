@@ -294,9 +294,8 @@ def train_epoch(model, pytorch_dataset_labeled, optimizer, criterion, epoch, tra
             else:
                 loss_nan_count += 1
 
-                if loss_nan_count > 100:
-                    logging.info("Loss is consistently nan (>100x per epoch), terminating train.")
-                    return
+                if loss_nan_count > int(0.5 * batch_count):
+                    raise RuntimeError("Loss is consistently nan (>50% of epoch), terminating train.")
 
             if batch_idx % 100 == 0:
                 # log loss and current GPU utilization
@@ -452,9 +451,8 @@ def train_epoch_ul(model, pytorch_dataset_labeled, dataset_pseudo_labeled, optim
             else:
                 loss_nan_count += 1
 
-                if loss_nan_count > 100:
-                    logging.info("Loss is consistently nan (>100x per epoch), terminating train.")
-                    return
+                if loss_nan_count > int(0.5 * batch_count):
+                    raise RuntimeError("Loss is consistently nan (>50% of epoch), terminating train.")
 
             if batch_idx % 100 == 0:
                 # log loss and current GPU utilization

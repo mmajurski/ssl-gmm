@@ -50,8 +50,10 @@ class SupervisedTrainer:
 
         batch_count = nb_reps * len(dataloader)
 
-        factor = 4.0
-        cyclic_lr_scheduler = torch.optim.lr_scheduler.CyclicLR(optimizer, base_lr=(self.args.learning_rate / factor), max_lr=(self.args.learning_rate * factor), step_size_up=int(batch_count / 2), cycle_momentum=False)
+        if self.args.cycle_factor is None or self.args.cycle_factor == 0:
+            cyclic_lr_scheduler = None
+        else:
+            cyclic_lr_scheduler = torch.optim.lr_scheduler.CyclicLR(optimizer, base_lr=(self.args.learning_rate / self.args.cycle_factor), max_lr=(self.args.learning_rate * self.args.cycle_factor), step_size_up=int(batch_count / 2), cycle_momentum=False)
 
         start_time = time.time()
         loss_nan_count = 0
@@ -83,6 +85,8 @@ class SupervisedTrainer:
                     batch_loss = criterion(outputs, labels)
                     batch_loss.backward()
                     optimizer.step()
+                    if cyclic_lr_scheduler is not None:
+                        cyclic_lr_scheduler.step()
 
                 pred = torch.argmax(outputs, dim=-1)
                 if self.args.soft_labels:
@@ -94,12 +98,11 @@ class SupervisedTrainer:
                 if not np.isnan(batch_loss.detach().cpu().numpy()):
                     loss_list.append(batch_loss.item())
                     accuracy_list.append(accuracy.item())
-                    cyclic_lr_scheduler.step()
                 else:
                     loss_nan_count += 1
 
-                    if loss_nan_count > min(100, int(0.25*batch_count)):
-                        raise RuntimeError("Loss is consistently nan (>100x per epoch), terminating train.")
+                    if loss_nan_count > int(0.5 * batch_count):
+                        raise RuntimeError("Loss is consistently nan (>50% of epoch), terminating train.")
 
                 if batch_idx % 100 == 0:
                     # log loss and current GPU utilization
@@ -142,11 +145,11 @@ class SupervisedTrainer:
                 labels_cpu = labels.detach().cpu().numpy()
                 gt_labels.extend(labels_cpu)
 
-                if self.args.amp:
-                    with torch.cuda.amp.autocast():
-                        outputs = model(inputs)
-                else:
-                    outputs = model(inputs)
+                # if self.args.amp:
+                #     with torch.cuda.amp.autocast():
+                #         outputs = model(inputs)
+                # else:
+                outputs = model(inputs)
 
                 batch_loss = criterion(outputs, labels)
                 loss_list.append(batch_loss.item())

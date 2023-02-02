@@ -151,9 +151,6 @@ def train(args):
 
     train_start_time = time.time()
 
-    # Move model to device
-    model.cuda()
-
     # Setup loss criteria
     criterion = torch.nn.CrossEntropyLoss()
 
@@ -162,6 +159,7 @@ def train(args):
     # model_trainer = trainer.SupervisedTrainer(args)
     # model_trainer = trainer_fixmatch.FixMatchTrainer(args)
     model_trainer = trainer_gmm.FixMatchTrainer_gmm(args)
+
     # setup the metadata capture object
     train_stats = metadata.TrainingStats()
 
@@ -169,10 +167,10 @@ def train(args):
     best_epoch = 0
     best_model = model
 
-
     if args.supervised_pretrain:
         fn = 'fully-supervised.pt'
         if os.path.exists(fn):
+            logging.info('Loading fully supervised pretrain model.')
             model = torch.load(fn)
         else:
             model, train_stats, best_epoch, epoch = fully_supervised_pretrain(model, train_dataset_labeled, val_dataset, criterion, args, train_stats)
@@ -180,11 +178,15 @@ def train(args):
             best_net.cpu()
             torch.save(best_net, fn)
 
-
+    # Move model to device
+    model.cuda()
 
     # setup early stopping on convergence using LR reduction on plateau
     optimizer = model_trainer.get_optimizer(model)
-    plateau_scheduler = lr_scheduler.ReduceLROnPlateau(optimizer, mode='min', factor=args.lr_reduction_factor, patience=args.patience, threshold=args.loss_eps, max_num_lr_reductions=args.num_lr_reductions)
+
+    def log_lr_reduction():
+        logging.info("Learning rate reduced")
+    plateau_scheduler = lr_scheduler.ReduceLROnPlateau(optimizer, mode='min', factor=args.lr_reduction_factor, patience=args.patience, threshold=args.loss_eps, max_num_lr_reductions=args.num_lr_reductions, lr_reduction_callback=log_lr_reduction)
     # train epochs until loss converges
     while not plateau_scheduler.is_done() and epoch < trainer.MAX_EPOCHS:
         epoch += 1

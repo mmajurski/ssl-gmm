@@ -23,7 +23,6 @@ class FixMatchTrainer(trainer.SupervisedTrainer):
         model.train()
         loss_nan_count = 0
         scaler = torch.cuda.amp.GradScaler()
-        mu = 5  #7  # the unlabeled data is 7x the size of the labeled
         start_time = time.time()
 
         dataloader = torch.utils.data.DataLoader(pytorch_dataset, batch_size=self.args.batch_size, shuffle=True, num_workers=self.args.num_workers, worker_init_fn=utils.worker_init_fn)
@@ -31,11 +30,13 @@ class FixMatchTrainer(trainer.SupervisedTrainer):
         batch_count = nb_reps * len(dataloader)
 
         # cyclic learning rate with one up/down cycle per epoch.
-        factor = 4.0
-        cyclic_lr_scheduler = torch.optim.lr_scheduler.CyclicLR(optimizer, base_lr=(self.args.learning_rate / factor), max_lr=(self.args.learning_rate * factor), step_size_up=int(batch_count / 2), cycle_momentum=False)
+        if self.args.cycle_factor is None or self.args.cycle_factor == 0:
+            cyclic_lr_scheduler = None
+        else:
+            cyclic_lr_scheduler = torch.optim.lr_scheduler.CyclicLR(optimizer, base_lr=(self.args.learning_rate / self.args.cycle_factor), max_lr=(self.args.learning_rate * self.args.cycle_factor), step_size_up=int(batch_count / 2), cycle_momentum=False)
 
         unlabeled_dataset.set_transforms(cifar_datasets.Cifar10.TRANSFORM_FIXMATCH)
-        dataloader_ul = torch.utils.data.DataLoader(unlabeled_dataset, batch_size=mu*self.args.batch_size, shuffle=True, num_workers=self.args.num_workers, worker_init_fn=utils.worker_init_fn)
+        dataloader_ul = torch.utils.data.DataLoader(unlabeled_dataset, batch_size=self.args.mu*self.args.batch_size, shuffle=True, num_workers=self.args.num_workers, worker_init_fn=utils.worker_init_fn)
         iter_ul = iter(dataloader_ul)
 
         loss_list = list()
@@ -167,20 +168,21 @@ class FixMatchTrainer(trainer.SupervisedTrainer):
                 else:
                     batch_loss.backward()
                     optimizer.step()
+                if cyclic_lr_scheduler is not None:
+                    cyclic_lr_scheduler.step()
 
                 # nan loss values are ignored when using AMP, so ignore them for the average
-                if not np.isnan(batch_loss.detach().cpu().numpy()):
+                if not torch.isnan(batch_loss):
                     if self.args.soft_labels:
                         targets_l = torch.argmax(targets_l, dim=-1)
                     accuracy = torch.mean((torch.argmax(logits_l, dim=-1) == targets_l).type(torch.float))
                     loss_list.append(batch_loss.item())
                     accuracy_list.append(accuracy.item())
-                    cyclic_lr_scheduler.step()
                 else:
                     loss_nan_count += 1
 
-                    if loss_nan_count > 100:
-                        raise RuntimeError("Loss is consistently nan (>100x per epoch), terminating train.")
+                    if loss_nan_count > int(0.5 * batch_count):
+                        raise RuntimeError("Loss is consistently nan (>50% of epoch), terminating train.")
 
                 if batch_idx % 100 == 0:
                     # log loss and current GPU utilization
