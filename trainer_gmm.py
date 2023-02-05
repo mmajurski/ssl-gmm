@@ -190,13 +190,14 @@ class FixMatchTrainer_gmm(trainer.SupervisedTrainer):
                 # TODO: check if we are supposed to train gmm or not
                 if self.args.inference_method == 'gmm':
                     resp = gmm.predict_proba(gmm_inputs)  # N*1, N*
+                    resp = torch.tensor(resp)  # wrap into a tensor if its a numpy array
                 elif self.args.inference_method == 'cauchy':
                     cauchy_unnorm_resp, _, resp = gmm.predict_cauchy_probability(gmm_inputs)
                 else:
                     msg = "Invalid inference method: {}".format(self.args.inference_method)
                     raise RuntimeError(msg)
 
-                resp = torch.tensor(resp)
+
                 resp = resp / self.args.tau
 
                 # resp = torch.from_numpy(resp)
