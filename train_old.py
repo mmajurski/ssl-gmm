@@ -362,11 +362,13 @@ def train_epoch_ul(model, pytorch_dataset_labeled, dataset_pseudo_labeled, optim
             batch_idx = rep_count * len(dataloader) + batch_idx
             optimizer.zero_grad()
 
-            inputs_l, targets_l, _ = tensor_dict_l
+            inputs_l = tensor_dict_l[0]
+            targets_l = tensor_dict_l[1]
 
             try:
                 tensor_dict_ul = next(iter_ul)
-                inputs_ul, targets_ul, _ = tensor_dict_ul
+                inputs_ul = tensor_dict_ul[0]
+                targets_ul = tensor_dict_ul[1]
 
                 inputs = utils.interleave(torch.cat((inputs_l, inputs_ul)), mu + 1)
                 inputs = inputs.cuda()

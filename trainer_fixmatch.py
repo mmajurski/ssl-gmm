@@ -60,7 +60,8 @@ class FixMatchTrainer(trainer.SupervisedTrainer):
                 # adjust for the rep offset
                 batch_idx = rep_count * len(dataloader) + batch_idx
 
-                inputs_l, targets_l, _ = tensor_dict_l
+                inputs_l = tensor_dict_l[0]
+                targets_l = tensor_dict_l[1]
 
                 try:
                     tensor_dict_ul = next(iter_ul)
@@ -69,7 +70,8 @@ class FixMatchTrainer(trainer.SupervisedTrainer):
                     iter_ul = iter(dataloader_ul)
                     tensor_dict_ul = next(iter_ul)
 
-                inputs_ul, targets_ul, _ = tensor_dict_ul
+                inputs_ul = tensor_dict_ul[0]
+                targets_ul = tensor_dict_ul[1]
                 inputs_ul_weak, inputs_ul_strong = inputs_ul
 
                 # interleave not required for single GPU training
