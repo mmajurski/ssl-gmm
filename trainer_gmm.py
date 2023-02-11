@@ -17,14 +17,15 @@ from skl_cauchy_mm import CMM
 
 class FixMatchTrainer_gmm(trainer.SupervisedTrainer):
 
-    def build_gmm(self, model, pytorch_dataset, epoch, train_stats, skl=True):
+    def build_gmm(self, model, pytorch_dataset, skl=True):
 
+        model_training_status = model.training
         model.eval()
 
-        dataloader = torch.utils.data.DataLoader(pytorch_dataset, batch_size=self.args.batch_size, shuffle=True,
+        bs = min(256, len(pytorch_dataset))
+        dataloader = torch.utils.data.DataLoader(pytorch_dataset, batch_size=bs, shuffle=False,
                                                  num_workers=self.args.num_workers,
                                                  worker_init_fn=utils.worker_init_fn)
-        start_time = time.time()
         dataset_logits = list()
         dataset_labels = list()
         for batch_idx, tensor_dict in enumerate(dataloader):
@@ -98,17 +99,15 @@ class FixMatchTrainer_gmm(trainer.SupervisedTrainer):
             gmm.precisions_ = precisions
             gmm.precisions_cholesky_ = precisions_chol
 
-        wall_time = time.time() - start_time
+        # return model to orig status
+        model.train(model_training_status)
 
-        train_stats.add(epoch, 'gmm_build_wall_time', wall_time)
         return gmm
 
     def train_epoch(self, model, pytorch_dataset, optimizer, criterion, epoch, train_stats, nb_reps=1, unlabeled_dataset=None):
 
         if unlabeled_dataset is None:
             raise RuntimeError("Unlabeled dataset missing. Cannot use FixMatch train_epoch function without an unlabeled_dataset.")
-
-        # gmm = self.build_gmm(model, pytorch_dataset, epoch, train_stats, skl=self.args.skl)
 
         model.train()
         loss_nan_count = 0
@@ -147,7 +146,7 @@ class FixMatchTrainer_gmm(trainer.SupervisedTrainer):
         for rep_count in range(nb_reps):
             for batch_idx, tensor_dict_l in enumerate(dataloader):
                 # build the gmm per batch (slow, but intellectually identical to fixmatch)
-                gmm = self.build_gmm(model, pytorch_dataset, epoch, train_stats, skl=self.args.skl)
+                gmm = self.build_gmm(model, pytorch_dataset, skl=self.args.skl)
 
                 optimizer.zero_grad()
                 # adjust for the rep offset
