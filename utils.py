@@ -1,3 +1,5 @@
+import os
+import shutil
 import numpy as np
 import subprocess
 import torch
@@ -8,6 +10,36 @@ import torch
 # https://tanelp.github.io/posts/a-bug-that-plagues-thousands-of-open-source-ml-projects/
 def worker_init_fn(worker_id):
     np.random.seed(np.random.get_state()[1][0] + worker_id)
+
+
+
+
+def validate_output_directory(args):
+    if args.debug:
+        # if we are in debug mode delete any existing output data.
+        if os.path.exists(args.output_dirpath):
+            shutil.rmtree(args.output_dirpath)
+    else:
+        if os.path.exists(args.output_dirpath):
+            # if we are not in debug mode, preserve all output data
+            raise RuntimeError("Output dirpath {} exists, exiting.".format(args.output_dirpath))
+
+    os.makedirs(args.output_dirpath)
+
+
+def is_ide_debug():
+    # check if IDE is in debug mode, and set num parallel worker to 0
+    import sys
+    gettrace = getattr(sys, 'gettrace', None)
+    if gettrace():
+        print("Detected IDE debug mode, force enabling debug mode and setting number of workers to 0")
+        return True
+    return False
+
+def check_for_ide_debug_mode(args):
+    if is_ide_debug():
+        args.num_workers = 0
+        args.debug = True
 
 
 def get_gpu_memory():

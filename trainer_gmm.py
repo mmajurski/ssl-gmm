@@ -108,7 +108,7 @@ class FixMatchTrainer_gmm(trainer.SupervisedTrainer):
         if unlabeled_dataset is None:
             raise RuntimeError("Unlabeled dataset missing. Cannot use FixMatch train_epoch function without an unlabeled_dataset.")
 
-        gmm = self.build_gmm(model, pytorch_dataset, epoch, train_stats, skl=self.args.skl)
+        # gmm = self.build_gmm(model, pytorch_dataset, epoch, train_stats, skl=self.args.skl)
 
         model.train()
         loss_nan_count = 0
@@ -146,6 +146,9 @@ class FixMatchTrainer_gmm(trainer.SupervisedTrainer):
 
         for rep_count in range(nb_reps):
             for batch_idx, tensor_dict_l in enumerate(dataloader):
+                # build the gmm per batch (slow, but intellectually identical to fixmatch)
+                gmm = self.build_gmm(model, pytorch_dataset, epoch, train_stats, skl=self.args.skl)
+
                 optimizer.zero_grad()
                 # adjust for the rep offset
                 batch_idx = rep_count * len(dataloader) + batch_idx

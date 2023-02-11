@@ -1,32 +1,7 @@
 import argparse
-import os
-import shutil
-
-
+import utils
 import train
 
-
-def validate_output_directory(args):
-    if args.debug:
-        # if we are in debug mode delete any existing output data.
-        if os.path.exists(args.output_dirpath):
-            shutil.rmtree(args.output_dirpath)
-    else:
-        if os.path.exists(args.output_dirpath):
-            # if we are not in debug mode, preserve all output data
-            raise RuntimeError("Output dirpath {} exists, exiting.".format(args.output_dirpath))
-
-    os.makedirs(args.output_dirpath)
-
-
-def check_for_ide_debug_mode(args):
-    # check if IDE is in debug mode, and set num parallel worker to 0
-    import sys
-    gettrace = getattr(sys, 'gettrace', None)
-    if gettrace():
-        print("Detected IDE debug mode, force enabling debug mode and setting number of workers to 0")
-        args.num_workers = 0
-        args.debug = True
 
 
 
@@ -69,10 +44,10 @@ def main():
 
 
     # check if IDE is in debug mode, and set the args debug flag and set num parallel worker to 0
-    check_for_ide_debug_mode(args)
+    utils.check_for_ide_debug_mode(args)
 
     # handle setup or exit based on output directory existance and debug mode
-    validate_output_directory(args)
+    utils.validate_output_directory(args)
 
     #Temp argument adjustment For GMM use Skl version and for CMM our implementation
     if args.inference_method == 'cauchy':

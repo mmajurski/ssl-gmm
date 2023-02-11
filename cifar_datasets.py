@@ -100,7 +100,7 @@ class Cifar10(torch.utils.data.Dataset):
         if self.transform is not None:
             img = self.transform(img)
 
-        return img, target, index
+        return img, target#, index
 
     def get(self, index:int) -> Tuple[Any, Any]:
         """
