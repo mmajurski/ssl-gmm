@@ -186,7 +186,7 @@ def train(args):
 
     def log_lr_reduction():
         logging.info("Learning rate reduced")
-    plateau_scheduler = lr_scheduler.ReduceLROnPlateau(optimizer, mode='min', factor=args.lr_reduction_factor, patience=args.patience, threshold=args.loss_eps, max_num_lr_reductions=args.num_lr_reductions, lr_reduction_callback=log_lr_reduction)
+    plateau_scheduler = lr_scheduler.ReduceLROnPlateau(optimizer, mode='max', factor=args.lr_reduction_factor, patience=args.patience, threshold=args.loss_eps, max_num_lr_reductions=args.num_lr_reductions, lr_reduction_callback=log_lr_reduction)
     # train epochs until loss converges
     while not plateau_scheduler.is_done() and epoch < trainer.MAX_EPOCHS:
         epoch += 1
