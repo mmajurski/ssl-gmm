@@ -73,7 +73,6 @@ class FixMatchTrainer_gmm(trainer.SupervisedTrainer):
                 gmm_list.append(gmm_skl)    
 
         class_preval = utils.compute_class_prevalance(dataloader)
-        logging.info(class_preval)
         class_preval = torch.tensor(list(class_preval.values()))
 
         # generate weights, mus and sigmas

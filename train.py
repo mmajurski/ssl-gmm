@@ -207,7 +207,8 @@ def train(args):
         model_trainer.eval_model(model, val_dataset, criterion, train_stats, "val", epoch)
 
         val_loss = train_stats.get_epoch('val_loss', epoch=epoch)
-        plateau_scheduler.step(val_loss)
+        val_accuracy = train_stats.get_epoch('val_accuracy', epoch=epoch)
+        plateau_scheduler.step(val_accuracy)
 
         # update global metadata stats
         train_stats.add_global('training_wall_time', train_stats.get('train_wall_time', aggregator='sum'))
@@ -220,7 +221,7 @@ def train(args):
         # handle early stopping when loss converges
         # if plateau_scheduler_sl.num_bad_epochs == 0:  # use if you only want literally the best epoch, instead of taking into account the loss eps
         if plateau_scheduler.is_equiv_to_best_epoch:
-            logging.info('Updating best model with epoch: {} loss: {}'.format(epoch, val_loss))
+            logging.info('Updating best model with epoch: {} accuracy: {}'.format(epoch, val_accuracy))
             best_model = copy.deepcopy(model)
             best_epoch = epoch
 

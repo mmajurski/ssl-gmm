@@ -31,6 +31,8 @@ class kMeans(nn.Module):
 	def forward(self, x):
 		batch = x.size()[0]  # batch size
 
+		# TODO make this work with num_classes x feature embedding length elements
+
 		# ---
 		# Calculate distance to cluster centers
 		# ---
@@ -86,6 +88,7 @@ class kMeansResNet18(nn.Module):
 	def __init__(self, num_classes):
 		super(kMeansResNet18, self).__init__()
 
+		# TODO work out how to cluster in the 512 dim second to last layer
 		self.model = torchvision.models.resnet18(pretrained=False, num_classes=num_classes)
 		# self.model.fc = Identity()  # replace the fc layer with an identity to ensure it does nothing
 
@@ -354,7 +357,9 @@ def main():
 		train_dataset = datasets.MNIST('../data', train=True, download=True, transform=transform)
 		test_dataset = datasets.MNIST('../data', train=False, transform=transform)
 	else:
-		model = kMeansResNet18(num_classes=10).to(device)
+		# model = kMeansResNet18(num_classes=10).to(device)
+		model = torchvision.models.resnet18(pretrained=False, num_classes=10).to(device)
+
 
 		import cifar_datasets
 		train_dataset = cifar_datasets.Cifar10(transform=cifar_datasets.Cifar10.TRANSFORM_WEAK_TRAIN, train=True)
