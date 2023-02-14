@@ -143,12 +143,11 @@ class FixMatchTrainer_gmm(trainer.SupervisedTrainer):
             tp_counter_per_class.append(0)
             pl_accuracy_per_class.append(0)
 
-        gmm = self.build_gmm(model, pytorch_dataset, skl=self.args.skl)
 
         for rep_count in range(nb_reps):
             for batch_idx, tensor_dict_l in enumerate(dataloader):
                 # build the gmm per batch (slow, but intellectually identical to fixmatch)
-                # gmm = self.build_gmm(model, pytorch_dataset, skl=self.args.skl)
+                gmm = self.build_gmm(model, pytorch_dataset, skl=self.args.skl)
 
                 optimizer.zero_grad()
                 # adjust for the rep offset
