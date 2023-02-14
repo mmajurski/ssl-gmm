@@ -1,5 +1,6 @@
 from typing import Optional, Union
 import argparse
+import numpy as np
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -10,98 +11,12 @@ from torch.optim.lr_scheduler import StepLR
 import torchvision.models
 import torchvision.models.resnet as resnet
 import sys
+import metadata
+import copy
+import psutil
+import utils
+import lcl_models
 
-
-class Identity(nn.Module):
-	def __init__(self):
-		super(Identity, self).__init__()
-
-	def forward(self, x):
-		return x
-
-
-class kMeans(nn.Module):
-	def __init__(self, dim):
-		super().__init__()
-
-		self.dim = dim
-		self.centers = nn.Parameter(torch.rand(size=(self.dim, self.dim), requires_grad=True))
-
-
-	def forward(self, x):
-		batch = x.size()[0]  # batch size
-
-		# TODO make this work with num_classes x feature embedding length elements
-
-		# ---
-		# Calculate distance to cluster centers
-		# ---
-
-		# Upsample the x-data to [batch, dim, dim]
-		x_rep = x.unsqueeze(1).repeat(1, self.dim, 1)
-
-		# Upsample the clusters to [batch, 10, 10]
-		centers_rep = self.centers.unsqueeze(0).repeat(batch, 1, 1)
-
-		# Subtract to get diff of [batch, 10, 10]
-		diff = x_rep - centers_rep
-
-		# Obtain the square distance to each cluster
-		#  of size [batch, dim]
-		dist_sq = diff * diff
-		dist_sq = torch.sum(dist_sq, 2)
-
-		# Obtain the exponents
-		expo = -0.5 * dist_sq
-
-		# # Calculate the true numerators and denominators
-		# #  (we don't use this directly for responsibility calculation
-		# #   we actually use the "safe" versions that are shifted
-		# #   for stability)
-		# # Note 0.00010211761 = (2*pi)^(-dim/2) where dim=10
-		# #
-		# numer = 0.00010211761 * torch.exp(expo)
-		# denom = torch.sum(numer, 1)
-		# denom = denom.unsqueeze(1).repeat(1, self.dim)
-
-		# Obtain the "safe" (numerically stable) versions of the
-		#  exponents.  These "safe" exponents produce fake numer and denom
-		#  but guarantee that resp = fake_numer / fake_denom = numer / denom
-		#  where fake_numer and fake_denom are numerically stable
-		# expo_safe_off = self.km_safe_pool(expo)
-		expo_safe_off, _ = torch.max(expo, dim=-1, keepdim=True)
-		expo_safe = expo - expo_safe_off  # use broadcast instead of the repeat
-
-		# Calculate the responsibilities
-		numer_safe = torch.exp(expo_safe)
-		denom_safe = torch.sum(numer_safe, 1)
-		denom_safe = denom_safe.unsqueeze(1).repeat(1, self.dim)
-		resp = numer_safe / denom_safe
-
-		output = torch.log(resp)
-
-		return output
-
-
-
-class kMeansResNet18(nn.Module):
-	def __init__(self, num_classes):
-		super(kMeansResNet18, self).__init__()
-
-		# TODO work out how to cluster in the 512 dim second to last layer
-		self.model = torchvision.models.resnet18(pretrained=False, num_classes=num_classes)
-		# self.model.fc = Identity()  # replace the fc layer with an identity to ensure it does nothing
-
-
-		self.dim = num_classes
-		# kmeans layer
-		self.kmeans = kMeans(dim=self.dim)
-
-
-	def forward(self, x):
-		x = self.model(x)  # get the feature embedding of 512 dim
-		output = self.kmeans(x)
-		return output
 
 
 class Net(nn.Module):
@@ -220,18 +135,17 @@ class Net(nn.Module):
 
 
 
-def train(args, model, device, train_loader, optimizer, epoch):
+def train(args, model, device, train_loader, optimizer, epoch, train_stats):
 	model.train()
 
 	# Setup loss criteria
 	criterion = torch.nn.CrossEntropyLoss()
+	loss_list = list()
+	accuracy_list = list()
 
 
 	for batch_idx, (data, target) in enumerate(train_loader):
 		data, target = data.to(device), target.to(device)
-		target_size = target.size()
-		batch_size = target_size[0]
-		num_class  = 10
 
 		optimizer.zero_grad()
 		output = model(data)
@@ -239,6 +153,9 @@ def train(args, model, device, train_loader, optimizer, epoch):
 		batch_loss = criterion(output, target)
 		batch_loss.backward()
 		optimizer.step()
+		loss_list.append(batch_loss.item())
+		acc = torch.argmax(output, dim=-1) == target
+		accuracy_list.append(torch.mean(acc, dtype=torch.float32).item())
 
 
 		# output = output[:,:num_class]
@@ -259,38 +176,54 @@ def train(args, model, device, train_loader, optimizer, epoch):
 		# optimizer.step()
 		
 		if batch_idx % args.log_interval == 0:
-			print('Train Epoch: {} [{}/{} ({:.0f}%)]\tLoss: {:.6f}'.format(
-				epoch, batch_idx * len(data), len(train_loader.dataset),
-				100. * batch_idx / len(train_loader), batch_loss.item()))
+			# log loss and current GPU utilization
+			cpu_mem_percent_used = psutil.virtual_memory().percent
+			gpu_mem_percent_used, memory_total_info = utils.get_gpu_memory()
+			gpu_mem_percent_used = [np.round(100 * x, 1) for x in gpu_mem_percent_used]
+			print('  batch {}/{}  loss: {:8.8g}  lr: {:4.4g}  cpu_mem: {:2.1f}%  gpu_mem: {}% of {}MiB'.format(batch_idx, len(train_loader), batch_loss.item(), optimizer.param_groups[0]['lr'], cpu_mem_percent_used, gpu_mem_percent_used, memory_total_info))
+
+			# print('Train Epoch: {} [{}/{} ({:.0f}%)]\tLoss: {:.6f}'.format(
+			# 	epoch, batch_idx * len(data), len(train_loader.dataset),
+			# 	100. * batch_idx / len(train_loader), batch_loss.item()))
 			if args.dry_run:
 				break
 
+	train_stats.add(epoch, 'train_loss', np.nanmean(loss_list))
+	train_stats.add(epoch, 'train_accuracy', np.nanmean(accuracy_list))
 
 
-def test(model, device, test_loader):
+
+def test(model, device, test_loader, epoch, train_stats):
 	model.eval()
-	test_loss = 0
-	correct = 0
+	criterion = torch.nn.CrossEntropyLoss()
+	loss_list = list()
+	accuracy_list = list()
+
 	with torch.no_grad():
 		for data, target in test_loader:
 			data, target = data.to(device), target.to(device)
 
 			target_size = target.size()
-			batch_size = target_size[0]
-			num_class  = 10
 
 			output = model(data)
-			output = output[:,:num_class]
+			loss = criterion(output, target)
+			loss_list.append(loss.item())
+			acc = torch.argmax(output, dim=-1) == target
+			accuracy_list.append(torch.mean(acc, dtype=torch.float32).item())
 
-			test_loss += F.nll_loss(output, target, reduction='sum').item()  # sum up batch loss
-			pred = output.argmax(dim=1, keepdim=True)  # get the index of the max log-probability
-			correct += pred.eq(target.view_as(pred)).sum().item()
 
-	test_loss /= len(test_loader.dataset)
+			# test_loss += F.nll_loss(output, target, reduction='sum').item()  # sum up batch loss
+			# pred = output.argmax(dim=1, keepdim=True)  # get the index of the max log-probability
+			# correct += pred.eq(target.view_as(pred)).sum().item()
 
-	print('\nTest set: Average loss: {:.4f}, Accuracy: {}/{} ({:.0f}%)\n'.format(
-		test_loss, correct, len(test_loader.dataset),
-		100. * correct / len(test_loader.dataset)))
+	# test_loss /= len(test_loader.dataset)
+
+	test_loss = np.nanmean(loss_list)
+	test_acc = np.nanmean(accuracy_list)
+	train_stats.add(epoch, 'test_loss', test_loss)
+	train_stats.add(epoch, 'test_accuracy', test_acc)
+
+	print('Test set: Average loss: {:.4f}, Accuracy: {}'.format(test_loss, test_acc))
 	return test_loss
 
 
@@ -303,7 +236,7 @@ def main():
 						help='input batch size for testing (default: 1000)')
 	parser.add_argument('--epochs', type=int, default=14, metavar='N',
 						help='number of epochs to train (default: 14)')
-	parser.add_argument('--lr', type=float, default=0.01, metavar='LR',
+	parser.add_argument('--lr', type=float, default=3e-4, metavar='LR',
 						help='learning rate (default: 1.0)')
 	parser.add_argument('--gamma', type=float, default=0.7, metavar='M',
 						help='Learning rate step gamma (default: 0.7)')
@@ -315,7 +248,7 @@ def main():
 						help='quickly check a single pass')
 	parser.add_argument('--seed', type=int, default=1, metavar='S',
 						help='random seed (default: 1)')
-	parser.add_argument('--log-interval', type=int, default=100, metavar='N',
+	parser.add_argument('--log-interval', type=int, default=200, metavar='N',
 						help='how many batches to wait before logging training status')
 	parser.add_argument('--save-model', action='store_true', default=False,
 						help='For Saving the current Model')
@@ -323,7 +256,7 @@ def main():
 	use_cuda = not args.no_cuda and torch.cuda.is_available()
 	use_mps = not args.no_mps and torch.backends.mps.is_available()
 
-	torch.manual_seed(args.seed)
+	# torch.manual_seed(args.seed)
 
 	if use_cuda:
 		device = torch.device("cuda")
@@ -357,8 +290,8 @@ def main():
 		train_dataset = datasets.MNIST('../data', train=True, download=True, transform=transform)
 		test_dataset = datasets.MNIST('../data', train=False, transform=transform)
 	else:
-		# model = kMeansResNet18(num_classes=10).to(device)
-		model = torchvision.models.resnet18(pretrained=False, num_classes=10).to(device)
+		model = lcl_models.kMeansResNet18(num_classes=10).to(device)
+		# model = torchvision.models.resnet18(pretrained=False, num_classes=10).to(device)
 
 
 		import cifar_datasets
@@ -391,18 +324,33 @@ def main():
 	plateau_scheduler = lr_scheduler.ReduceLROnPlateau(optimizer, mode='min', factor=0.2, patience=20, threshold=1e-4, max_num_lr_reductions=2)
 
 	# scheduler = StepLR(optimizer, step_size=1, gamma=args.gamma)
+	# setup the metadata capture object
+	train_stats = metadata.TrainingStats()
 	epoch = -1
-	MAX_EPOCHS = 200
+	MAX_EPOCHS = 2000
+	best_model = copy.deepcopy(model)
 	while not plateau_scheduler.is_done() and epoch < MAX_EPOCHS:
 		epoch += 1
-		train(args, model, device, train_loader, optimizer, epoch)
+		train(args, model, device, train_loader, optimizer, epoch, train_stats)
 		torch.cuda.empty_cache()
 		torch.cuda.synchronize()
-		test_loss = test(model, device, test_loader)
+		test_loss = test(model, device, test_loader, epoch, train_stats)
 		plateau_scheduler.step(test_loss)
 
+		if plateau_scheduler.is_equiv_to_best_epoch:
+			print('Updating best model with epoch: {} loss: {}'.format(epoch, test_loss))
+			best_model = copy.deepcopy(model)
+
+			# update the global metrics with the best epoch
+			train_stats.update_global(epoch)
+
+		train_stats.export('./kmeans/')  # update metrics data on disk
+		train_stats.plot_all_metrics('./kmeans/')
+
+	train_stats.export('./kmeans/')  # update metrics data on disk
+	train_stats.plot_all_metrics('./kmeans/')
 	if args.save_model:
-		torch.save(model.state_dict(), "mnist_cnn.pt")
+		torch.save(best_model, "./kmeans/model.pt")
 
 
 if __name__ == '__main__':

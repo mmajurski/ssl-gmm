@@ -15,6 +15,7 @@ class TrainingStats():
         self.epoch_data = list()
         self.global_data = dict()
         self.metric_names = list()
+        self.best_epoch = None
 
     def add(self, epoch: int, metric_name: str, value):
         while len(self.epoch_data) <= epoch:
@@ -29,6 +30,7 @@ class TrainingStats():
         if epoch > len(self.epoch_data):
             raise RuntimeError('Missing data at epoch {} in epoch stats'.format(epoch))
 
+        self.best_epoch = epoch
         epoch_data = self.epoch_data[epoch]
         for k, v in epoch_data.items():
             self.add_global(k, v)
@@ -91,53 +93,41 @@ class TrainingStats():
         plt.savefig(os.path.join(ofldr, "epoch{:04d}_".format(epoch) + metric_name + "_norm" + ".png"))
         plt.close(fig)
 
-    def plot_metric(self, metric_name: str, output_dirpath: str, best_epoch:int=None):
-        df = pd.DataFrame(self.epoch_data)
-
-        if metric_name not in df.columns:
-            return
-
-        x = df['epoch'].to_list()
-        y1 = df[metric_name].to_list()
-        if len(y1) == 0:
-            return
-        y2 = None
-        if 'train' in metric_name:
-            val_metric_name = metric_name.replace('train','val')
-            if val_metric_name in df.columns:
-                y2 = df[val_metric_name].to_list()
-
-        fig = plt.figure() #dpi=200)
-        plt.plot(x, y1)
-        if y2 is not None:
-            plt.plot(x, y2)
-            plt.legend(['train', 'val'])
-
-        if best_epoch is not None:
-            y1_best = y1[best_epoch]
-            plt.plot(best_epoch, y1_best, marker='*')
-            if y2 is not None:
-                y2_best = y2[best_epoch]
-                plt.plot(best_epoch, y2_best, marker='*')
-
-        # if 'loss' in metric_name:
-        #     # limit the y axis to 95% percentile
-        #     if y2 is not None:
-        #         y1.extend(y2)
-        #     y1 = [a for a in y1 if np.isfinite(a)]
-        #     p95 = np.percentile(y1, 95)
-        #     plt.ylim((0.95 * np.min(y1)), p95)
-
-        plt.title(metric_name)
-        plt.xlabel('Epoch')
-        plt.savefig(os.path.join(output_dirpath, '{}.png'.format(metric_name)))
-        plt.close(fig)
-
     def plot_all_metrics(self, output_dirpath: str):
         df = pd.DataFrame(self.epoch_data)
-        # plot all metrics if its useful (its usually not)
+        col_list = list(df.columns)
+
         fig = plt.figure(figsize=(8, 4), dpi=200)
-        for col in df.columns:
+
+        for cm in {'loss', 'accuracy'}:
+            core_metrics = ['train_{}'.format(cm),'val_{}'.format(cm),'test_{}'.format(cm)]
+            core_metrics = [a for a in core_metrics if a in col_list]
+            [col_list.remove(m) for m in core_metrics]
+            # plot the loss curves
+
+            if len(core_metrics) > 0:
+                plt.clf()
+                ax = plt.gca()
+                for col in core_metrics:
+                    x = df['epoch'].to_list()
+                    y = df[col].to_list()
+                    ax.plot(x, y, '-')
+                ax.legend(core_metrics)
+
+                # plot the best indicator after the legend, so that it does not show up in the legend
+                if self.best_epoch is not None:
+                    for col in core_metrics:
+                        y = df[col].to_list()
+                        y1_best = y[self.best_epoch]
+                        plt.plot(self.best_epoch, y1_best, marker='*', c='k')
+
+                ax.set_xlabel('Epoch')
+                ax.set_ylabel('{}'.format(cm))
+                plt.tight_layout()
+                plt.savefig(os.path.join(output_dirpath, '{}.png'.format(cm)))
+
+        # plot all metrics if its useful (its usually not)
+        for col in col_list:
             if col == 'epoch':
                 continue  # don't plot epochs against itself
             plt.clf()

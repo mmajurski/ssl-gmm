@@ -22,7 +22,7 @@ import utils
 import trainer
 import trainer_fixmatch
 import trainer_gmm
-
+import lcl_models
 
 
 def plot_selected_metrics(train_stats, args, best_epoch):
@@ -91,17 +91,25 @@ def setup(args):
         logging.info("Loading requested starting model from '{}'".format(args.starting_model))
         model = torch.load(args.starting_model)
     else:
-        if args.arch == 'resnet18':
-            model = torchvision.models.resnet18(pretrained=False, num_classes=args.num_classes)
-            #model = flavored_resnets.ResNet18(num_classes=args.num_classes)
-        if args.arch == 'resnet34':
-            model = torchvision.models.resnet34(pretrained=False, num_classes=args.num_classes)
-        if args.arch == 'resnext50_32x4d':
-            model = torchvision.models.resnext50_32x4d(pretrained=False, num_classes=args.num_classes)
-        if args.arch == 'wide_resnet50_2':
-            model = torchvision.models.wide_resnet50_2(pretrained=False, num_classes=args.num_classes)
-        if args.arch == 'wide_resnet':
-            model = flavored_wideresnet.build_wideresnet(num_classes=args.num_classes)
+        if args.last_layer == 'fc':
+            if args.arch == 'resnet18':
+                model = torchvision.models.resnet18(pretrained=False, num_classes=args.num_classes)
+                # model = flavored_resnets.ResNet18(num_classes=args.num_classes)
+            if args.arch == 'resnet34':
+                model = torchvision.models.resnet34(pretrained=False, num_classes=args.num_classes)
+            if args.arch == 'resnext50_32x4d':
+                model = torchvision.models.resnext50_32x4d(pretrained=False, num_classes=args.num_classes)
+            if args.arch == 'wide_resnet50_2':
+                model = torchvision.models.wide_resnet50_2(pretrained=False, num_classes=args.num_classes)
+            if args.arch == 'wide_resnet':
+                model = flavored_wideresnet.build_wideresnet(num_classes=args.num_classes)
+
+        elif args.last_layer == 'kmeans':
+            if args.arch == 'resnet18':
+                model = lcl_models.kMeansResNet18(num_classes=args.num_classes)
+        elif args.last_layer == 'gmm':
+            if args.arch == 'resnet18':
+                model = lcl_models.GmmResNet18(num_classes=args.num_classes)
 
     if model is None:
         raise RuntimeError("Unsupported model architecture selection: {}.".format(args.arch))
@@ -156,9 +164,9 @@ def train(args):
 
 
     # setup the trainer
-    # model_trainer = trainer.SupervisedTrainer(args)
+    model_trainer = trainer.SupervisedTrainer(args)
     # model_trainer = trainer_fixmatch.FixMatchTrainer(args)
-    model_trainer = trainer_gmm.FixMatchTrainer_gmm(args)
+    # model_trainer = trainer_gmm.FixMatchTrainer_gmm(args)
 
     # setup the metadata capture object
     train_stats = metadata.TrainingStats()
