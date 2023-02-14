@@ -57,6 +57,8 @@ class ReduceLROnPlateau(torch.optim.lr_scheduler.ReduceLROnPlateau):
         return self.num_lr_reductions > self.max_num_lr_reductions
 
     def step(self, metrics, epoch=None):
+        if self.mode not in ['min','max']:
+            raise RuntimeError("Invalid mode: {}".format(self.mode))
         # convert `metrics` to float, in case it's a zero-dim Tensor
         current = float(metrics)
         # keep separate track of the globally best metric
@@ -68,11 +70,14 @@ class ReduceLROnPlateau(torch.optim.lr_scheduler.ReduceLROnPlateau):
             self.best_metric = current
 
         self.metric_values.append(current)
-        self.last_epoch = epoch
         if epoch is None:
             epoch = self.last_epoch + 1
+        self.last_epoch = epoch
 
-        error_from_best = np.abs(np.asarray(self.metric_values) - np.nanmin(self.metric_values))
+        if self.mode == 'min':
+            error_from_best = np.abs(np.asarray(self.metric_values) - np.nanmin(self.metric_values))
+        else:
+            error_from_best = np.abs(np.asarray(self.metric_values) - np.nanmax(self.metric_values))
         error_from_best[error_from_best < np.abs(self.threshold)] = 0
         if np.all(np.isnan(error_from_best)):
             return
@@ -82,10 +87,7 @@ class ReduceLROnPlateau(torch.optim.lr_scheduler.ReduceLROnPlateau):
         # update the number of "bad" epochs. The (epoch-1) handles 0 based indexing vs natural counting of epochs
         self.num_bad_epochs = (epoch-1) - self.best_metric_epoch
         # if this epoch is equivalent in loss to the best
-        if self.mode == 'min':
-            self.is_equiv_to_best_epoch = current <= (self.best_metric + self.threshold)
-        if self.mode == 'max':
-            self.is_equiv_to_best_epoch = current >= (self.best_metric + self.threshold)
+        self.is_equiv_to_best_epoch = error_from_best[-1] == 0
 
         if self.num_bad_epochs > self.patience:
             self.num_lr_reductions += 1

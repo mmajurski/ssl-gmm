@@ -25,14 +25,6 @@ import trainer_gmm
 import lcl_models
 
 
-def plot_selected_metrics(train_stats, args, best_epoch):
-    train_stats.plot_metric('train_loss', args.output_dirpath, best_epoch)
-    train_stats.plot_metric('train_accuracy', args.output_dirpath, best_epoch)
-    train_stats.plot_metric('train_pseudo_label_loss', args.output_dirpath, best_epoch)
-
-    train_stats.plot_metric('pseudo_label_accuracy', args.output_dirpath, best_epoch)
-    train_stats.plot_metric('num_pseudo_labels', args.output_dirpath, best_epoch)
-
 
 def fully_supervised_pretrain(model, train_dataset_labeled, val_dataset, criterion, args, train_stats):
 
@@ -51,7 +43,7 @@ def fully_supervised_pretrain(model, train_dataset_labeled, val_dataset, criteri
         epoch += 1
         logging.info("Epoch (fully supervised): {}".format(epoch))
 
-        plot_selected_metrics(train_stats, args, best_epoch)
+        train_stats.plot_all_metrics(output_dirpath=args.output_dirpath)
 
         logging.info("  training")
         model_trainer.train_epoch(model, train_dataset_labeled, optimizer, criterion, epoch, train_stats, nb_reps=args.nb_reps)
@@ -164,9 +156,9 @@ def train(args):
 
 
     # setup the trainer
-    model_trainer = trainer.SupervisedTrainer(args)
+    # model_trainer = trainer.SupervisedTrainer(args)
     # model_trainer = trainer_fixmatch.FixMatchTrainer(args)
-    # model_trainer = trainer_gmm.FixMatchTrainer_gmm(args)
+    model_trainer = trainer_gmm.FixMatchTrainer_gmm(args)
 
     # setup the metadata capture object
     train_stats = metadata.TrainingStats()
@@ -200,7 +192,7 @@ def train(args):
         epoch += 1
         logging.info("Epoch: {}".format(epoch))
 
-        plot_selected_metrics(train_stats, args, best_epoch)
+        train_stats.plot_all_metrics(output_dirpath=args.output_dirpath)
 
         logging.info("  training")
         # import cProfile

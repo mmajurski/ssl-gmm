@@ -22,24 +22,25 @@ class FixMatchTrainer_gmm(trainer.SupervisedTrainer):
         model_training_status = model.training
         model.eval()
 
-        bs = min(256, len(pytorch_dataset))
+        bs = min(1024, len(pytorch_dataset))
         dataloader = torch.utils.data.DataLoader(pytorch_dataset, batch_size=bs, shuffle=False,
                                                  num_workers=self.args.num_workers,
                                                  worker_init_fn=utils.worker_init_fn)
         dataset_logits = list()
         dataset_labels = list()
-        for batch_idx, tensor_dict in enumerate(dataloader):
-            inputs = tensor_dict[0].cuda()
-            labels = tensor_dict[1].cuda()
+        with torch.no_grad():
+            for batch_idx, tensor_dict in enumerate(dataloader):
+                inputs = tensor_dict[0].cuda()
+                labels = tensor_dict[1].cuda()
 
-            if self.args.amp:
-                with torch.cuda.amp.autocast():
+                if self.args.amp:
+                    with torch.cuda.amp.autocast():
+                        outputs = model(inputs)
+                else:
                     outputs = model(inputs)
-            else:
-                outputs = model(inputs)
 
-            dataset_logits.append(outputs.detach().cpu())
-            dataset_labels.append(labels.detach().cpu())
+                dataset_logits.append(outputs.detach().cpu())
+                dataset_labels.append(labels.detach().cpu())
 
         bucketed_dataset_logits = list()
         # join together the individual batches of numpy logit data
@@ -142,10 +143,12 @@ class FixMatchTrainer_gmm(trainer.SupervisedTrainer):
             tp_counter_per_class.append(0)
             pl_accuracy_per_class.append(0)
 
+        gmm = self.build_gmm(model, pytorch_dataset, skl=self.args.skl)
+
         for rep_count in range(nb_reps):
             for batch_idx, tensor_dict_l in enumerate(dataloader):
                 # build the gmm per batch (slow, but intellectually identical to fixmatch)
-                gmm = self.build_gmm(model, pytorch_dataset, skl=self.args.skl)
+                # gmm = self.build_gmm(model, pytorch_dataset, skl=self.args.skl)
 
                 optimizer.zero_grad()
                 # adjust for the rep offset
