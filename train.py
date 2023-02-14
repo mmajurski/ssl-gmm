@@ -239,7 +239,7 @@ def train(args):
     best_model.cuda()  # move the model back to the GPU (saving moved the best model back to the cpu)
 
     logging.info('Evaluating model against test dataset using softmax and gmm')
-    model_trainer.eval_model(model, val_dataset, criterion, train_stats, "val", epoch)
+    model_trainer.eval_model(model, test_dataset, criterion, train_stats, "test", epoch)
 
     # update the global metrics with the best epoch, to include test stats
     train_stats.update_global(best_epoch)
