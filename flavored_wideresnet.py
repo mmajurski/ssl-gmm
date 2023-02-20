@@ -4,6 +4,8 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
+import lcl_models
+
 logger = logging.getLogger(__name__)
 
 
@@ -60,12 +62,13 @@ class NetworkBlock(nn.Module):
 
 
 class WideResNet(nn.Module):
-    def __init__(self, num_classes, depth=28, width=2):
+    def __init__(self, num_classes, last_layer:str='fc', depth=28, width=2):
         assert (depth - 4) % 6 == 0, 'depth should be 6n+4'
 
         super(WideResNet, self).__init__()
         channels = [16, 16*width, 32*width, 64*width]
         n = (depth - 4) / 6
+        self.channels = channels[3]
 
         # 1st conv before any network block
         self.conv1 = nn.Conv2d(3, channels[0], kernel_size=3, stride=1, padding=1, bias=False)
@@ -80,8 +83,17 @@ class WideResNet(nn.Module):
         # self.relu = nn.ReLU(inplace=True)  # published wideresnet network
         self.relu = nn.LeakyReLU(negative_slope=0.1, inplace=True)
         # TODO replace with GMM
-        self.fc = nn.Linear(channels[3], num_classes)
-        self.channels = channels[3]
+        if last_layer == 'fc':
+            self.fc = nn.Linear(channels[3], num_classes)
+        elif last_layer == 'kmeans':
+            self.fc = lcl_models.kMeans(dim=self.channels, num_classes=num_classes)
+        elif last_layer == 'gmm':
+            raise NotImplementedError()
+        elif last_layer == 'caughy':
+            raise NotImplementedError()
+        else:
+            raise RuntimeError("Invalid last layer type: {}".format(last_layer))
+
 
     def forward(self, x):
         out = self.conv1(x)
@@ -93,9 +105,3 @@ class WideResNet(nn.Module):
         out = out.view(-1, self.channels)
         return self.fc(out)
 
-
-def build_wideresnet(num_classes, depth=28, width=2):
-    logger.info(f"Model: WideResNet {depth}x{width}")
-    return WideResNet(depth=depth,
-                      width=width,
-                      num_classes=num_classes)

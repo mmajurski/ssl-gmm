@@ -94,11 +94,13 @@ def setup(args):
             if args.arch == 'wide_resnet50_2':
                 model = torchvision.models.wide_resnet50_2(pretrained=False, num_classes=args.num_classes)
             if args.arch == 'wide_resnet':
-                model = flavored_wideresnet.build_wideresnet(num_classes=args.num_classes)
+                model = flavored_wideresnet.WideResNet(num_classes=args.num_classes, last_layer=args.last_layer)
 
         elif args.last_layer == 'kmeans':
             if args.arch == 'resnet18':
                 model = lcl_models.kMeansResNet18(num_classes=args.num_classes)
+            if args.arch == 'wide_resnet':
+                model = flavored_wideresnet.WideResNet(num_classes=args.num_classes, last_layer=args.last_layer)
         elif args.last_layer == 'gmm':
             if args.arch == 'resnet18':
                 model = lcl_models.GmmResNet18(num_classes=args.num_classes)
@@ -156,9 +158,15 @@ def train(args):
 
 
     # setup the trainer
-    # model_trainer = trainer.SupervisedTrainer(args)
-    # model_trainer = trainer_fixmatch.FixMatchTrainer(args)
-    model_trainer = trainer_gmm.FixMatchTrainer_gmm(args)
+    # supervised, fixmatch, fixmatch-gmm
+    if args.trainer == 'supervised':
+        model_trainer = trainer.SupervisedTrainer(args)
+    elif args.trainer == 'fixmatch':
+        model_trainer = trainer_fixmatch.FixMatchTrainer(args)
+    elif args.trainer == 'fixmatch-gmm':
+        model_trainer = trainer_gmm.FixMatchTrainer_gmm(args)
+    else:
+        raise RuntimeError("Invalid trainer request: {}".format(args.trainer))
 
     # setup the metadata capture object
     train_stats = metadata.TrainingStats()
@@ -186,6 +194,7 @@ def train(args):
 
     def log_lr_reduction():
         logging.info("Learning rate reduced")
+
     plateau_scheduler = lr_scheduler.ReduceLROnPlateau(optimizer, mode='max', factor=args.lr_reduction_factor, patience=args.patience, threshold=args.loss_eps, max_num_lr_reductions=args.num_lr_reductions, lr_reduction_callback=log_lr_reduction)
     # train epochs until loss converges
     while not plateau_scheduler.is_done() and epoch < trainer.MAX_EPOCHS:

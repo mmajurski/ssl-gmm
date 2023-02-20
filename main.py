@@ -38,7 +38,8 @@ def main():
     parser.add_argument('--strong-augmentation', help='enables strong augmentation', action='store_true')
     parser.add_argument('--debug', help='enables debugging mode', action='store_true')
     parser.add_argument('--skl',help='uses sklearn implementation of Gaussian Mixture',action='store_true')
-    parser.add_argument('--last_layer', type=str, default='fc', help='last layer to use in the NN (currently supported fc, kmeans)')
+    parser.add_argument('--last-layer', type=str, default='kmeans', help='last layer to use in the NN (currently supported fc, kmeans)')
+    parser.add_argument('--trainer', type=str, default='supervised', help='trainer to use (currently supported supervised, fixmatch, fixmatch-gmm)')
 
 
     args = parser.parse_args()

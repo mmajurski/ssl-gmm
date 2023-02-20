@@ -60,6 +60,8 @@ class kMeans(torch.nn.Module):
         expo_safe_off, _ = torch.max(expo, dim=-1, keepdim=True)
         expo_safe = expo - expo_safe_off  # use broadcast instead of the repeat
 
+        # TODO create a cauchy version of this resp
+
         # Calculate the responsibilities
         numer_safe = torch.exp(expo_safe)
         denom_safe = torch.sum(numer_safe, 1, keepdim=True)
