@@ -89,7 +89,7 @@ class WideResNet(nn.Module):
             self.fc = lcl_models.kMeans(dim=self.channels, num_classes=num_classes)
         elif last_layer == 'gmm':
             raise NotImplementedError()
-        elif last_layer == 'caughy':
+        elif last_layer == 'cauchy':
             raise NotImplementedError()
         else:
             raise RuntimeError("Invalid last layer type: {}".format(last_layer))
