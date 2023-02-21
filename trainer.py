@@ -20,6 +20,7 @@ class SupervisedTrainer:
 
     def __init__(self, args):
         self.args = args
+        self.gmm = None
 
     def get_optimizer(self, model):
         # Setup optimizer
@@ -137,6 +138,9 @@ class SupervisedTrainer:
         gt_labels = list()
         preds = list()
 
+        if self.gmm is not None:
+            gmm_preds = list()
+
         with torch.no_grad():
             for batch_idx, tensor_dict in enumerate(dataloader):
                 inputs = tensor_dict[0].cuda()
@@ -156,6 +160,18 @@ class SupervisedTrainer:
                 pred = torch.argmax(outputs, dim=-1).detach().cpu().numpy()
                 preds.extend(pred)
 
+                if self.gmm is not None:
+                    # passing the logits acquired before the softmax to gmm as inputs
+                    gmm_inputs = outputs.detach().cpu().numpy()
+                    if self.args.inference_method == 'gmm':
+                        gmm_resp = self.gmm.predict_proba(gmm_inputs)  # N*1, N*K
+                    elif self.args.inference_method == 'cauchy':
+                        _, _, gmm_resp = self.gmm.predict_cauchy_probability(gmm_inputs)
+                    if not isinstance(gmm_resp, np.ndarray):
+                        gmm_resp = gmm_resp.detach().cpu().numpy()
+                    gmm_pred = np.argmax(gmm_resp, axis=-1) // self.args.cluster_per_class
+                    gmm_preds.extend(gmm_pred)
+
                 if batch_idx % 100 == 0:
                     # log loss and current GPU utilization
                     cpu_mem_percent_used = psutil.virtual_memory().percent
@@ -173,3 +189,11 @@ class SupervisedTrainer:
         train_stats.add(epoch, '{}_loss'.format(split_name), avg_loss)
         train_stats.add(epoch, '{}_accuracy'.format(split_name), softmax_accuracy)
 
+        if self.gmm is not None:
+            gmm_preds = np.asarray(gmm_preds)
+            gmm_accuracy = (gmm_preds == gt_labels).astype(float)
+            gmm_accuracy = np.mean(gmm_accuracy)
+            acc_string = 'gmm_accuracy'
+            if self.args.inference_method == 'cauchy':
+                acc_string = 'cmm_accuracy'
+            train_stats.add(epoch, '{}_{}'.format(split_name, acc_string), gmm_accuracy)

@@ -147,7 +147,7 @@ class FixMatchTrainer_gmm(trainer.SupervisedTrainer):
         for rep_count in range(nb_reps):
             for batch_idx, tensor_dict_l in enumerate(dataloader):
                 # build the gmm per batch (slow, but intellectually identical to fixmatch)
-                gmm = self.build_gmm(model, pytorch_dataset, skl=self.args.skl)
+                self.gmm = self.build_gmm(model, pytorch_dataset, skl=self.args.skl)
 
                 optimizer.zero_grad()
                 # adjust for the rep offset
@@ -194,10 +194,10 @@ class FixMatchTrainer_gmm(trainer.SupervisedTrainer):
 
                 # TODO: check if we are supposed to train gmm or not
                 if self.args.inference_method == 'gmm':
-                    resp = gmm.predict_proba(gmm_inputs)  # N*1, N*
+                    resp = self.gmm.predict_proba(gmm_inputs)  # N*1, N*
                     resp = torch.tensor(resp)  # wrap into a tensor if its a numpy array
                 elif self.args.inference_method == 'cauchy':
-                    cauchy_unnorm_resp, _, resp = gmm.predict_cauchy_probability(gmm_inputs)
+                    cauchy_unnorm_resp, _, resp = self.gmm.predict_cauchy_probability(gmm_inputs)
                 else:
                     msg = "Invalid inference method: {}".format(self.args.inference_method)
                     raise RuntimeError(msg)
