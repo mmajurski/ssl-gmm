@@ -17,6 +17,10 @@ from skl_cauchy_mm import CMM
 
 class FixMatchTrainer_gmm(trainer.SupervisedTrainer):
 
+    def __init__(self, args):
+        super().__init__(args)
+        self.gmm = None
+
     def build_gmm(self, model, pytorch_dataset, skl=True):
 
         model_training_status = model.training
@@ -335,3 +339,77 @@ class FixMatchTrainer_gmm(trainer.SupervisedTrainer):
         train_stats.add(epoch, 'pseudo_label_percentage_per_class', vals.tolist())
         vals = np.asarray(tp_counter_per_class) / np.sum(tp_counter_per_class)
         train_stats.add(epoch, 'pseudo_label_gt_percentage_per_class', vals.tolist())
+
+    def eval_model(self, model, pytorch_dataset, criterion, train_stats, split_name, epoch):
+        if pytorch_dataset is None or len(pytorch_dataset) == 0:
+            return
+
+        dataloader = torch.utils.data.DataLoader(pytorch_dataset, batch_size=self.args.batch_size, shuffle=False, num_workers=self.args.num_workers, worker_init_fn=utils.worker_init_fn)
+
+        batch_count = len(dataloader)
+        model.eval()
+        start_time = time.time()
+
+        loss_list = list()
+        gt_labels = list()
+        preds = list()
+
+        if self.gmm is not None:
+            gmm_preds = list()
+
+        with torch.no_grad():
+            for batch_idx, tensor_dict in enumerate(dataloader):
+                inputs = tensor_dict[0].cuda()
+                labels = tensor_dict[1].cuda()
+
+                labels_cpu = labels.detach().cpu().numpy()
+                gt_labels.extend(labels_cpu)
+
+                # if self.args.amp:
+                #     with torch.cuda.amp.autocast():
+                #         outputs = model(inputs)
+                # else:
+                outputs = model(inputs)
+
+                batch_loss = criterion(outputs, labels)
+                loss_list.append(batch_loss.item())
+                pred = torch.argmax(outputs, dim=-1).detach().cpu().numpy()
+                preds.extend(pred)
+
+                if self.gmm is not None:
+                    # passing the logits acquired before the softmax to gmm as inputs
+                    gmm_inputs = outputs.detach().cpu().numpy()
+                    if self.args.inference_method == 'gmm':
+                        gmm_resp = self.gmm.predict_proba(gmm_inputs)  # N*1, N*K
+                    elif self.args.inference_method == 'cauchy':
+                        _, _, gmm_resp = self.gmm.predict_cauchy_probability(gmm_inputs)
+                    if not isinstance(gmm_resp, np.ndarray):
+                        gmm_resp = gmm_resp.detach().cpu().numpy()
+                    gmm_pred = np.argmax(gmm_resp, axis=-1) // self.args.cluster_per_class
+                    gmm_preds.extend(gmm_pred)
+
+                if batch_idx % 100 == 0:
+                    # log loss and current GPU utilization
+                    cpu_mem_percent_used = psutil.virtual_memory().percent
+                    gpu_mem_percent_used, memory_total_info = utils.get_gpu_memory()
+                    gpu_mem_percent_used = [np.round(100 * x, 1) for x in gpu_mem_percent_used]
+                    logging.info('  batch {}/{}  loss: {:8.8g}  cpu_mem: {:2.1f}%  gpu_mem: {}% of {}MiB'.format(batch_idx, batch_count, batch_loss.item(), cpu_mem_percent_used, gpu_mem_percent_used, memory_total_info))
+
+        avg_loss = np.nanmean(loss_list)
+        gt_labels = np.asarray(gt_labels)
+        softmax_preds = np.asarray(preds)
+        softmax_accuracy = np.mean((softmax_preds == gt_labels).astype(float))
+
+        wall_time = time.time() - start_time
+        train_stats.add(epoch, '{}_wall_time'.format(split_name), wall_time)
+        train_stats.add(epoch, '{}_loss'.format(split_name), avg_loss)
+        train_stats.add(epoch, '{}_accuracy'.format(split_name), softmax_accuracy)
+
+        if self.gmm is not None:
+            gmm_preds = np.asarray(gmm_preds)
+            gmm_accuracy = (gmm_preds == gt_labels).astype(float)
+            gmm_accuracy = np.mean(gmm_accuracy)
+            acc_string = 'gmm_accuracy'
+            if self.args.inference_method == 'cauchy':
+                acc_string = 'cmm_accuracy'
+            train_stats.add(epoch, '{}_{}'.format(split_name, acc_string), gmm_accuracy)
