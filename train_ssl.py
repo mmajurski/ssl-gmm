@@ -11,7 +11,7 @@ import sklearn.mixture
 import cifar_datasets
 import metadata
 from gmm_module import GMM
-from skl_cauchy_mm import CMM
+from skl_cauchy_mm import GMM_SKL
 import lr_scheduler
 import flavored_resnet18
 import flavored_wideresnet

@@ -3,7 +3,7 @@ import sklearn.mixture
 from math import gamma
 
 
-class CMM(sklearn.mixture.GaussianMixture):
+class GMM_SKL(sklearn.mixture.GaussianMixture):
     def __init__(self, isCauchy, **kwargs):
         super().__init__(**kwargs)
         self.isCauchy = isCauchy
