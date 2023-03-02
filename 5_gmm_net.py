@@ -10,6 +10,8 @@ from torch.optim.lr_scheduler import StepLR
 import torchvision.models.resnet as resnet
 import sys
 
+import lcl_models
+
 
 class Net(nn.Module):
 	def __init__(self):
@@ -26,6 +28,8 @@ class Net(nn.Module):
 		self.dropout2 = nn.Dropout(0.5)
 		self.fc1 = nn.Linear(9216, 128)
 		self.fc2 = nn.Linear(128, dim)
+
+		self.gmm_layer = lcl_models.gmm_layer(dim, dim)
 		
 		#----------
 		# The k-means layer
@@ -77,6 +81,8 @@ class Net(nn.Module):
 		x = self.dropout2(x)
 		x = self.fc2(x)	
 
+		output = self.gmm_layer(x)
+		return output
 
 		#---------
 		# The k-means layer
@@ -100,6 +106,8 @@ class Net(nn.Module):
 		centers = self.km_linear(zeros)
 		centers = torch.reshape(centers,(dim,dim))
 
+		centers = self.gmm_layer.centers
+
 		#---
 		# Construct the Sigma matrix through
 		#  LDL decomposition
@@ -115,6 +123,7 @@ class Net(nn.Module):
 			# Hack, the raw weights are stored in chol_linear[k]
 			raw_mat = self.chol_linear[k](zeros)
 			raw_mat = torch.reshape(raw_mat,(dim,dim))
+			raw_mat = self.gmm_layer.L[k,]
 	
 			# Construct the L matrix for LDL
 			L       = torch.tril(raw_mat,diagonal=-1)
@@ -233,10 +242,12 @@ class Net(nn.Module):
 		# Use the k-means layer
 		#     not we take log, because this model
 		#     outputs log softmax
-		output = torch.log(resp)
+		# output = torch.log(resp)
 		
 		# Uncomment for regular log-softmax layer
 #		output = F.log_softmax(x, dim=1)
+
+		output = resp
 
 		return output
 
@@ -244,6 +255,13 @@ class Net(nn.Module):
 
 def train(args, model, device, train_loader, optimizer, epoch):
 	model.train()
+
+	criterion = torch.nn.CrossEntropyLoss()
+
+	import time
+	start_time = time.time()
+
+
 
 	for batch_idx, (data, target) in enumerate(train_loader):
 		data, target = data.to(device), target.to(device)
@@ -253,19 +271,21 @@ def train(args, model, device, train_loader, optimizer, epoch):
 
 		optimizer.zero_grad()
 		output = model(data)
-		output = output[:,:num_class]
+		loss = criterion(output, target)
 
-		# calculate y and yhat
-		y=F.one_hot(target,num_class)
-		yhat=torch.softmax(output,dim=1)
-
-		# implement log_loss by hand
-		minus_one_over_N = (-1.0 / (batch_size*num_class))
-				
-		log_yhat=torch.log(torch.clamp(yhat,min=0.0001))
-		log_one_minus_yhat=torch.log(torch.clamp(1.0-yhat,min=0.0001))
-		presum=(y * log_yhat + (1.0-y)*log_one_minus_yhat) * minus_one_over_N
-		loss = torch.sum(  presum  )
+		# output = output[:,:num_class]
+		#
+		# # calculate y and yhat
+		# y=F.one_hot(target,num_class)
+		# yhat=torch.softmax(output,dim=1)
+		#
+		# # implement log_loss by hand
+		# minus_one_over_N = (-1.0 / (batch_size*num_class))
+		#
+		# log_yhat=torch.log(torch.clamp(yhat,min=0.0001))
+		# log_one_minus_yhat=torch.log(torch.clamp(1.0-yhat,min=0.0001))
+		# presum=(y * log_yhat + (1.0-y)*log_one_minus_yhat) * minus_one_over_N
+		# loss = torch.sum(  presum  )
 		
 		loss.backward()
 		optimizer.step()
@@ -277,8 +297,10 @@ def train(args, model, device, train_loader, optimizer, epoch):
 			if args.dry_run:
 				break
 				
-		if batch_idx * len(data) >= len(train_loader.dataset)/4:
-			break
+		# if batch_idx * len(data) >= len(train_loader.dataset)/4:
+		# 	break
+
+	print("Epoch took {}s".format(time.time() - start_time))
 
 
 
@@ -329,7 +351,7 @@ def main():
 						help='quickly check a single pass')
 	parser.add_argument('--seed', type=int, default=1, metavar='S',
 						help='random seed (default: 1)')
-	parser.add_argument('--log-interval', type=int, default=10, metavar='N',
+	parser.add_argument('--log-interval', type=int, default=100, metavar='N',
 						help='how many batches to wait before logging training status')
 	parser.add_argument('--save-model', action='store_true', default=False,
 						help='For Saving the current Model')
@@ -349,7 +371,7 @@ def main():
 	train_kwargs = {'batch_size': args.batch_size}
 	test_kwargs = {'batch_size': args.test_batch_size}
 	if use_cuda:
-		cuda_kwargs = {'num_workers': 1,
+		cuda_kwargs = {'num_workers': 10,
 					   'pin_memory': True,
 					   'shuffle': True}
 		train_kwargs.update(cuda_kwargs)
@@ -373,9 +395,8 @@ def main():
 	
 	#input("20")
 
-	#layers = dict(model.named_children())
-	layers = dict(model.named_modules())
-	print(layers)
+	# layers = dict(model.named_modules())
+	# print(layers)
 	
 #	sys.exit(0)
 #	#input ("press enter")

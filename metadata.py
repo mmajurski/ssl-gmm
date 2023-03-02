@@ -93,7 +93,7 @@ class TrainingStats():
         plt.savefig(os.path.join(ofldr, "epoch{:04d}_".format(epoch) + metric_name + "_norm" + ".png"))
         plt.close(fig)
 
-    def plot_all_metrics(self, output_dirpath: str):
+    def plot_all_metrics(self, output_dirpath: str, all_one_figure: bool = False):
         df = pd.DataFrame(self.epoch_data)
         col_list = list(df.columns)
 
@@ -106,7 +106,8 @@ class TrainingStats():
             # plot the loss curves
 
             if len(core_metrics) > 0:
-                plt.clf()
+                if not all_one_figure:
+                    plt.clf()
                 ax = plt.gca()
                 for col in core_metrics:
                     x = df['epoch'].to_list()
@@ -124,13 +125,15 @@ class TrainingStats():
                 ax.set_xlabel('Epoch')
                 ax.set_ylabel('{}'.format(cm))
                 plt.tight_layout()
-                plt.savefig(os.path.join(output_dirpath, '{}.png'.format(cm)))
+                if not all_one_figure:
+                    plt.savefig(os.path.join(output_dirpath, '{}.png'.format(cm)))
 
         # plot all metrics if its useful (its usually not)
         for col in col_list:
             if col == 'epoch':
                 continue  # don't plot epochs against itself
-            plt.clf()
+            if not all_one_figure:
+                plt.clf()
             ax = plt.gca()
             x = df['epoch'].to_list()
             y = df[col].to_list()
@@ -138,7 +141,10 @@ class TrainingStats():
             ax.set_xlabel('Epoch')
             ax.set_ylabel(col)
             plt.tight_layout()
-            plt.savefig(os.path.join(output_dirpath, '{}.png'.format(col)))
+            if not all_one_figure:
+                plt.savefig(os.path.join(output_dirpath, '{}.png'.format(col)))
+        if all_one_figure:
+            plt.savefig(os.path.join(output_dirpath, 'all-plots.png'))
         plt.close(fig)
 
     def export(self, output_folder: str):

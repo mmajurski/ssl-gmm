@@ -58,7 +58,15 @@ def main():
     elif args.inference_method == 'gmm':
         args.skl = True
 
-    train.train(args)
+    if args.trainer == 'rng':
+        import random
+        args.trainer = random.choice(['supervised','fixmatch'])
+
+    try:
+        train.train(args)
+        return 0
+    except:
+        return 1
 
 
 if __name__ == '__main__':
