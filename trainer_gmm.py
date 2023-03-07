@@ -22,26 +22,6 @@ class FixMatchTrainer_gmm(trainer.SupervisedTrainer):
         self.cmm = None
         self.alpha = 1.0
 
-    def get_optimizer(self, model):
-        # Setup optimizer
-        # params = itertools.chain(model.parameters(), (self.alpha,))
-        params = model.parameters()
-        if self.args.weight_decay is not None:
-            if self.args.optimizer == 'sgd':
-                optimizer = torch.optim.SGD(params, lr=self.args.learning_rate, weight_decay=self.args.weight_decay, momentum=0.9, nesterov=True)
-            elif self.args.optimizer == 'adamw':
-                optimizer = torch.optim.AdamW(params, lr=self.args.learning_rate, weight_decay=self.args.weight_decay)
-            else:
-                raise RuntimeError("Invalid optimizer: {}".format(self.args.optimizer))
-        else:
-            if self.args.optimizer == 'sgd':
-                optimizer = torch.optim.SGD(params, lr=self.args.learning_rate, momentum=0.9, nesterov=True)
-            elif self.args.optimizer == 'adamw':
-                optimizer = torch.optim.AdamW(params, lr=self.args.learning_rate)
-            else:
-                raise RuntimeError("Invalid optimizer: {}".format(self.args.optimizer))
-        return optimizer
-
     def build_gmm(self, model, pytorch_dataset, skl=True):
 
         model_training_status = model.training
@@ -139,6 +119,7 @@ class FixMatchTrainer_gmm(trainer.SupervisedTrainer):
                                                  worker_init_fn=utils.worker_init_fn)
         dataset_logits = list()
         dataset_labels = list()
+        # logging.info('Build GMM CMM: Started')
         with torch.no_grad():
             for batch_idx, tensor_dict in enumerate(dataloader):
                 inputs = tensor_dict[0].cuda()
@@ -162,7 +143,7 @@ class FixMatchTrainer_gmm(trainer.SupervisedTrainer):
         for i in range(len(unique_class_labels)):
             c = unique_class_labels[i]
             bucketed_dataset_logits.append(dataset_logits[dataset_labels == c])
-
+        # logging.info('List Compilation: Started')
         gmm_list = list()
         cmm_list = list()
 
@@ -170,10 +151,12 @@ class FixMatchTrainer_gmm(trainer.SupervisedTrainer):
 
             class_c_logits = bucketed_dataset_logits[i]
             #create GMM list (This creates GMM based on SKL implementation as our version have some numerical instability)
+            # logging.info("gmm started")
             gmm_skl = GMM_SKL(n_components=1, isCauchy=False)
+            # logging.info('gmm will be fitted')
             gmm_skl.fit(class_c_logits.numpy())
             gmm_list.append(gmm_skl)
-
+            # logging.info('GMM{i} done'.format(i))
 
             #create CMM list (This uses our implementation of CMM)
             cmm = GMM(n_features=class_c_logits.shape[1], n_clusters=1, tolerance=1e-4, max_iter=50, isCauchy=True)
@@ -182,7 +165,8 @@ class FixMatchTrainer_gmm(trainer.SupervisedTrainer):
                 cmm = GMM(n_features=class_c_logits.shape[1], n_clusters=1, tolerance=1e-4, max_iter=50, isCauchy=True)
                 cmm.fit(class_c_logits)
             cmm_list.append(cmm)
-
+            # logging.info('CMM{i} done'.format(i))
+        # logging.info('List Compilation: Completed')
         class_preval = utils.compute_class_prevalance(dataloader)
         class_preval = torch.tensor(list(class_preval.values()))
 
@@ -204,7 +188,7 @@ class FixMatchTrainer_gmm(trainer.SupervisedTrainer):
         gmm.covariances_ = covariances
         gmm.precisions_ = precisions
         gmm.precisions_cholesky_ = precisions_chol
-
+        # logging.info("Combined GMM built")
 
         # Now for CMM (don't get confused with names)
         cmm_weights = class_preval.repeat_interleave(self.args.cluster_per_class)
@@ -216,7 +200,7 @@ class FixMatchTrainer_gmm(trainer.SupervisedTrainer):
         cmm = GMM(n_features=self.args.num_classes, n_clusters=cmm_weights.shape[0], weights=cmm_weights, mu=mus, sigma=sigmas)
         # return model to orig status
         model.train(model_training_status)
-
+        # logging.info('Build GMM CMM: Completed')
         return gmm, cmm
 
     # if self.args.inference_method == 'gmm_cmm':
@@ -280,7 +264,6 @@ class FixMatchTrainer_gmm(trainer.SupervisedTrainer):
 
                 inputs_l = tensor_dict_l[0]
                 targets_l = tensor_dict_l[1]
-
                 try:
                     tensor_dict_ul = next(iter_ul)
                 except:
@@ -304,7 +287,6 @@ class FixMatchTrainer_gmm(trainer.SupervisedTrainer):
                         logits = model(inputs)
                 else:
                     logits = model(inputs)
-
                 # split the logits back into labeled and unlabeled
                 logits_l = logits[:inputs_l.shape[0]]
                 logits_ul = logits[inputs_l.shape[0]:]
@@ -314,12 +296,13 @@ class FixMatchTrainer_gmm(trainer.SupervisedTrainer):
                 # softmax_ul_weak = torch.softmax(logits_ul_weak, dim=-1) # NOT NEEDED FOR GMM
 
                 gmm_inputs = logits_ul_weak.detach().cpu()
-
                 gmm_resp = self.gmm.predict_proba(gmm_inputs.numpy())
                 gmm_resp = torch.tensor(gmm_resp)
 
                 _, _, cmm_resp = self.cmm.predict_cauchy_probability(gmm_inputs)
-                resp = ((torch.Tensor(self.alpha)) * gmm_resp) + ((torch.Tensor(1.0 - self.alpha)) * cmm_resp)
+
+                resp = torch.add(torch.mul(gmm_resp,self.alpha),cmm_resp,alpha=(1.0 - self.alpha))
+                # resp = ((torch.Tensor(self.alpha)) * gmm_resp) + ((torch.Tensor(1.0 - self.alpha)) * cmm_resp)
 
                 resp = resp / self.args.tau
                 score_weak, pred_weak = torch.max(resp, dim=-1)
