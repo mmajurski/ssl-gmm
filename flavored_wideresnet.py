@@ -69,6 +69,7 @@ class WideResNet(nn.Module):
         channels = [16, 16*width, 32*width, 64*width]
         n = (depth - 4) / 6
         self.channels = channels[3]
+        self.last_layer = last_layer
 
         # 1st conv before any network block
         self.conv1 = nn.Conv2d(3, channels[0], kernel_size=3, stride=1, padding=1, bias=False)
@@ -83,18 +84,18 @@ class WideResNet(nn.Module):
         # self.relu = nn.ReLU(inplace=True)  # published wideresnet network
         self.relu = nn.LeakyReLU(negative_slope=0.1, inplace=True)
         # TODO replace with GMM
-        if last_layer == 'fc':
+        if self.last_layer == 'fc':
             self.fc = nn.Linear(channels[3], num_classes)
-        elif last_layer == 'kmeans':
+        elif self.last_layer == 'kmeans':
             self.fc = lcl_models.kMeans(dim=self.channels, num_classes=num_classes)
-        elif last_layer == 'gmm':
+        elif self.last_layer == 'gmm':
             a = nn.Linear(channels[3], num_classes)
             b = lcl_models.gmm_layer(num_classes, num_classes)
             self.fc = torch.nn.Sequential(a, b)
-        elif last_layer == 'cauchy':
+        elif self.last_layer == 'cauchy':
             raise NotImplementedError()
         else:
-            raise RuntimeError("Invalid last layer type: {}".format(last_layer))
+            raise RuntimeError("Invalid last layer type: {}".format(self.last_layer))
 
 
     def forward(self, x):
@@ -105,5 +106,11 @@ class WideResNet(nn.Module):
         out = self.relu(self.bn1(out))
         out = F.adaptive_avg_pool2d(out, 1)
         out = out.view(-1, self.channels)
-        return self.fc(out)
+        out = self.fc(out)
+        if self.last_layer == 'fc':
+            # TODO fix loss here
+            # https://pytorch.org/docs/stable/generated/torch.nn.CrossEntropyLoss.html#torch.nn.CrossEntropyLoss
+            # Note that this case is equivalent to the combination of LogSoftmax and NLLLoss.
+            out = torch.nn.functional.log_softmax(out)
+        return out
 
