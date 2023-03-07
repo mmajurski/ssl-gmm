@@ -10,7 +10,7 @@ INDEX=1
 SUCCESS_COUNT=0
 
 for i in $(seq $MODELS_PER_JOB); do
-  python main.py --output-dirpath=./kmeans/id-${i} --trainer='fixmatch' --last-layer='kmeans' --supervised-pretrain
+  python main.py --output-dirpath=./models-20230304/id-${INDEX} --trainer=fixmatch --last-layer=gmm --supervised-pretrain
   INDEX=$((INDEX+1))
 done
 

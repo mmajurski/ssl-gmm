@@ -104,6 +104,8 @@ def setup(args):
         elif args.last_layer == 'gmm':
             if args.arch == 'resnet18':
                 model = lcl_models.GmmResNet18(num_classes=args.num_classes)
+            if args.arch == 'wide_resnet':
+                model = flavored_wideresnet.WideResNet(num_classes=args.num_classes, last_layer=args.last_layer)
 
     if model is None:
         raise RuntimeError("Unsupported model architecture selection: {}.".format(args.arch))
@@ -181,6 +183,8 @@ def train(args):
             logging.info('Loading fully supervised pretrain model.')
             model = torch.load(fn)
         else:
+            # Move model to device
+            model.cuda()
             model, train_stats, best_epoch, epoch = fully_supervised_pretrain(model, train_dataset_labeled, val_dataset, criterion, args, train_stats)
             best_net = copy.deepcopy(model)
             best_net.cpu()

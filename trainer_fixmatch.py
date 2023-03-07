@@ -161,6 +161,7 @@ class FixMatchTrainer(trainer.SupervisedTrainer):
 
                 if self.args.amp:
                     scaler.scale(batch_loss).backward()
+                    torch.nn.utils.clip_grad_value_(model.parameters(), 10)
                     # scaler.step() first unscales the gradients of the optimizer's assigned params.
                     # If these gradients do not contain infs or NaNs, optimizer.step() is then called,
                     # otherwise, optimizer.step() is skipped.
@@ -169,6 +170,7 @@ class FixMatchTrainer(trainer.SupervisedTrainer):
                     scaler.update()
                 else:
                     batch_loss.backward()
+                    torch.nn.utils.clip_grad_value_(model.parameters(), 10)
                     optimizer.step()
                 if cyclic_lr_scheduler is not None:
                     cyclic_lr_scheduler.step()

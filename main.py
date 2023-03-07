@@ -1,4 +1,5 @@
 import argparse
+import logging
 import utils
 import train
 
@@ -12,7 +13,7 @@ def main():
     parser.add_argument('--num-workers', type=int, default=6, help='number of workers')
     parser.add_argument('--output-dirpath', default='./model', type=str, help='filepath to where the outputs will be saved.')
     parser.add_argument('--batch-size', default=32, type=int, help='batch size')
-    parser.add_argument('--learning-rate', default=0.03, type=float, help='initial learning rate')  # 3e-4
+    parser.add_argument('--learning-rate', default=3e-4, type=float, help='initial learning rate')  # 3e-4
     parser.add_argument('--tau', default=0.9, type=float, help='temperature value to sharpen the logits. Set to 1 to disable. If tau is 1, hard pseudo-labeling is used instead of soft pseudo-labeling.')
     parser.add_argument('--mu', default=7, type=int, help='the number of unlabeled batches per labeled batch factor.')
     parser.add_argument('--loss-eps', default=1e-4, type=float, help='loss value eps for determining early stopping loss equivalence.')
@@ -62,10 +63,14 @@ def main():
         import random
         args.trainer = random.choice(['supervised','fixmatch'])
 
+    train.train(args)
     try:
         train.train(args)
         return 0
     except:
+        import traceback
+        tb = traceback.format_exc()
+        logging.info(tb)
         return 1
 
 

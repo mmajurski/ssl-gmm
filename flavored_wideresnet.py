@@ -88,7 +88,9 @@ class WideResNet(nn.Module):
         elif last_layer == 'kmeans':
             self.fc = lcl_models.kMeans(dim=self.channels, num_classes=num_classes)
         elif last_layer == 'gmm':
-            raise NotImplementedError()
+            a = nn.Linear(channels[3], num_classes)
+            b = lcl_models.gmm_layer(num_classes, num_classes)
+            self.fc = torch.nn.Sequential(a, b)
         elif last_layer == 'cauchy':
             raise NotImplementedError()
         else:
