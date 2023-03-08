@@ -97,7 +97,6 @@ class WideResNet(nn.Module):
         else:
             raise RuntimeError("Invalid last layer type: {}".format(self.last_layer))
 
-
     def forward(self, x):
         out = self.conv1(x)
         out = self.block1(out)
@@ -108,9 +107,6 @@ class WideResNet(nn.Module):
         out = out.view(-1, self.channels)
         out = self.fc(out)
         if self.last_layer == 'fc':
-            # TODO fix loss here
-            # https://pytorch.org/docs/stable/generated/torch.nn.CrossEntropyLoss.html#torch.nn.CrossEntropyLoss
-            # Note that this case is equivalent to the combination of LogSoftmax and NLLLoss.
-            out = torch.nn.functional.log_softmax(out)
+            out = torch.nn.functional.softmax(out)
         return out
 

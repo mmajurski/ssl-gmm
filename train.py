@@ -156,8 +156,7 @@ def train(args):
     train_start_time = time.time()
 
     # Setup loss criteria
-    # criterion = torch.nn.CrossEntropyLoss()
-    criterion = torch.nn.NLLLoss()  # use NLL because outputs from model are normalized, and not simply the nn.Linear
+    criterion = torch.nn.CrossEntropyLoss()
 
     # setup the trainer
     # supervised, fixmatch, fixmatch-gmm

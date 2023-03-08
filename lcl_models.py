@@ -466,7 +466,6 @@ class gmm_layer(torch.nn.Module):
         if torch.any(torch.isnan(resp)):
             raise RuntimeError("Nan at \"resp = numer_safe / denom_safe\"")
 
-        # TODO force the nan with high learning rate and debug whats causing the nan
 
         # comment out
         # output = torch.log(resp)
