@@ -264,7 +264,7 @@ class axis_aligned_gmm_layer(torch.nn.Module):
 
 
 class gmm_layer(torch.nn.Module):
-    def __init__(self, dim: int, num_classes: int):
+    def __init__(self, dim: int, num_classes: int, isCauchy: bool = False):
         super().__init__()
 
         self.dim = dim
@@ -279,7 +279,7 @@ class gmm_layer(torch.nn.Module):
         # with torch.no_grad():
         #     for k1 in range(num_classes):
         #         self.L[k1, k1] = 1.0
-
+        self.isCauchy = isCauchy
 
     def forward(self, x):
         batch = x.size()[0]  # batch size
@@ -409,9 +409,16 @@ class gmm_layer(torch.nn.Module):
         # dist_sq = torch.sum(dist_sq,2)
 
         # Obtain the exponents
-        expo = -0.5 * dist_sq
-        if torch.any(torch.isnan(expo)):
-            raise RuntimeError("Nan at \"expo = -0.5 * dist_sq\"")
+        if self.isCauchy:
+            expo = -((1+self.dim)/2) * torch.add(dist_sq,1)
+            if torch.any(torch.isnan(expo)):
+                raise RuntimeError("Nan at \"-((1+self.dim)/2) * torch.add(dist_sq,1)\"")
+        else:
+            expo = -0.5 * dist_sq
+            if torch.any(torch.isnan(expo)):
+                raise RuntimeError("Nan at \"expo = -0.5 * dist_sq\"")
+        # if torch.any(torch.isnan(expo)):
+        #     raise RuntimeError("Nan at \"expo = -0.5 * dist_sq\"")
 
         det_scale_rep = det_scale.unsqueeze(0).repeat(batch, 1)
 
@@ -439,12 +446,21 @@ class gmm_layer(torch.nn.Module):
         # TODO create a cauchy version of this resp
 
         # Calculate the responsibilities
-        numer_safe = det_scale_rep * torch.exp(expo_safe)
+        if self.isCauchy:
+            numer_safe = det_scale_rep * expo_safe
+            if torch.any(torch.isnan(numer_safe)):
+                raise RuntimeError("Nan at \"numer_safe = det_scale_rep * expo_safe\"")
+
+        else:
+            numer_safe = det_scale_rep * torch.exp(expo_safe)
+            if torch.any(torch.isnan(numer_safe)):
+                raise RuntimeError("Nan at \"numer_safe = det_scale_rep * torch.exp(expo_safe)\"")
+
+
         denom_safe = torch.sum(numer_safe, 1, keepdim=True)
         resp = numer_safe / denom_safe  # use broadcast
 
-        if torch.any(torch.isnan(numer_safe)):
-            raise RuntimeError("Nan at \"numer_safe = det_scale_rep * torch.exp(expo_safe)\"")
+
         if torch.any(torch.isnan(denom_safe)):
             raise RuntimeError("Nan at \"denom_safe = torch.sum(numer_safe, 1, keepdim=True)\"")
         if torch.any(torch.isnan(resp)):
