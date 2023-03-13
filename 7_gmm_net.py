@@ -89,7 +89,7 @@ def train(args, model, device, train_loader, optimizer, epoch, train_stats):
             print("nan loss")
 
         batch_loss.backward()
-        torch.nn.utils.clip_grad_value_(model.parameters(), 50)
+        # torch.nn.utils.clip_grad_value_(model.parameters(), 50)
 
         # if batch_idx % 10 == 0:
         #     for name, param in model.named_parameters():
@@ -172,7 +172,7 @@ def main():
                         help='input batch size for testing (default: 1000)')
     parser.add_argument('--epochs', type=int, default=14, metavar='N',
                         help='number of epochs to train (default: 14)')
-    parser.add_argument('--lr', type=float, default=0.1, metavar='LR',
+    parser.add_argument('--lr', type=float, default=3e-4, metavar='LR',
                         help='learning rate (default: 1.0)')
     parser.add_argument('--gamma', type=float, default=0.7, metavar='M',
                         help='Learning rate step gamma (default: 0.7)')
@@ -230,13 +230,13 @@ def main():
     test_loader = torch.utils.data.DataLoader(test_dataset, **test_kwargs)
 
 
-    # optimizer = torch.optim.AdamW(model.parameters(), lr=args.lr)
-    optimizer = torch.optim.Adadelta(model.parameters(), lr=args.lr)
+    optimizer = torch.optim.AdamW(model.parameters(), lr=args.lr)
+    # optimizer = torch.optim.Adadelta(model.parameters(), lr=args.lr)
     import lr_scheduler
     plateau_scheduler = lr_scheduler.ReduceLROnPlateau(optimizer, mode='min', factor=0.2, patience=20, threshold=1e-4, max_num_lr_reductions=2)
 
 
-    output_folder = './models-diff-gmm2/adadelta-01'
+    output_folder = './models-20230312/adam-0.8-1.2'
     train_stats = metadata.TrainingStats()
     epoch = -1
     MAX_EPOCHS = 2000

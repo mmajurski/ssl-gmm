@@ -106,15 +106,14 @@ class axis_aligned_gmm_layer(torch.nn.Module):
         self.centers = torch.nn.Parameter(torch.rand(size=(self.num_classes, self.dim), requires_grad=True))
         a = torch.rand(size=(self.num_classes, self.dim), requires_grad=True)
         with torch.no_grad():
-            a = 0.2*a + 0.9  # rand of 1.0+-0.1
-
-        # a = torch.ones(size=(self.num_classes, self.dim), requires_grad=True)
+            a = 0.4 * a + 0.8  # rand of [0.8, 1.2]
+        # with torch.no_grad():
+        #     a = a - 0.5  # rand of [-0.5, 0.5]
+        # with torch.no_grad():
+        #     a = 2*a - 1.0  # rand of [-1.0, 1.0]
         self.D = torch.nn.Parameter(a)
 
-        # self.D = torch.nn.Parameter(torch.clip(a, min=0.8, max=1.2))
-
         self.counter = 0
-
 
     def forward(self, x):
         batch = x.size()[0]  # batch size
@@ -125,22 +124,13 @@ class axis_aligned_gmm_layer(torch.nn.Module):
         #  Sigma_inv  = Lt-1 D-1 L-1
         #
 
-        self.counter += 1
-        if self.counter % 1000 == 0:
-            from matplotlib import pyplot as plt
-            plt.figure(figsize=(8, 6))
-            plt.hist(self.D.detach().cpu().numpy().reshape(-1), bins=100, label='D')
-            plt.savefig('D-hist.png')
-            plt.close()
-
-
-
         # TODO do we need to add a compactness criteria to the loss to encourage high quality clusters?
 
-        det = torch.zeros((self.num_classes), device=x.device, requires_grad=False)
+        # det = torch.zeros((self.num_classes), device=x.device, requires_grad=False)
+        log_det = torch.zeros((self.num_classes), device=x.device, requires_grad=False)
         Sigma_inv = [None] * self.num_classes
         for k in range(self.num_classes):
-            root_D = self.D[k, ]  # get the num_classes x 1 vector of covariances
+            root_D = self.D[k,]  # get the num_classes x 1 vector of covariances
             # ensure positive
             # D = root_D * root_D + 1e-4
             D = torch.abs(root_D) + 1e-4  # multiplying causes the value to get smaller if <1, which causes determinant problems. So let pytorch use a subgradient for abs
@@ -155,13 +145,27 @@ class axis_aligned_gmm_layer(torch.nn.Module):
             Sigma_inv[k] = D_inv_embed
 
             # Determinant
-            det[k] = torch.prod(D, dim=0)  # difficulty keeping non 0 for large dim, as are multiplying many potentially small numbers together
-            if torch.any(torch.isnan(det[k])):
-                raise RuntimeError("Nan at \"det[k] = torch.prod(D, 0)\"")
+            # det[k] = torch.prod(D, dim=0)  # difficulty keeping non 0 for large dim, as are multiplying many potentially small numbers together
+            # if torch.any(torch.isnan(det[k])):
+            #    raise RuntimeError("Nan at \"det[k] = torch.prod(D, 0)\"")
 
-        det_scale = torch.rsqrt(det)
-        if torch.any(torch.isnan(det_scale)) or torch.any(torch.isinf(det_scale)):
-            raise RuntimeError("Nan at \"det_scale = torch.rsqrt(det)\"")
+            # Safe version of Determinant
+            log_det[k] = torch.sum(torch.log(D), dim=0)
+
+            # Legacy version
+            # det_scale = torch.rsqrt(det)
+            # if torch.any(torch.isnan(det_scale)) or torch.any(torch.isinf(det_scale)):
+            #    raise RuntimeError("Nan at \"det_scale = torch.rsqrt(det)\"")
+
+            # New math but still unsafe
+            # det_scale_factor = -0.5 * log_det
+            # det_scale = torch.exp( det_scale_factor )
+
+            # Safe version
+        det_scale_factor = -0.5 * log_det
+        det_scale_factor_safe = det_scale_factor - torch.max(det_scale_factor)
+        det_scale_safe = torch.exp(det_scale_factor_safe)
+
 
         # ---
         # Calculate distance to cluster centers
@@ -197,29 +201,6 @@ class axis_aligned_gmm_layer(torch.nn.Module):
         if torch.any(torch.isnan(dist_sq)):
             raise RuntimeError("Nan at \"dist_sq\"")
 
-        if self.counter % 1000 == 0:
-            min_dist, _ = torch.min(dist_sq, dim=1)
-            min_dist = min_dist.detach().cpu().numpy()
-
-            avg_dist = torch.mean(dist_sq, dim=1)
-            avg_dist = avg_dist.detach().cpu().numpy()
-            from matplotlib import pyplot as plt
-            plt.figure(figsize=(8, 6))
-            plt.hist(min_dist.reshape(-1), bins=100, label='Min Dist')
-            plt.hist(avg_dist.reshape(-1), bins=100, label='Avg Dist')
-            plt.legend(loc='upper right')
-            plt.savefig('dist-hist.png')
-            plt.close()
-
-            fig, axs = plt.subplots(5, figsize=(8, 20))
-            a = dist_sq.detach().cpu().numpy()
-            for k in range(5):
-                axs[k].hist(a[k,:].reshape(-1), bins=100, label='dist_sq[{}, :]'.format(k))
-                axs[k].legend(loc='upper right')
-            plt.savefig('dist-hist-0.png')
-            plt.close()
-
-
         #   GMM
         # dist_sq = (x-mu) Sigma_inv (x-mu)T
         #   K-means
@@ -235,7 +216,11 @@ class axis_aligned_gmm_layer(torch.nn.Module):
         if torch.any(torch.isnan(expo)):
             raise RuntimeError("Nan at \"expo = -0.5 * dist_sq\"")
 
-        det_scale_rep = det_scale.unsqueeze(0).repeat(batch, 1)
+        # Unsafe
+        # det_scale_rep = det_scale.unsqueeze(0).repeat(batch, 1)
+
+        # Safe version
+        det_scale_rep_safe = det_scale_safe.unsqueeze(0).repeat(batch, 1)
 
         # # Calculate the true numerators and denominators
         # #  (we don't use this directly for responsibility calculation
@@ -260,7 +245,7 @@ class axis_aligned_gmm_layer(torch.nn.Module):
         # TODO create a cauchy version of this resp
 
         # Calculate the responsibilities
-        numer_safe = det_scale_rep * torch.exp(expo_safe)
+        numer_safe = det_scale_rep_safe * torch.exp(expo_safe)
         denom_safe = torch.sum(numer_safe, 1, keepdim=True)
         resp = numer_safe / denom_safe  # use broadcast
 
@@ -276,7 +261,6 @@ class axis_aligned_gmm_layer(torch.nn.Module):
         output = resp
 
         return output
-
 
 
 class gmm_layer(torch.nn.Module):
