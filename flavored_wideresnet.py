@@ -93,7 +93,9 @@ class WideResNet(nn.Module):
             b = lcl_models.gmm_layer(num_classes, num_classes)
             self.fc = torch.nn.Sequential(a, b)
         elif self.last_layer == 'cauchy':
-            raise NotImplementedError()
+            a = nn.Linear(channels[3], num_classes)
+            b = lcl_models.gmm_layer(num_classes, num_classes, isCauchy= True)
+            self.fc = torch.nn.Sequential(a, b)
         else:
             raise RuntimeError("Invalid last layer type: {}".format(self.last_layer))
 

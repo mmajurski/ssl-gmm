@@ -106,6 +106,9 @@ def setup(args):
                 model = lcl_models.GmmResNet18(num_classes=args.num_classes)
             if args.arch == 'wide_resnet':
                 model = flavored_wideresnet.WideResNet(num_classes=args.num_classes, last_layer=args.last_layer)
+        elif args.last_layer == 'cauchy':
+            if args.arch == 'wide_resnet':
+                model = flavored_wideresnet.WideResNet(num_classes=args.num_classes, last_layer=args.last_layer)
 
     if model is None:
         raise RuntimeError("Unsupported model architecture selection: {}.".format(args.arch))
