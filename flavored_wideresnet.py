@@ -83,19 +83,15 @@ class WideResNet(nn.Module):
         self.bn1 = nn.BatchNorm2d(channels[3], momentum=0.001)
         # self.relu = nn.ReLU(inplace=True)  # published wideresnet network
         self.relu = nn.LeakyReLU(negative_slope=0.1, inplace=True)
-        # TODO replace with GMM
+        self.fc = nn.Linear(channels[3], num_classes)
+
+        # TODO test replacing with a different embedding dimension, as the GMM cannot scale to imagenet 1000 classes
         if self.last_layer == 'fc':
-            self.fc = nn.Linear(channels[3], num_classes)
-        elif self.last_layer == 'kmeans':
-            self.fc = lcl_models.kMeans(dim=self.channels, num_classes=num_classes)
+            pass
         elif self.last_layer == 'gmm':
-            a = nn.Linear(channels[3], num_classes)
-            b = lcl_models.gmm_layer(num_classes, num_classes)
-            self.fc = torch.nn.Sequential(a, b)
+            self.gmm_layer = lcl_models.axis_aligned_gmm_layer(num_classes, num_classes)
         elif self.last_layer == 'cauchy':
-            a = nn.Linear(channels[3], num_classes)
-            b = lcl_models.gmm_layer(num_classes, num_classes, isCauchy= True)
-            self.fc = torch.nn.Sequential(a, b)
+            self.cmm_layer = lcl_models.axis_aligned_gmm_layer(num_classes, num_classes, isCauchy=True)
         else:
             raise RuntimeError("Invalid last layer type: {}".format(self.last_layer))
 
@@ -109,6 +105,10 @@ class WideResNet(nn.Module):
         out = out.view(-1, self.channels)
         out = self.fc(out)
         if self.last_layer == 'fc':
-            out = torch.nn.functional.softmax(out)
+            out = torch.nn.functional.softmax(out, dim=-1)
+        elif self.last_layer == 'gmm':
+            out = self.gmm_layer(out)
+        elif self.last_layer == 'cauchy':
+            out = self.cmm_layer(out)
         return out
 

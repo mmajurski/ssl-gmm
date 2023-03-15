@@ -6,18 +6,11 @@ import torch
 import torchvision
 import json
 import logging
-import sklearn.mixture
-import psutil
-from matplotlib import pyplot as plt
 
 import cifar_datasets
 import metadata
-from gmm_module import GMM
-from skl_cauchy_mm import GMM_SKL
 import lr_scheduler
-import flavored_resnet18
 import flavored_wideresnet
-import fixmatch_augmentation
 import utils
 import trainer
 import trainer_fixmatch
@@ -96,14 +89,7 @@ def setup(args):
             if args.arch == 'wide_resnet':
                 model = flavored_wideresnet.WideResNet(num_classes=args.num_classes, last_layer=args.last_layer)
 
-        elif args.last_layer == 'kmeans':
-            if args.arch == 'resnet18':
-                model = lcl_models.kMeansResNet18(num_classes=args.num_classes)
-            if args.arch == 'wide_resnet':
-                model = flavored_wideresnet.WideResNet(num_classes=args.num_classes, last_layer=args.last_layer)
         elif args.last_layer == 'gmm':
-            if args.arch == 'resnet18':
-                model = lcl_models.GmmResNet18(num_classes=args.num_classes)
             if args.arch == 'wide_resnet':
                 model = flavored_wideresnet.WideResNet(num_classes=args.num_classes, last_layer=args.last_layer)
         elif args.last_layer == 'cauchy':
@@ -145,7 +131,6 @@ def train(args):
     logging.basicConfig(level=logging.INFO,
                         format="%(asctime)s [%(levelname)s] [%(filename)s:%(lineno)d] %(message)s",
                         filename=os.path.join(args.output_dirpath, 'log.txt'))
-
     logging.getLogger().addHandler(logging.StreamHandler())
 
     logging.info(args)
@@ -153,6 +138,7 @@ def train(args):
     model, train_dataset_labeled, train_dataset_unlabeled, val_dataset, test_dataset = setup(args)
 
     # write the args configuration to disk
+    logging.info("writing args to config.json")
     with open(os.path.join(args.output_dirpath, 'config.json'), 'w') as fh:
         json.dump(vars(args), fh, ensure_ascii=True, indent=2)
 
@@ -160,6 +146,7 @@ def train(args):
 
     # Setup loss criteria
     criterion = torch.nn.CrossEntropyLoss()
+    logging.info("criterion setup")
 
     # setup the trainer
     # supervised, fixmatch, fixmatch-gmm
@@ -171,6 +158,7 @@ def train(args):
         model_trainer = trainer_gmm.FixMatchTrainer_gmm(args)
     else:
         raise RuntimeError("Invalid trainer request: {}".format(args.trainer))
+    logging.info("trainer setup")
 
     # setup the metadata capture object
     train_stats = metadata.TrainingStats()

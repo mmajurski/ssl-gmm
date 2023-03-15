@@ -88,8 +88,6 @@ class kMeans(torch.nn.Module):
         if torch.any(torch.isnan(resp)):
             raise RuntimeError("Nan at \"resp = numer_safe / denom_safe\"")
 
-        # TODO force the nan with high learning rate and debug whats causing the nan
-
         # comment out
         # output = torch.log(resp)
         output = resp
@@ -98,22 +96,20 @@ class kMeans(torch.nn.Module):
 
 
 class axis_aligned_gmm_layer(torch.nn.Module):
-    def __init__(self, dim: int, num_classes: int):
+    def __init__(self, embeddign_dim: int, num_classes: int, isCauchy=False):
         super().__init__()
 
-        self.dim = dim
+        if isCauchy:
+            raise NotImplementedError('Cauchy axis aligned gmm not yet implemented')
+        # TODO support isCauchy
+        self.dim = embeddign_dim
         self.num_classes = num_classes
         self.centers = torch.nn.Parameter(torch.rand(size=(self.num_classes, self.dim), requires_grad=True))
+        # this is roughly equivalent to init to identity (i.e. kmeans)
         a = torch.rand(size=(self.num_classes, self.dim), requires_grad=True)
         with torch.no_grad():
-            a = 0.4 * a + 0.8  # rand of [0.8, 1.2]
-        # with torch.no_grad():
-        #     a = a - 0.5  # rand of [-0.5, 0.5]
-        # with torch.no_grad():
-        #     a = 2*a - 1.0  # rand of [-1.0, 1.0]
+            a = 0.2 * a + 0.9  # rand of [0.9, 1.1]
         self.D = torch.nn.Parameter(a)
-
-        self.counter = 0
 
     def forward(self, x):
         batch = x.size()[0]  # batch size
@@ -124,72 +120,45 @@ class axis_aligned_gmm_layer(torch.nn.Module):
         #  Sigma_inv  = Lt-1 D-1 L-1
         #
 
-        # TODO do we need to add a compactness criteria to the loss to encourage high quality clusters?
-
-        # det = torch.zeros((self.num_classes), device=x.device, requires_grad=False)
         log_det = torch.zeros((self.num_classes), device=x.device, requires_grad=False)
         Sigma_inv = [None] * self.num_classes
         for k in range(self.num_classes):
-            root_D = self.D[k,]  # get the num_classes x 1 vector of covariances
+            D = self.D[k,]  # get the num_classes x 1 vector of covariances
             # ensure positive
-            # D = root_D * root_D + 1e-4
-            D = torch.abs(root_D) + 1e-4  # multiplying causes the value to get smaller if <1, which causes determinant problems. So let pytorch use a subgradient for abs
-            # Upsample from Nx1 to NxN diagonal matrix
-            # D_embed = torch.diag_embed(D)
+            D = torch.abs(D) + 1e-4
 
             # create inverse of D
             D_inv = 1.0 / D
+            # Upsample from Nx1 to NxN diagonal matrix
             D_inv_embed = torch.diag_embed(D_inv)
 
-            # Sigma[k] = D_embed
             Sigma_inv[k] = D_inv_embed
-
-            # Determinant
-            # det[k] = torch.prod(D, dim=0)  # difficulty keeping non 0 for large dim, as are multiplying many potentially small numbers together
-            # if torch.any(torch.isnan(det[k])):
-            #    raise RuntimeError("Nan at \"det[k] = torch.prod(D, 0)\"")
 
             # Safe version of Determinant
             log_det[k] = torch.sum(torch.log(D), dim=0)
 
-            # Legacy version
-            # det_scale = torch.rsqrt(det)
-            # if torch.any(torch.isnan(det_scale)) or torch.any(torch.isinf(det_scale)):
-            #    raise RuntimeError("Nan at \"det_scale = torch.rsqrt(det)\"")
-
-            # New math but still unsafe
-            # det_scale_factor = -0.5 * log_det
-            # det_scale = torch.exp( det_scale_factor )
-
-            # Safe version
+        # Safe det version
         det_scale_factor = -0.5 * log_det
         det_scale_factor_safe = det_scale_factor - torch.max(det_scale_factor)
         det_scale_safe = torch.exp(det_scale_factor_safe)
 
-
         # ---
         # Calculate distance to cluster centers
         # ---
-
         # Upsample the x-data to [batch, num_classes, dim]
         x_rep = x.unsqueeze(1).repeat(1, self.num_classes, 1)
-        if torch.any(torch.isnan(x_rep)):
-            raise RuntimeError("Nan at \"x_rep = x.unsqueeze(1).repeat(1, self.num_classes, 1)\"")
 
         # Upsample the clusters to [batch, num_classes, dim]
         centers_rep = self.centers.unsqueeze(0).repeat(batch, 1, 1)
-        if torch.any(torch.isnan(centers_rep)):
-            raise RuntimeError("Nan at \"centers_rep = self.centers.unsqueeze(0).repeat(batch, 1, 1)\"")
 
         # Subtract to get diff of [batch, num_classes, dim]
         diff = x_rep - centers_rep
-        if torch.any(torch.isnan(diff)):
-            raise RuntimeError("Nan at \"diff = x_rep - centers_rep\"")
 
         dist_sq = torch.sum(diff, 2)  # initially set to zero
         dist_sq = dist_sq - dist_sq
 
         # Calculate each dist_sq entry separately
+        # dist_sq = torch.zeros((diff.shape[0], diff.shape[1]), requires_grad=True)
         for k in range(self.num_classes):
             curr_diff = diff[:, k]
             curr_diff_t = torch.transpose(curr_diff, 0, 1)
@@ -198,39 +167,17 @@ class axis_aligned_gmm_layer(torch.nn.Module):
             curr_dist_sq = curr_diff * Sig_inv_curr_diff_t_t
             curr_dist_sq = torch.sum(curr_dist_sq, 1)
             dist_sq[:, k] = curr_dist_sq
-        if torch.any(torch.isnan(dist_sq)):
-            raise RuntimeError("Nan at \"dist_sq\"")
 
         #   GMM
         # dist_sq = (x-mu) Sigma_inv (x-mu)T
         #   K-means
         # dist_sq = (x-mu) dot (x-mu)
 
-        # Obtain the square distance to each cluster
-        #  of size [batch, dim]
-        # dist_sq = diff*diff
-        # dist_sq = torch.sum(dist_sq,2)
-
         # Obtain the exponents
         expo = -0.5 * dist_sq
-        if torch.any(torch.isnan(expo)):
-            raise RuntimeError("Nan at \"expo = -0.5 * dist_sq\"")
-
-        # Unsafe
-        # det_scale_rep = det_scale.unsqueeze(0).repeat(batch, 1)
 
         # Safe version
         det_scale_rep_safe = det_scale_safe.unsqueeze(0).repeat(batch, 1)
-
-        # # Calculate the true numerators and denominators
-        # #  (we don't use this directly for responsibility calculation
-        # #   we actually use the "safe" versions that are shifted
-        # #   for stability)
-        # # Note 0.00010211761 = (2*pi)^(-dim/2) where dim=10
-        # #
-        # numer = 0.00010211761 * torch.exp(expo)
-        # denom = torch.sum(numer, 1)
-        # denom = denom.unsqueeze(1).repeat(1, self.dim)
 
         # Obtain the "safe" (numerically stable) versions of the
         #  exponents.  These "safe" exponents produce fake numer and denom
@@ -249,14 +196,6 @@ class axis_aligned_gmm_layer(torch.nn.Module):
         denom_safe = torch.sum(numer_safe, 1, keepdim=True)
         resp = numer_safe / denom_safe  # use broadcast
 
-        if torch.any(torch.isnan(numer_safe)):
-            raise RuntimeError("Nan at \"numer_safe = det_scale_rep * torch.exp(expo_safe)\"")
-        if torch.any(torch.isnan(denom_safe)):
-            raise RuntimeError("Nan at \"denom_safe = torch.sum(numer_safe, 1, keepdim=True)\"")
-        if torch.any(torch.isnan(resp)):
-            raise RuntimeError("Nan at \"resp = numer_safe / denom_safe\"")
-
-        # comment out
         # output = torch.log(resp)
         output = resp
 
@@ -473,38 +412,4 @@ class gmm_layer(torch.nn.Module):
 
         return output
 
-
-class kMeansResNet18(torch.nn.Module):
-    def __init__(self, num_classes):
-        super().__init__()
-
-        # TODO work out how to cluster in the 512 dim second to last layer
-        self.model = torchvision.models.resnet18(pretrained=False, num_classes=num_classes)
-        self.model.fc = Identity()  # replace the fc layer with an identity to ensure it does nothing, preserving the 512 len embedding
-
-        self.dim = 512  # dim of the last FC layer in the model, I just manually specified it here out of lazyness.
-        self.kmeans = kMeans(dim=self.dim, num_classes=num_classes)
-
-    def forward(self, x):
-        x = self.model(x)  # get the feature embedding of 512 dim
-        output = self.kmeans(x)
-        return output
-
-
-class GmmResNet18(torch.nn.Module):
-    def __init__(self, num_classes):
-        super().__init__()
-
-        # TODO work out how to cluster in the 512 dim second to last layer
-        self.model = torchvision.models.resnet18(pretrained=False, num_classes=num_classes)
-        # self.model.fc = Identity()  # replace the fc layer with an identity to ensure it does nothing, preserving the 512 len embedding
-
-        self.dim = num_classes  # dim of the last FC layer in the model, I just manually specified it here out of lazyness.
-        self.gmm_layer = gmm_layer(dim=self.dim, num_classes=num_classes)
-
-
-    def forward(self, x):
-        x = self.model(x)  # get the feature embedding of X dim
-        output = self.gmm_layer(x)
-        return output
 

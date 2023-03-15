@@ -217,9 +217,9 @@ def main():
 
     train_stats.export(output_folder)  # update metrics data on disk
     train_stats.plot_all_metrics(output_folder)
-    if args.save_model:
-        import os
-        torch.save(best_model, os.path.join(output_folder, "model.pt"))
+
+    import os
+    torch.save(best_model, os.path.join(output_folder, "model.pt"))
 
 
 if __name__ == '__main__':

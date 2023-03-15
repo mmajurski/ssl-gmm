@@ -93,8 +93,10 @@ class FixMatchTrainer(trainer.SupervisedTrainer):
                 logits_ul_weak = logits_ul[:inputs_ul_weak.shape[0]]
                 logits_ul_strong = logits_ul[inputs_ul_weak.shape[0]:]
 
-                logits_ul_weak = logits_ul_weak / self.args.tau
-                softmax_ul_weak = torch.softmax(logits_ul_weak, dim=-1)
+                softmax_ul_weak = logits_ul_weak  # the weights have already been softmaxed in the network
+                # you cannot do tau scaling and the re-softmax with the gmm
+                # logits_ul_weak = logits_ul_weak / self.args.tau
+                # softmax_ul_weak = torch.softmax(logits_ul_weak, dim=-1)
 
                 if self.args.soft_labels:
                     # convert hard labels in the fully labeled dataset into soft labels (i.e. one hot)

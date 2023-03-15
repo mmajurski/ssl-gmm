@@ -25,9 +25,9 @@ def main():
     parser.add_argument('--nb-reps', default=128, help='the number of reps through the labeled portion of the dataset to form an epoch', type=int)
     parser.add_argument('--lr-reduction-factor', default=0.2, type=float)
     parser.add_argument('--amp', action='store_true')
-    parser.add_argument('--inference-method', default='gmm', type=str, help='whether to use gmm or cauchy for inference.')
-    parser.add_argument('--pseudo-label-method', default="resp", type=str, help='method/algorithm to use for selecting valid psudo-label samples.')
-    parser.add_argument('--pseudo-label-threshold', default=0.95, type=float, help='Threshold when filtering pseudo-labeling.')
+    # parser.add_argument('--inference-method', default='gmm', type=str, help='whether to use gmm or cauchy for inference.')
+    # parser.add_argument('--pseudo-label-method', default="resp", type=str, help='method/algorithm to use for selecting valid psudo-label samples.')
+    parser.add_argument('--pseudo-label-threshold', default=0.9, type=float, help='Threshold when filtering pseudo-labeling.')
     parser.add_argument('--soft-labels', help='enables soft labels', action='store_true')
     parser.add_argument('--supervised-pretrain', help='enables a fully supervised pre-train before starting the SSL', action='store_true')
     parser.add_argument('--supervised-pretrain-patience', default=5, type=int, help='number of epochs past optimal to explore before early stopping terminates training.')
@@ -38,9 +38,9 @@ def main():
     parser.add_argument('--cluster-per-class', default=1, type=int, help='number of clusters to create per class')
     parser.add_argument('--strong-augmentation', help='enables strong augmentation', action='store_true')
     parser.add_argument('--debug', help='enables debugging mode', action='store_true')
-    parser.add_argument('--skl',help='uses sklearn implementation of Gaussian Mixture',action='store_true')
-    parser.add_argument('--last-layer', type=str, default='kmeans', help='last layer to use in the NN (currently supported fc, kmeans)')
-    parser.add_argument('--trainer', type=str, default='supervised', help='trainer to use (currently supported supervised, fixmatch, fixmatch-gmm)')
+    # parser.add_argument('--skl',help='uses sklearn implementation of Gaussian Mixture',action='store_true')
+    parser.add_argument('--last-layer', type=str, default='gmm', help='last layer to use in the NN (currently supported fc, gmm, cmm)')
+    parser.add_argument('--trainer', type=str, default='fixmatch', help='trainer to use (currently supported supervised, fixmatch, fixmatch-gmm)')
 
 
     args = parser.parse_args()
@@ -53,17 +53,6 @@ def main():
     # handle setup or exit based on output directory existance and debug mode
     utils.validate_output_directory(args)
 
-    #Temp argument adjustment For GMM use Skl version and for CMM our implementation
-    if args.inference_method == 'cauchy':
-        args.skl = False
-    elif args.inference_method == 'gmm':
-        args.skl = True
-
-    if args.trainer == 'rng':
-        import random
-        args.trainer = random.choice(['supervised','fixmatch'])
-
-    train.train(args)
     try:
         train.train(args)
         return 0
