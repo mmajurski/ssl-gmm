@@ -12,6 +12,13 @@ import utils
 import trainer
 
 
+def sharpen_mixmatch(x:torch.Tensor, T:float):
+    # from https://arxiv.org/pdf/1905.02249.pdf equation 7
+    p = 1.0 / float(T)
+    neum = torch.pow(x, p)
+    denom = torch.sum(neum, dim=-1, keepdim=True)
+    return neum / denom
+
 
 class FixMatchTrainer(trainer.SupervisedTrainer):
 
@@ -94,6 +101,9 @@ class FixMatchTrainer(trainer.SupervisedTrainer):
                 logits_ul_strong = logits_ul[inputs_ul_weak.shape[0]:]
 
                 softmax_ul_weak = logits_ul_weak  # the weights have already been softmaxed in the network
+                # sharpen the logits with tau, but in a manner which preserves sum to 1
+                softmax_ul_weak = sharpen_mixmatch(x=softmax_ul_weak, T=self.args.tau)
+
                 # you cannot do tau scaling and the re-softmax with the gmm
                 # logits_ul_weak = logits_ul_weak / self.args.tau
                 # softmax_ul_weak = torch.softmax(logits_ul_weak, dim=-1)

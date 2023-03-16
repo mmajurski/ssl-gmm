@@ -3,7 +3,7 @@
 # MODIFY THESE OPTIONS
 
 #SBATCH --partition=isg
-#SBATCH --exclude=p100,charlie,echo,foxtrot,golf,hotel,juliett,kilo,lima,mike,pn116125,pn120395,quebec
+#SBATCH --exclude=p100
 #SBATCH --requeue
 #SBATCH --nodes=1
 #SBATCH --nice
@@ -25,9 +25,9 @@ source /mnt/isgnas/home/mmajursk/miniconda3/etc/profile.d/conda.sh
 conda activate gmm
 
 PL_THRES=$1
-PL_METHOD=$1
+PL_METHOD=$2
 
-python main.py --output-dirpath=./models-20230314/fixmatch-${PL_METHOD}-01-${PL_THRES} --trainer=fixmatch --last-layer=${PL_METHOD} --pseudo-label-threshold=${PL_THRES}
-python main.py --output-dirpath=./models-20230314/fixmatch-${PL_METHOD}-02-${PL_THRES} --trainer=fixmatch --last-layer=${PL_METHOD} --pseudo-label-threshold=${PL_THRES}
-python main.py --output-dirpath=./models-20230314/fixmatch-${PL_METHOD}-03-${PL_THRES} --trainer=fixmatch --last-layer=${PL_METHOD} --pseudo-label-threshold=${PL_THRES}
+python main.py --output-dirpath=./models-20230315/fixmatch-${PL_METHOD}-01-thres${PL_THRES} --trainer=fixmatch --last-layer=${PL_METHOD} --pseudo-label-threshold=${PL_THRES}
+python main.py --output-dirpath=./models-20230315/fixmatch-${PL_METHOD}-02-thres${PL_THRES} --trainer=fixmatch --last-layer=${PL_METHOD} --pseudo-label-threshold=${PL_THRES}
+
 

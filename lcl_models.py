@@ -99,9 +99,7 @@ class axis_aligned_gmm_layer(torch.nn.Module):
     def __init__(self, embeddign_dim: int, num_classes: int, isCauchy=False):
         super().__init__()
 
-        if isCauchy:
-            raise NotImplementedError('Cauchy axis aligned gmm not yet implemented')
-        # TODO support isCauchy
+        self.isCauchy = isCauchy
         self.dim = embeddign_dim
         self.num_classes = num_classes
         self.centers = torch.nn.Parameter(torch.rand(size=(self.num_classes, self.dim), requires_grad=True))
@@ -174,7 +172,12 @@ class axis_aligned_gmm_layer(torch.nn.Module):
         # dist_sq = (x-mu) dot (x-mu)
 
         # Obtain the exponents
-        expo = -0.5 * dist_sq
+        if self.isCauchy:
+            a = torch.add(dist_sq, 1)
+            b = -((1 + self.dim) / 2)
+            expo = torch.pow(a, b)
+        else:
+            expo = -0.5 * dist_sq
 
         # Safe version
         det_scale_rep_safe = det_scale_safe.unsqueeze(0).repeat(batch, 1)
@@ -186,13 +189,14 @@ class axis_aligned_gmm_layer(torch.nn.Module):
         # expo_safe_off = self.km_safe_pool(expo)
         expo_safe_off, _ = torch.max(expo, dim=-1, keepdim=True)
         expo_safe = expo - expo_safe_off  # use broadcast instead of the repeat
-        if torch.any(torch.isnan(expo_safe)):
-            raise RuntimeError("Nan at \"expo_safe = expo - expo_safe_off\"")
 
-        # TODO create a cauchy version of this resp
+        # TODO verify the cauchy version
 
         # Calculate the responsibilities
-        numer_safe = det_scale_rep_safe * torch.exp(expo_safe)
+        if self.isCauchy:
+            numer_safe = det_scale_rep_safe * expo_safe
+        else:
+            numer_safe = det_scale_rep_safe * torch.exp(expo_safe)
         denom_safe = torch.sum(numer_safe, 1, keepdim=True)
         resp = numer_safe / denom_safe  # use broadcast
 
@@ -349,7 +353,9 @@ class gmm_layer(torch.nn.Module):
 
         # Obtain the exponents
         if self.isCauchy:
-            expo = -((1+self.dim)/2) * torch.add(dist_sq,1)
+            a = torch.add(dist_sq,1)
+            b = -((1+self.dim)/2)
+            expo = torch.pow(a, b)
             if torch.any(torch.isnan(expo)):
                 raise RuntimeError("Nan at \"-((1+self.dim)/2) * torch.add(dist_sq,1)\"")
         else:
