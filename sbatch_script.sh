@@ -26,8 +26,7 @@ conda activate gmm
 
 PL_THRES=$1
 PL_METHOD=$2
+MODEL_NB=$3
 
-python main.py --output-dirpath=./models-20230315/fixmatch-${PL_METHOD}-01-thres${PL_THRES} --trainer=fixmatch --last-layer=${PL_METHOD} --pseudo-label-threshold=${PL_THRES}
-python main.py --output-dirpath=./models-20230315/fixmatch-${PL_METHOD}-02-thres${PL_THRES} --trainer=fixmatch --last-layer=${PL_METHOD} --pseudo-label-threshold=${PL_THRES}
-
+python main.py --output-dirpath=./models-20230318/fixmatch-${PL_METHOD}-${MODEL_NB}-thres${PL_THRES} --trainer=fixmatch --last-layer=${PL_METHOD} --pseudo-label-threshold=${PL_THRES}
 

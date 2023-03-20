@@ -102,7 +102,8 @@ class FixMatchTrainer(trainer.SupervisedTrainer):
 
                 softmax_ul_weak = logits_ul_weak  # the weights have already been softmaxed in the network
                 # sharpen the logits with tau, but in a manner which preserves sum to 1
-                softmax_ul_weak = sharpen_mixmatch(x=softmax_ul_weak, T=self.args.tau)
+                if self.args.tau < 1.0:
+                    softmax_ul_weak = sharpen_mixmatch(x=softmax_ul_weak, T=self.args.tau)
 
                 # you cannot do tau scaling and the re-softmax with the gmm
                 # logits_ul_weak = logits_ul_weak / self.args.tau

@@ -12,9 +12,9 @@ def main():
     parser.add_argument('--arch', default='wide_resnet', type=str, help='Name of the image classification architecture to train')
     parser.add_argument('--num-workers', type=int, default=6, help='number of workers')
     parser.add_argument('--output-dirpath', default='./model', type=str, help='filepath to where the outputs will be saved.')
-    parser.add_argument('--batch-size', default=32, type=int, help='batch size')
-    parser.add_argument('--learning-rate', default=3e-4, type=float, help='initial learning rate')  # 3e-4
-    parser.add_argument('--tau', default=0.9, type=float, help='temperature value to sharpen the logits. Set to 1 to disable. If tau is 1, hard pseudo-labeling is used instead of soft pseudo-labeling.')
+    parser.add_argument('--batch-size', default=64, type=int, help='batch size')
+    parser.add_argument('--learning-rate', default=0.03, type=float, help='initial learning rate')  # 3e-4
+    parser.add_argument('--tau', default=1.0, type=float, help='temperature value to sharpen the logits. Set to 1 to disable. If tau is 1, hard pseudo-labeling is used instead of soft pseudo-labeling.')
     parser.add_argument('--mu', default=7, type=int, help='the number of unlabeled batches per labeled batch factor.')
     parser.add_argument('--loss-eps', default=1e-4, type=float, help='loss value eps for determining early stopping loss equivalence.')
     # parser.add_argument('--val-fraction', default=0.1, type=float, help='fraction of the training data to use for validation.')
@@ -34,12 +34,12 @@ def main():
     parser.add_argument('--num-classes', default=10, type=int, help='number of classes in the dataset.')
     parser.add_argument('--num-labeled-datapoints', default=250, type=int, help='number of labeled annotations in the dataset.')
     parser.add_argument('--starting-model', type=str, default=None, help='Pytorch model checkpoint to load instead of starting from random')
-    parser.add_argument('--optimizer', type=str, default='adamw',help='optimizer if nothing is passed AdamW would be used (currently supported sgd,adamw)')
+    parser.add_argument('--optimizer', type=str, default='sgd',help='optimizer if nothing is passed AdamW would be used (currently supported sgd,adamw)')
     parser.add_argument('--cluster-per-class', default=1, type=int, help='number of clusters to create per class')
     parser.add_argument('--strong-augmentation', help='enables strong augmentation', action='store_true')
     parser.add_argument('--debug', help='enables debugging mode', action='store_true')
     # parser.add_argument('--skl',help='uses sklearn implementation of Gaussian Mixture',action='store_true')
-    parser.add_argument('--last-layer', type=str, default='gmm', help='last layer to use in the NN (currently supported fc, gmm, cmm)')
+    parser.add_argument('--last-layer', type=str, default='gmmcmm', help='last layer to use in the NN (currently supported fc, gmm, cmm)')
     parser.add_argument('--trainer', type=str, default='fixmatch', help='trainer to use (currently supported supervised, fixmatch, fixmatch-gmm)')
 
 

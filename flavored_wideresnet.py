@@ -92,6 +92,9 @@ class WideResNet(nn.Module):
             self.gmm_layer = lcl_models.axis_aligned_gmm_layer(num_classes, num_classes)
         elif self.last_layer == 'cauchy':
             self.cmm_layer = lcl_models.axis_aligned_gmm_layer(num_classes, num_classes, isCauchy=True)
+        elif self.last_layer == 'gmmcmm':
+            self.gmm_layer = lcl_models.axis_aligned_gmm_cmm_layer(num_classes, num_classes)
+
         else:
             raise RuntimeError("Invalid last layer type: {}".format(self.last_layer))
 
@@ -110,5 +113,8 @@ class WideResNet(nn.Module):
             out = self.gmm_layer(out)
         elif self.last_layer == 'cauchy':
             out = self.cmm_layer(out)
+        elif self.last_layer == 'gmmcmm':
+            resp_gmm, resp_cmm = self.gmm_layer(out)
+            return resp_gmm, resp_cmm
         return out
 

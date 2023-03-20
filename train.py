@@ -11,6 +11,7 @@ import cifar_datasets
 import metadata
 import lr_scheduler
 import flavored_wideresnet
+import trainer_mixed
 import utils
 import trainer
 import trainer_fixmatch
@@ -95,9 +96,12 @@ def setup(args):
         elif args.last_layer == 'cauchy':
             if args.arch == 'wide_resnet':
                 model = flavored_wideresnet.WideResNet(num_classes=args.num_classes, last_layer=args.last_layer)
+        elif args.last_layer == 'gmmcmm':
+            if args.arch == 'wide_resnet':
+                model = flavored_wideresnet.WideResNet(num_classes=args.num_classes, last_layer=args.last_layer)
 
     if model is None:
-        raise RuntimeError("Unsupported model architecture selection: {}.".format(args.arch))
+        raise RuntimeError("Unsupported model architecture selection: {} with last layer: {}.".format(args.arch, args.last_layer))
 
     logging.info("Total Model params: {:.2f}M".format(sum(p.numel() for p in model.parameters()) / 1e6))
 
@@ -110,13 +114,18 @@ def setup(args):
     else:
         raise RuntimeError("unsupported CIFAR class count: {}".format(args.num_classes))
 
-    # split the data class balanced based on a total count.
-    # returns subset, remainder
-    val_dataset, train_dataset = train_dataset.data_split_class_balanced(subset_count=args.num_labeled_datapoints)
-    # set the validation augmentation to just normalize (.dataset since val_dataset is a Subset, not a full dataset)
-    val_dataset.set_transforms(cifar_datasets.Cifar10.TRANSFORM_TEST)
+    if args.num_labeled_datapoints > 0:
+        # split the data class balanced based on a total count.
+        # returns subset, remainder
+        val_dataset, train_dataset = train_dataset.data_split_class_balanced(subset_count=args.num_labeled_datapoints)
+        # set the validation augmentation to just normalize (.dataset since val_dataset is a Subset, not a full dataset)
+        val_dataset.set_transforms(cifar_datasets.Cifar10.TRANSFORM_TEST)
 
-    train_dataset_labeled, train_dataset_unlabeled = train_dataset.data_split_class_balanced(subset_count=args.num_labeled_datapoints)
+        train_dataset_labeled, train_dataset_unlabeled = train_dataset.data_split_class_balanced(subset_count=args.num_labeled_datapoints)
+    else:
+        val_dataset, train_dataset = train_dataset.data_split_class_balanced(subset_count=int(0.1*len(train_dataset)))
+        train_dataset_labeled = train_dataset
+        train_dataset_unlabeled = None
 
     test_dataset = cifar_datasets.Cifar10(transform=cifar_datasets.Cifar10.TRANSFORM_TEST, train=False)
 
@@ -152,6 +161,8 @@ def train(args):
     # supervised, fixmatch, fixmatch-gmm
     if args.trainer == 'supervised':
         model_trainer = trainer.SupervisedTrainer(args)
+    elif args.trainer == 'supervised-mixed':
+        model_trainer = trainer_mixed.SupervisedTrainerMixed(args)
     elif args.trainer == 'fixmatch':
         model_trainer = trainer_fixmatch.FixMatchTrainer(args)
     elif args.trainer == 'fixmatch-gmm':
@@ -185,6 +196,7 @@ def train(args):
 
     # setup early stopping on convergence using LR reduction on plateau
     optimizer = model_trainer.get_optimizer(model)
+
 
     def log_lr_reduction():
         logging.info("Learning rate reduced")

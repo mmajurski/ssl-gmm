@@ -100,8 +100,10 @@ class TrainingStats():
         fig = plt.figure(figsize=(8, 4), dpi=200)
 
         for cm in {'loss', 'accuracy'}:
-            core_metrics = ['train_{}'.format(cm),'val_{}'.format(cm),'test_{}'.format(cm)]
-            core_metrics = [a for a in core_metrics if a in col_list]
+            # core_metrics = ['train_{}'.format(cm),'val_{}'.format(cm),'test_{}'.format(cm)]
+            # core_metrics = [a for a in core_metrics if a in col_list]
+
+            core_metrics = [a for a in col_list if a.endswith(cm)]
             [col_list.remove(m) for m in core_metrics]
             # plot the loss curves
 

@@ -17,7 +17,7 @@ import metadata
 
 
 class Net(nn.Module):
-    def __init__(self, init, dim, num_classes=10):
+    def __init__(self, dim, num_classes=10):
         super(Net, self).__init__()
 
 
@@ -30,7 +30,8 @@ class Net(nn.Module):
         self.dropout2 = nn.Dropout(0.5)
         self.fc1 = nn.Linear(9216, 128)
         self.fc2 = nn.Linear(128, dim)
-        self.gmm_layer = lcl_models.axis_aligned_gmm_layer(dim, num_classes)
+        # self.gmm_layer = lcl_models.axis_aligned_gmm_layer(dim, num_classes)
+        self.gmm_layer = lcl_models.axis_aligned_gmm_cmm_layer(dim, num_classes)
 
     def forward(self, x):
         # ----------
@@ -48,19 +49,19 @@ class Net(nn.Module):
         x = self.dropout2(x)
         x = self.fc2(x)
 
-        output = self.gmm_layer(x)
-        return output
+        resp_gmm, resp_cmm = self.gmm_layer(x)
+        return resp_gmm, resp_cmm
 
 
 def train(args, model, device, train_loader, optimizer, epoch, train_stats):
     model.train()
 
     # Setup loss criteria
-    criterion = torch.nn.CrossEntropyLoss()
+    criterion = torch.nn.CrossEntropyLoss() #reduction='none')
     loss_list = list()
     accuracy_list = list()
 
-
+    L = 0.5#1.0
     # grad_scale_dict = dict()
 
     # tmp_stats = metadata.TrainingStats()
@@ -71,7 +72,27 @@ def train(args, model, device, train_loader, optimizer, epoch, train_stats):
         data, target = data.to(device), target.to(device)
         target_size = target.size()
 
-        output = model(data)
+        # L = max(0.5, (L * 0.999))
+        # l = torch.rand(1).to(data.device)
+        l = torch.rand(target.shape).to(data.device)
+        l_idx = l > 0.5
+
+        resp_gmm, resp_cmm = model(data)
+
+        # output = (resp_gmm + resp_cmm) / 2.0
+        output = resp_gmm  # dropout ish version of combining gmm and cmm
+        output[l_idx, :] = resp_cmm[l_idx, :]
+        # output = (l * resp_gmm) + ((1.0 - l) * resp_cmm)
+
+        output = resp_cmm
+
+        # batch_loss_gmm = criterion(resp_gmm, target)
+        # batch_loss_cmm = criterion(resp_cmm, target)
+        # batch_loss = batch_loss_gmm
+        # batch_loss[l_idx] = batch_loss_cmm[l_idx]
+        # batch_loss = torch.mean(batch_loss)
+        # batch_loss = (l * batch_loss_gmm) + ((1.0 - l) * batch_loss_cmm)
+        # batch_loss = batch_loss_gmm + batch_loss_cmm
         batch_loss = criterion(output, target)
         if torch.isnan(batch_loss):
             print("nan loss")
@@ -123,35 +144,58 @@ def test(model, device, test_loader, epoch, train_stats):
     criterion = torch.nn.CrossEntropyLoss()
     loss_list = list()
     accuracy_list = list()
+    loss_gmm_list = list()
+    accuracy_gmm_list = list()
+    loss_cmm_list = list()
+    accuracy_cmm_list = list()
+
+    # model.set_lambda(1.0)
 
     with torch.no_grad():
         for data, target in test_loader:
             data, target = data.to(device), target.to(device)
 
-            target_size = target.size()
-
-            output = model(data)
+            # output = model(data)
+            resp_gmm, resp_cmm = model(data)
+            output = (resp_gmm + resp_cmm) / 2.0
+            batch_loss_gmm = criterion(resp_gmm, target)
+            batch_loss_cmm = criterion(resp_cmm, target)
+            # loss = (batch_loss_gmm + batch_loss_cmm) / 2.0
             loss = criterion(output, target)
             loss_list.append(loss.item())
+            loss_gmm_list.append(batch_loss_gmm.item())
+            loss_cmm_list.append(batch_loss_cmm.item())
+
             acc = torch.argmax(output, dim=-1) == target
+            acc_gmm = torch.argmax(resp_gmm, dim=-1) == target
+            acc_cmm = torch.argmax(resp_cmm, dim=-1) == target
+            accuracy_gmm_list.append(torch.mean(acc_gmm, dtype=torch.float32).item())
+            accuracy_cmm_list.append(torch.mean(acc_cmm, dtype=torch.float32).item())
             accuracy_list.append(torch.mean(acc, dtype=torch.float32).item())
 
-        # test_loss += F.nll_loss(output, target, reduction='sum').item()  # sum up batch loss
-        # pred = output.argmax(dim=1, keepdim=True)  # get the index of the max log-probability
-        # correct += pred.eq(target.view_as(pred)).sum().item()
-
-    # test_loss /= len(test_loader.dataset)
-
     test_loss = np.nanmean(loss_list)
+    avg_test_loss = test_loss
     test_acc = np.nanmean(accuracy_list)
     train_stats.add(epoch, 'test_loss', test_loss)
     train_stats.add(epoch, 'test_accuracy', test_acc)
-
     print('Test set: Average loss: {:.4f}, Accuracy: {}'.format(test_loss, test_acc))
-    return test_loss
+
+    test_loss = np.nanmean(loss_gmm_list)
+    test_acc = np.nanmean(accuracy_gmm_list)
+    train_stats.add(epoch, 'test_gmm_loss', test_loss)
+    train_stats.add(epoch, 'test_gmm_accuracy', test_acc)
+    print('Test set (GMM): Average loss: {:.4f}, Accuracy: {}'.format(test_loss, test_acc))
+
+    test_loss = np.nanmean(loss_cmm_list)
+    test_acc = np.nanmean(accuracy_cmm_list)
+    train_stats.add(epoch, 'test_cmm_loss', test_loss)
+    train_stats.add(epoch, 'test_cmm_accuracy', test_acc)
+    print('Test set (CMM): Average loss: {:.4f}, Accuracy: {}'.format(test_loss, test_acc))
+
+    return avg_test_loss
 
 
-def main(init, args):
+def main(args):
 
     use_cuda = not args.no_cuda and torch.cuda.is_available()
     use_mps = not args.no_mps and torch.backends.mps.is_available()
@@ -180,7 +224,7 @@ def main(init, args):
         train_kwargs.update(cuda_kwargs)
         test_kwargs.update(cuda_kwargs)
 
-    model = Net(init, args.dim).to(device)
+    model = Net(args.dim).to(device)
 
     transform = transforms.Compose([
         transforms.ToTensor(),
@@ -193,13 +237,13 @@ def main(init, args):
     test_loader = torch.utils.data.DataLoader(test_dataset, **test_kwargs)
 
 
-    optimizer = torch.optim.AdamW(model.parameters(), lr=args.lr)
-    # optimizer = torch.optim.Adadelta(model.parameters(), lr=args.lr)
+    # optimizer = torch.optim.AdamW(model.parameters(), lr=args.lr)
+    optimizer = torch.optim.Adadelta(model.parameters(), lr=args.lr)
     import lr_scheduler
     plateau_scheduler = lr_scheduler.ReduceLROnPlateau(optimizer, mode='min', factor=0.2, patience=20, threshold=1e-4, max_num_lr_reductions=2)
 
 
-    output_folder = './models-20230313/adam-{}-{}dim'.format(init, args.dim)
+    output_folder = './models-20230319/adadelta-model-01'.format(args.dim)
     train_stats = metadata.TrainingStats()
     epoch = -1
     MAX_EPOCHS = 2000
@@ -240,7 +284,7 @@ if __name__ == '__main__':
                         help='number of epochs to train (default: 14)')
     parser.add_argument('--dim', type=int, default=10, metavar='N',
                         help='dimensionality of the gmm')
-    parser.add_argument('--lr', type=float, default=3e-4, metavar='LR',
+    parser.add_argument('--lr', type=float, default=0.1, metavar='LR',
                         help='learning rate (default: 1.0)')
     parser.add_argument('--gamma', type=float, default=0.7, metavar='M',
                         help='Learning rate step gamma (default: 0.7)')
@@ -258,6 +302,5 @@ if __name__ == '__main__':
                         help='For Saving the current Model')
     args = parser.parse_args()
 
-    main(init="0.8-1.2", args=args)
-    main(init="0.0-1.0", args=args)
+    main(args=args)
 
