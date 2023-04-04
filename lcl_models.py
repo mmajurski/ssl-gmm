@@ -1,7 +1,9 @@
-import copy
+import os
 import numpy as np
 import torch.nn
 import torchvision.models
+import imageio
+from matplotlib import pyplot as plt
 
 
 class Identity(torch.nn.Module):
@@ -218,6 +220,8 @@ class axis_aligned_gmm_cmm_layer(torch.nn.Module):
         with torch.no_grad():
             a = 0.2 * a + 0.9  # rand of [0.9, 1.1]
         self.D = torch.nn.Parameter(a)
+        self.count = 0
+        self.D_list = list()
 
     def forward(self, x):
         batch = x.size()[0]  # batch size
@@ -227,6 +231,8 @@ class axis_aligned_gmm_cmm_layer(torch.nn.Module):
         #
         #  Sigma_inv  = Lt-1 D-1 L-1
         #
+
+        # TODO debug almost no gradient with CMM w.r.t. D
 
         log_det = torch.zeros((self.num_classes), device=x.device, requires_grad=False)
         Sigma_inv = [None] * self.num_classes
@@ -261,12 +267,14 @@ class axis_aligned_gmm_cmm_layer(torch.nn.Module):
 
         # Subtract to get diff of [batch, num_classes, dim]
         diff = x_rep - centers_rep
+        dist_sq_kmeans = torch.sum(diff * diff, dim=2)
 
-        dist_sq = torch.sum(diff, 2)  # initially set to zero
-        dist_sq = dist_sq - dist_sq
+        # with torch.no_grad():
+        #     dist_sq = torch.sum(diff, 2)  # initially set to zero
+        #     dist_sq = dist_sq - dist_sq
 
         # Calculate each dist_sq entry separately
-        # dist_sq = torch.zeros((diff.shape[0], diff.shape[1]), requires_grad=True)
+        dist_sq = torch.zeros_like(torch.sum(diff, 2))
         for k in range(self.num_classes):
             curr_diff = diff[:, k]
             curr_diff_t = torch.transpose(curr_diff, 0, 1)
@@ -295,25 +303,110 @@ class axis_aligned_gmm_cmm_layer(torch.nn.Module):
         #  exponents.  These "safe" exponents produce fake numer and denom
         #  but guarantee that resp = fake_numer / fake_denom = numer / denom
         #  where fake_numer and fake_denom are numerically stable
-        # expo_safe_off = self.km_safe_pool(expo)
         expo_safe_off_gmm, _ = torch.max(expo_gmm, dim=-1, keepdim=True)
         expo_safe_gmm = expo_gmm - expo_safe_off_gmm  # use broadcast instead of the repeat
         expo_safe_off_cmm, _ = torch.max(expo_cmm, dim=-1, keepdim=True)
         expo_safe_cmm = expo_cmm - expo_safe_off_cmm  # use broadcast instead of the repeat
-
-        # TODO verify the cauchy version
 
         # Calculate the responsibilities
         numer_safe_gmm = det_scale_rep_safe * torch.exp(expo_safe_gmm)
         denom_safe_gmm = torch.sum(numer_safe_gmm, 1, keepdim=True)
         resp_gmm = numer_safe_gmm / denom_safe_gmm  # use broadcast
 
-        numer_safe_cmm = det_scale_rep_safe * expo_safe_cmm
+
+        numer_safe_cmm = det_scale_rep_safe * torch.exp(expo_safe_cmm)
         denom_safe_cmm = torch.sum(numer_safe_cmm, 1, keepdim=True)
         resp_cmm = numer_safe_cmm / denom_safe_cmm  # use broadcast
 
-        # output = torch.log(resp)
-        return resp_gmm, resp_cmm
+        # Build the kmeans resp
+        # Obtain the exponents
+        expo = -0.5 * dist_sq_kmeans
+
+        # Obtain the "safe" (numerically stable) versions of the
+        #  exponents.  These "safe" exponents produce fake numer and denom
+        #  but guarantee that resp = fake_numer / fake_denom = numer / denom
+        #  where fake_numer and fake_denom are numerically stable
+        expo_safe_off = torch.mean(expo, dim=-1, keepdim=True)
+        expo_safe = expo - expo_safe_off
+
+        # Calculate the responsibilities
+        numer_safe = torch.exp(expo_safe)
+        denom_safe = torch.sum(numer_safe, 1, keepdim=True)
+        resp_kmeans = numer_safe / denom_safe
+
+
+        # argmax resp to assign to cluster
+        # optimize CE over resp + L2 loss
+
+        # TODO build a normal Linear layer with 2D embedding space, see if 2D is enough representation space
+
+        # cluster_dist based on L2 of the whole point cloud, which is implicitly a compactness criteria
+        # cluster_assignment = torch.argmax(resp_kmeans, dim=-1)
+        cluster_assignment = torch.argmax(resp_gmm, dim=-1)
+
+        # cluster_dist = torch.zeros_like(dist_sq_kmeans[:,0])
+        # for i in range(dist_sq_kmeans.shape[0]):
+        #     cluster_dist[i] = dist_sq_kmeans[i, cluster_assignment[i]]
+        # cluster_dist = torch.sqrt(cluster_dist)
+
+        # version of cluster_dist which is based on the centroid distance from self.centers
+        cluster_dist = torch.zeros_like(resp_kmeans[0, :])
+        for c in range(self.num_classes):
+            if torch.any(c == cluster_assignment):
+                x_centroid = torch.mean(x[c==cluster_assignment, :], dim=0)
+                delta = self.centers[c, :] - x_centroid
+                delta = torch.sqrt(torch.sum(torch.pow(delta, 2), dim=-1))
+                cluster_dist[c] = delta
+        cluster_dist = torch.sum(cluster_dist)
+
+
+        if not self.training and self.dim == 2:
+            self.D_list.append(self.D.detach().cpu().numpy().squeeze())
+
+            fig = plt.figure(figsize=(4, 4), dpi=400)
+            cmap = plt.get_cmap('tab10')
+            for c in range(self.num_classes):
+                tmpD = np.stack(self.D_list)
+                xs = tmpD[:, c, 0].reshape(-1)
+                ys = tmpD[:, c, 1].reshape(-1)
+                cs = cmap(c)
+                plt.plot(xs, ys, '*-', color=cs, markersize=4)
+                plt.plot(xs[-1], ys[-1], color=cs, markersize=8, marker='o')
+            # plt.xlim([-1, 2])
+            # plt.ylim([-1, 2])
+            plt.title("D vec locations")
+            plt.savefig('D_space_{:04d}.png'.format(self.count))
+            plt.close()
+
+            fig = plt.figure(figsize=(4, 4), dpi=400)
+            xcoord = x[:, 0].detach().cpu().numpy().squeeze()
+            ycoord = x[:, 1].detach().cpu().numpy().squeeze()
+            c_ids = cluster_assignment.detach().cpu().numpy().squeeze()
+            cent_xcoord = self.centers[:, 0].detach().cpu().numpy().squeeze()
+            cent_ycoord = self.centers[:, 1].detach().cpu().numpy().squeeze()
+            cmap = plt.get_cmap('tab10')
+            for c in range(self.num_classes):
+                idx = c_ids == c
+                cs = [cmap(c)]
+                xs = xcoord[idx]
+                ys = ycoord[idx]
+                plt.scatter(xs, ys, c=cs, alpha=0.1, s=8)
+                xs = cent_xcoord[c]
+                ys = cent_ycoord[c]
+                plt.scatter(xs, ys, c=cs, marker='X', s=64, edgecolors='black', linewidth=0.25)
+            plt.title('Epoch {}'.format(self.count))
+            plt.savefig('feature_space_{:04d}.png'.format(self.count))
+            self.count+=1
+            plt.close()
+
+        resp_gmm = torch.clip(resp_gmm, min=1e-6)
+        resp_cmm = torch.clip(resp_cmm, min=1e-6)
+        resp_kmeans = torch.clip(resp_kmeans, min=1e-6)
+        resp_gmm = torch.log(resp_gmm)
+        resp_cmm = torch.log(resp_cmm)
+        resp_kmeans = torch.log(resp_kmeans)
+
+        return resp_kmeans, resp_gmm, resp_cmm, cluster_dist
 
 
 class gmm_layer(torch.nn.Module):

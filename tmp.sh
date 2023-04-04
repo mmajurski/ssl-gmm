@@ -3,15 +3,24 @@
 source /home/mmajursk/miniconda3/etc/profile.d/conda.sh
 conda activate gmm
 
-python main.py --output-dirpath=./models-20230314/fixmatch-fc-01 --trainer=fixmatch --last-layer=fc --pseudo-label-threshold=0.95
-python main.py --output-dirpath=./models-20230314/fixmatch-fc-02 --trainer=fixmatch --last-layer=fc --pseudo-label-threshold=0.95
-python main.py --output-dirpath=./models-20230314/fixmatch-gmm-01 --trainer=fixmatch --last-layer=gmm --pseudo-label-threshold=0.95
-python main.py --output-dirpath=./models-20230314/fixmatch-gmm-02 --trainer=fixmatch --last-layer=gmm --pseudo-label-threshold=0.95
 
-python main.py --output-dirpath=./models-20230314/fixmatch-fc-01 --trainer=fixmatch --last-layer=fc --pseudo-label-threshold=0.9
-python main.py --output-dirpath=./models-20230314/fixmatch-fc-02 --trainer=fixmatch --last-layer=fc --pseudo-label-threshold=0.9
-python main.py --output-dirpath=./models-20230314/fixmatch-gmm-01 --trainer=fixmatch --last-layer=gmm --pseudo-label-threshold=0.9
-python main.py --output-dirpath=./models-20230314/fixmatch-gmm-02 --trainer=fixmatch --last-layer=gmm --pseudo-label-threshold=0.9
+#python 7_gmm_net.py --num-classes=2 --dim=2
+#python 7_gmm_net.py --num-classes=3 --dim=2
+#python 7_gmm_net.py --num-classes=4 --dim=2
+python 7_gmm_net.py --num-classes=10 --dim=2
+
+#python 7_gmm_net.py --num-classes=10 --dim=10
+
+
+#python main.py --output-dirpath=./models-20230314/fixmatch-fc-01 --trainer=fixmatch --last-layer=fc --pseudo-label-threshold=0.95
+#python main.py --output-dirpath=./models-20230314/fixmatch-fc-02 --trainer=fixmatch --last-layer=fc --pseudo-label-threshold=0.95
+#python main.py --output-dirpath=./models-20230314/fixmatch-gmm-01 --trainer=fixmatch --last-layer=gmm --pseudo-label-threshold=0.95
+#python main.py --output-dirpath=./models-20230314/fixmatch-gmm-02 --trainer=fixmatch --last-layer=gmm --pseudo-label-threshold=0.95
+#
+#python main.py --output-dirpath=./models-20230314/fixmatch-fc-01 --trainer=fixmatch --last-layer=fc --pseudo-label-threshold=0.9
+#python main.py --output-dirpath=./models-20230314/fixmatch-fc-02 --trainer=fixmatch --last-layer=fc --pseudo-label-threshold=0.9
+#python main.py --output-dirpath=./models-20230314/fixmatch-gmm-01 --trainer=fixmatch --last-layer=gmm --pseudo-label-threshold=0.9
+#python main.py --output-dirpath=./models-20230314/fixmatch-gmm-02 --trainer=fixmatch --last-layer=gmm --pseudo-label-threshold=0.9
 
 #MODELS_PER_JOB=2
 #MAX_MODEL_ATTEMPT_COUNT=1000

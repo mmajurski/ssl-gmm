@@ -1,4 +1,5 @@
 import psutil
+import os
 import argparse
 import numpy as np
 import torch
@@ -9,10 +10,30 @@ from torchvision import datasets, transforms
 from torch.optim.lr_scheduler import StepLR
 import torchvision.models.resnet as resnet
 import copy
+import imageio
 
 import utils
 import lcl_models
 import metadata
+
+
+class MNIST_subset(torch.utils.data.Dataset):
+
+    def __init__(self, src_data, num_classes):
+        self.imgs = list()
+        self.labels = list()
+        class_list = list(range(num_classes))
+        for i in range(len(src_data)):
+            data, target = src_data.__getitem__(i)
+            if target in class_list:
+                self.labels.append(target)
+                self.imgs.append(data)
+
+    def __len__(self):
+        return len(self.labels)
+
+    def __getitem__(self, item):
+        return self.imgs[item], self.labels[item]
 
 
 
@@ -37,6 +58,7 @@ class Net(nn.Module):
         # ----------
         # The architecture
         # ----------
+        # with torch.no_grad():
         x = self.conv1(x)
         x = F.relu(x)
         x = self.conv2(x)
@@ -49,15 +71,17 @@ class Net(nn.Module):
         x = self.dropout2(x)
         x = self.fc2(x)
 
-        resp_gmm, resp_cmm = self.gmm_layer(x)
-        return resp_gmm, resp_cmm
+        resp_kmeans, resp_gmm, resp_cmm, cluster_dist = self.gmm_layer(x)
+        return resp_kmeans, resp_gmm, resp_cmm, cluster_dist
 
 
 def train(args, model, device, train_loader, optimizer, epoch, train_stats):
     model.train()
 
     # Setup loss criteria
-    criterion = torch.nn.CrossEntropyLoss() #reduction='none')
+    cluster_criterion = torch.nn.MSELoss()
+    criterion = torch.nn.CrossEntropyLoss()
+    # criterion = torch.nn.NLLLoss()
     loss_list = list()
     accuracy_list = list()
 
@@ -67,35 +91,49 @@ def train(args, model, device, train_loader, optimizer, epoch, train_stats):
     # tmp_stats = metadata.TrainingStats()
     #
     # try:
+    nan_count = 0
     for batch_idx, (data, target) in enumerate(train_loader):
         optimizer.zero_grad()
         data, target = data.to(device), target.to(device)
         target_size = target.size()
 
-        # L = max(0.5, (L * 0.999))
-        # l = torch.rand(1).to(data.device)
-        l = torch.rand(target.shape).to(data.device)
-        l_idx = l > 0.5
 
-        resp_gmm, resp_cmm = model(data)
+        # l = torch.rand(target.shape).to(data.device)
+        # l_idx = l > 0.5
+
+        resp_kmeans, resp_gmm, resp_cmm, cluster_dist = model(data)
+
+        cluster_tgt = torch.zeros_like(cluster_dist)
+        cluster_loss = cluster_criterion(cluster_dist, cluster_tgt)
 
         # output = (resp_gmm + resp_cmm) / 2.0
-        output = resp_gmm  # dropout ish version of combining gmm and cmm
-        output[l_idx, :] = resp_cmm[l_idx, :]
+        # output = resp_gmm  # dropout ish version of combining gmm and cmm
+        # output[l_idx, :] = resp_cmm[l_idx, :]
         # output = (l * resp_gmm) + ((1.0 - l) * resp_cmm)
 
         output = resp_cmm
 
-        # batch_loss_gmm = criterion(resp_gmm, target)
-        # batch_loss_cmm = criterion(resp_cmm, target)
+        batch_loss_gmm = criterion(resp_gmm, target)
+        batch_loss_cmm = criterion(resp_cmm, target)
+        batch_loss_kmeans = criterion(resp_kmeans, target)
+
         # batch_loss = batch_loss_gmm
         # batch_loss[l_idx] = batch_loss_cmm[l_idx]
         # batch_loss = torch.mean(batch_loss)
         # batch_loss = (l * batch_loss_gmm) + ((1.0 - l) * batch_loss_cmm)
-        # batch_loss = batch_loss_gmm + batch_loss_cmm
-        batch_loss = criterion(output, target)
+        # batch_loss = batch_loss_gmm + batch_loss_cmm + cluster_loss
+        # batch_loss = batch_loss_cmm + batch_loss_kmeans + cluster_loss
+        # batch_loss = batch_loss_gmm + cluster_loss
+        batch_loss = batch_loss_cmm + cluster_loss
+        # batch_loss = batch_loss_cmm + batch_loss_kmeans + cluster_loss
+        # batch_loss =  + cluster_loss
+
+        # batch_loss = cluster_loss
+        # batch_loss = criterion(output, target)
         if torch.isnan(batch_loss):
-            print("nan loss")
+            nan_count += 1
+            if nan_count > 0.5 * len(train_loader):
+                raise RuntimeError("more than 25% of the batches were nan, terminating")
 
         batch_loss.backward()
         torch.nn.utils.clip_grad_value_(model.parameters(), 50)
@@ -141,6 +179,7 @@ def train(args, model, device, train_loader, optimizer, epoch, train_stats):
 
 def test(model, device, test_loader, epoch, train_stats):
     model.eval()
+    cluster_criterion = torch.nn.MSELoss()
     criterion = torch.nn.CrossEntropyLoss()
     loss_list = list()
     accuracy_list = list()
@@ -148,6 +187,9 @@ def test(model, device, test_loader, epoch, train_stats):
     accuracy_gmm_list = list()
     loss_cmm_list = list()
     accuracy_cmm_list = list()
+    loss_kmeans_list = list()
+    accuracy_kmeans_list = list()
+    loss_cluster_list = list()
 
     # model.set_lambda(1.0)
 
@@ -156,41 +198,68 @@ def test(model, device, test_loader, epoch, train_stats):
             data, target = data.to(device), target.to(device)
 
             # output = model(data)
-            resp_gmm, resp_cmm = model(data)
-            output = (resp_gmm + resp_cmm) / 2.0
+            resp_kmeans, resp_gmm, resp_cmm, cluster_dist = model(data)
+
+            cluster_tgt = torch.zeros_like(cluster_dist)
+            cluster_loss = cluster_criterion(cluster_dist, cluster_tgt)
+            loss_cluster_list.append(cluster_loss.item())
+
+            # undo log space transform which make CE works well
+            # output = torch.log((torch.exp(resp_gmm) + torch.exp(resp_cmm)) / 2.0)
             batch_loss_gmm = criterion(resp_gmm, target)
             batch_loss_cmm = criterion(resp_cmm, target)
+            batch_loss_kmeans = criterion(resp_kmeans, target)
+
+            loss = batch_loss_kmeans + batch_loss_cmm + cluster_loss
+
             # loss = (batch_loss_gmm + batch_loss_cmm) / 2.0
-            loss = criterion(output, target)
+            # loss = criterion(output, target)
             loss_list.append(loss.item())
             loss_gmm_list.append(batch_loss_gmm.item())
             loss_cmm_list.append(batch_loss_cmm.item())
+            loss_kmeans_list.append(batch_loss_kmeans.item())
 
-            acc = torch.argmax(output, dim=-1) == target
+            # acc = torch.argmax(output, dim=-1) == target
             acc_gmm = torch.argmax(resp_gmm, dim=-1) == target
             acc_cmm = torch.argmax(resp_cmm, dim=-1) == target
+            acc_kmeans = torch.argmax(resp_kmeans, dim=-1) == target
             accuracy_gmm_list.append(torch.mean(acc_gmm, dtype=torch.float32).item())
             accuracy_cmm_list.append(torch.mean(acc_cmm, dtype=torch.float32).item())
-            accuracy_list.append(torch.mean(acc, dtype=torch.float32).item())
+            accuracy_kmeans_list.append(torch.mean(acc_kmeans, dtype=torch.float32).item())
+            # accuracy_list.append(torch.mean(acc, dtype=torch.float32).item())
 
     test_loss = np.nanmean(loss_list)
     avg_test_loss = test_loss
-    test_acc = np.nanmean(accuracy_list)
+    # test_acc = np.nanmean(accuracy_list)
     train_stats.add(epoch, 'test_loss', test_loss)
-    train_stats.add(epoch, 'test_accuracy', test_acc)
-    print('Test set: Average loss: {:.4f}, Accuracy: {}'.format(test_loss, test_acc))
+    # train_stats.add(epoch, 'test_accuracy', test_acc)
+    # print('Test set: Average loss: {:.4f}, Accuracy: {}'.format(test_loss, test_acc))
+    print('Test set: Average loss: {:.4f}'.format(test_loss))
 
     test_loss = np.nanmean(loss_gmm_list)
     test_acc = np.nanmean(accuracy_gmm_list)
     train_stats.add(epoch, 'test_gmm_loss', test_loss)
     train_stats.add(epoch, 'test_gmm_accuracy', test_acc)
+    avg_test_accuracy = test_acc
     print('Test set (GMM): Average loss: {:.4f}, Accuracy: {}'.format(test_loss, test_acc))
 
     test_loss = np.nanmean(loss_cmm_list)
     test_acc = np.nanmean(accuracy_cmm_list)
     train_stats.add(epoch, 'test_cmm_loss', test_loss)
     train_stats.add(epoch, 'test_cmm_accuracy', test_acc)
+    avg_test_accuracy = test_acc
     print('Test set (CMM): Average loss: {:.4f}, Accuracy: {}'.format(test_loss, test_acc))
+
+    test_loss = np.nanmean(loss_kmeans_list)
+    test_acc = np.nanmean(accuracy_kmeans_list)
+    train_stats.add(epoch, 'test_kmeans_loss', test_loss)
+    train_stats.add(epoch, 'test_kmeans_accuracy', test_acc)
+    avg_test_accuracy = test_acc
+    print('Test set (KMeans): Average loss: {:.4f}, Accuracy: {}'.format(test_loss, test_acc))
+
+    test_loss = np.nanmean(loss_cluster_list)
+    train_stats.add(epoch, 'test_cluster_loss', test_loss)
+    print('Test set (CMM): Cluster loss: {:.4f}'.format(test_loss))
 
     return avg_test_loss
 
@@ -224,30 +293,37 @@ def main(args):
         train_kwargs.update(cuda_kwargs)
         test_kwargs.update(cuda_kwargs)
 
-    model = Net(args.dim).to(device)
+    model = Net(args.dim, num_classes=args.num_classes).to(device)
 
     transform = transforms.Compose([
         transforms.ToTensor(),
         transforms.Normalize((0.1307,), (0.3081,))
     ])
+
     train_dataset = datasets.MNIST('../data', train=True, download=True, transform=transform)
     test_dataset = datasets.MNIST('../data', train=False, transform=transform)
 
+    if args.num_classes != 10:
+        train_dataset = MNIST_subset(train_dataset, num_classes=args.num_classes)
+        test_dataset = MNIST_subset(test_dataset, num_classes=args.num_classes)
+
     train_loader = torch.utils.data.DataLoader(train_dataset, **train_kwargs)
+    test_kwargs['batch_size'] = len(test_dataset)
     test_loader = torch.utils.data.DataLoader(test_dataset, **test_kwargs)
 
 
     # optimizer = torch.optim.AdamW(model.parameters(), lr=args.lr)
     optimizer = torch.optim.Adadelta(model.parameters(), lr=args.lr)
     import lr_scheduler
-    plateau_scheduler = lr_scheduler.ReduceLROnPlateau(optimizer, mode='min', factor=0.2, patience=20, threshold=1e-4, max_num_lr_reductions=2)
+    plateau_scheduler = lr_scheduler.ReduceLROnPlateau(optimizer, mode='min', factor=0.2, patience=10, threshold=1e-4, max_num_lr_reductions=1)
 
 
-    output_folder = './models-20230319/adadelta-model-01'.format(args.dim)
+    output_folder = './models-20230330/adadelta-model-01-{}D-{}class-cmm+cluster'.format(args.dim, args.num_classes)
     train_stats = metadata.TrainingStats()
     epoch = -1
     MAX_EPOCHS = 2000
     best_model = copy.deepcopy(model)
+
     while not plateau_scheduler.is_done() and epoch < MAX_EPOCHS:
         epoch += 1
         train(args, model, device, train_loader, optimizer, epoch, train_stats)
@@ -255,9 +331,11 @@ def main(args):
         torch.cuda.synchronize()
         test_loss = test(model, device, test_loader, epoch, train_stats)
         plateau_scheduler.step(test_loss)
+        # plateau_scheduler.step(avg_test_accuracy)
 
         if plateau_scheduler.is_equiv_to_best_epoch:
             print('Updating best model with epoch: {} loss: {}'.format(epoch, test_loss))
+            # print('Updating best model with epoch: {} accuracy: {}'.format(epoch, avg_test_accuracy))
             best_model = copy.deepcopy(model)
 
             # update the global metrics with the best epoch
@@ -272,6 +350,38 @@ def main(args):
     torch.save(best_model, os.path.join(output_folder, "model.pt"))
     torch.save(best_model.state_dict(), os.path.join(output_folder, "model-state-dict.pt"))
 
+    # build gif, and remove tmp files
+    fns = [fn for fn in os.listdir('./') if fn.startswith('feature_space_')]
+    fns.sort()
+    if len(fns) > 0:
+        fps = 2
+        if len(fns) > 50:
+            fps = 4
+        if len(fns) > 100:
+            fps = 8
+        with imageio.get_writer(os.path.join(output_folder, 'feature_space.gif'), mode='I', fps=fps) as writer:
+            for filename in fns:
+                image = imageio.imread(filename)
+                writer.append_data(image)
+        for fn in fns:
+            os.remove(fn)
+
+    # build gif, and remove tmp files
+    fns = [fn for fn in os.listdir('./') if fn.startswith('D_space_')]
+    fns.sort()
+    if len(fns) > 0:
+        fps = 4
+        if len(fns) > 50:
+            fps = 8
+        if len(fns) > 100:
+            fps = 16
+        with imageio.get_writer(os.path.join(output_folder, 'D_space.gif'), mode='I', fps=fps) as writer:
+            for filename in fns:
+                image = imageio.imread(filename)
+                writer.append_data(image)
+        for fn in fns:
+            os.remove(fn)
+
 
 if __name__ == '__main__':
     # Training settings
@@ -282,8 +392,9 @@ if __name__ == '__main__':
                         help='input batch size for testing (default: 1000)')
     parser.add_argument('--epochs', type=int, default=14, metavar='N',
                         help='number of epochs to train (default: 14)')
-    parser.add_argument('--dim', type=int, default=10, metavar='N',
+    parser.add_argument('--dim', type=int, default=2, metavar='N',
                         help='dimensionality of the gmm')
+    parser.add_argument('--num-classes', type=int, default=10)
     parser.add_argument('--lr', type=float, default=0.1, metavar='LR',
                         help='learning rate (default: 1.0)')
     parser.add_argument('--gamma', type=float, default=0.7, metavar='M',
@@ -303,4 +414,6 @@ if __name__ == '__main__':
     args = parser.parse_args()
 
     main(args=args)
+
+
 
