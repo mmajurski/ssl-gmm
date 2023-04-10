@@ -10,7 +10,7 @@ import train
 def main():
     parser = argparse.ArgumentParser(description='PyTorch Training')
     parser.add_argument('--arch', default='wide_resnet', type=str, help='Name of the image classification architecture to train')
-    parser.add_argument('--num-workers', type=int, default=6, help='number of workers')
+    parser.add_argument('--num-workers', type=int, default=12, help='number of workers')
     parser.add_argument('--output-dirpath', default='./model', type=str, help='filepath to where the outputs will be saved.')
     parser.add_argument('--batch-size', default=64, type=int, help='batch size')
     parser.add_argument('--learning-rate', default=0.03, type=float, help='initial learning rate')  # 3e-4
@@ -40,7 +40,7 @@ def main():
     parser.add_argument('--debug', help='enables debugging mode', action='store_true')
     # parser.add_argument('--skl',help='uses sklearn implementation of Gaussian Mixture',action='store_true')
     parser.add_argument('--last-layer', type=str, default='gmmcmm', help='last layer to use in the NN (currently supported fc, gmm, cmm)')
-    parser.add_argument('--trainer', type=str, default='fixmatch', help='trainer to use (currently supported supervised, fixmatch, fixmatch-gmm)')
+    parser.add_argument('--trainer', type=str, default='fixmatch-gmm', help='trainer to use (currently supported supervised, fixmatch, fixmatch-gmm)')
 
 
     args = parser.parse_args()

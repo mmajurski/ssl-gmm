@@ -24,11 +24,12 @@ def fully_supervised_pretrain(model, train_dataset_labeled, val_dataset, criteri
 
     logging.info("Performing a fully supervised pre-train until the model converges on just the labeled samples")
     model_trainer = trainer.SupervisedTrainer(args)
+    model.output_only_gmm = True
 
     # train the model until it has converged on the labeled data
     # setup early stopping on convergence using LR reduction on plateau
     optimizer = model_trainer.get_optimizer(model)
-    plateau_scheduler = lr_scheduler.ReduceLROnPlateau(optimizer, mode='min', factor=args.lr_reduction_factor, patience=args.supervised_pretrain_patience, threshold=args.loss_eps, max_num_lr_reductions=1)
+    plateau_scheduler = lr_scheduler.ReduceLROnPlateau(optimizer, mode='max', factor=args.lr_reduction_factor, patience=args.supervised_pretrain_patience, threshold=args.loss_eps, max_num_lr_reductions=1)
     # train epochs until loss converges
     epoch = -1
     best_model = model
@@ -46,7 +47,8 @@ def fully_supervised_pretrain(model, train_dataset_labeled, val_dataset, criteri
         model_trainer.eval_model(model, val_dataset, criterion, train_stats, "val", epoch)
 
         val_loss = train_stats.get_epoch('val_loss', epoch=epoch)
-        plateau_scheduler.step(val_loss)
+        val_accuracy = train_stats.get_epoch('val_accuracy', epoch=epoch)
+        plateau_scheduler.step(val_accuracy)
 
         # update global metadata stats
         train_stats.add_global('training_wall_time', train_stats.get('train_wall_time', aggregator='sum'))
@@ -65,6 +67,8 @@ def fully_supervised_pretrain(model, train_dataset_labeled, val_dataset, criteri
 
             # update the global metrics with the best epoch
             train_stats.update_global(epoch)
+
+    model.output_only_gmm = False
 
     return best_model, train_stats, best_epoch, epoch
 

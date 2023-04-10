@@ -3,7 +3,6 @@ import os
 import numpy as np
 import torch.nn
 import torchvision.models
-import imageio
 from matplotlib import pyplot as plt
 
 

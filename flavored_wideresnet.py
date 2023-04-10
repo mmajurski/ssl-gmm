@@ -74,6 +74,7 @@ class WideResNet(nn.Module):
         self.width = width
         self.channels = channels[3]
         self.last_layer = last_layer
+        self.output_only_gmm = False
 
         # 1st conv before any network block
         self.conv1 = nn.Conv2d(3, channels[0], kernel_size=3, stride=1, padding=1, bias=False)
@@ -87,6 +88,7 @@ class WideResNet(nn.Module):
         self.bn1 = nn.BatchNorm2d(channels[3], momentum=0.001)
         # self.relu = nn.ReLU(inplace=True)  # published wideresnet network
         self.relu = nn.LeakyReLU(negative_slope=0.1, inplace=True)
+
 
 
         # TODO test replacing with a different embedding dimension, as the GMM cannot scale to imagenet 1000 classes
@@ -122,6 +124,9 @@ class WideResNet(nn.Module):
             out = self.cmm_layer(out)
         elif self.last_layer == 'gmmcmm':
             resp_gmm, resp_cmm, cluster_dist = self.gmm_layer(out)
-            return resp_gmm, resp_cmm, cluster_dist
+            if self.output_only_gmm:
+                return resp_gmm
+            else:
+                return resp_gmm, resp_cmm, cluster_dist
         return out
 
