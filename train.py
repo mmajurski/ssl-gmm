@@ -15,7 +15,7 @@ import trainer_mixed
 import utils
 import trainer
 import trainer_fixmatch
-import trainer_gmm
+import trainer_fixmatch_gmm
 import lcl_models
 
 
@@ -166,7 +166,7 @@ def train(args):
     elif args.trainer == 'fixmatch':
         model_trainer = trainer_fixmatch.FixMatchTrainer(args)
     elif args.trainer == 'fixmatch-gmm':
-        model_trainer = trainer_gmm.FixMatchTrainer_gmm(args)
+        model_trainer = trainer_fixmatch_gmm.FixMatchTrainer_gmm(args)
     else:
         raise RuntimeError("Invalid trainer request: {}".format(args.trainer))
     logging.info("trainer setup")

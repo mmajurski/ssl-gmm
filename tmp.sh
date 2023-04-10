@@ -4,10 +4,24 @@ source /home/mmajursk/miniconda3/etc/profile.d/conda.sh
 conda activate gmm
 
 
-#python 7_gmm_net.py --num-classes=2 --dim=2
-#python 7_gmm_net.py --num-classes=3 --dim=2
-#python 7_gmm_net.py --num-classes=4 --dim=2
-python 7_gmm_net.py --num-classes=10 --dim=2
+
+d=10
+lr=0.01
+python 7_gmm_net.py --num-classes=10 --dim=${d} --lr=${lr} &
+sleep 2  # separate launches by 1 second minimum
+
+lr=0.05
+python 7_gmm_net.py --num-classes=10 --dim=${d} --lr=${lr} &
+sleep 2  # separate launches by 1 second minimum
+
+lr=0.1
+python 7_gmm_net.py --num-classes=10 --dim=${d} --lr=${lr} &
+sleep 2  # separate launches by 1 second minimum
+
+
+wait
+
+
 
 #python 7_gmm_net.py --num-classes=10 --dim=10
 

@@ -1,3 +1,4 @@
+import copy
 import os
 import numpy as np
 import torch.nn
@@ -221,7 +222,6 @@ class axis_aligned_gmm_cmm_layer(torch.nn.Module):
             a = 0.2 * a + 0.9  # rand of [0.9, 1.1]
         self.D = torch.nn.Parameter(a)
         self.count = 0
-        self.D_list = list()
 
     def forward(self, x):
         batch = x.size()[0]  # batch size
@@ -231,8 +231,6 @@ class axis_aligned_gmm_cmm_layer(torch.nn.Module):
         #
         #  Sigma_inv  = Lt-1 D-1 L-1
         #
-
-        # TODO debug almost no gradient with CMM w.r.t. D
 
         log_det = torch.zeros((self.num_classes), device=x.device, requires_grad=False)
         Sigma_inv = [None] * self.num_classes
@@ -295,7 +293,6 @@ class axis_aligned_gmm_cmm_layer(torch.nn.Module):
         b = -((1 + self.dim) / 2)
         expo_cmm = torch.pow(a, b)
 
-
         # Safe version
         det_scale_rep_safe = det_scale_safe.unsqueeze(0).repeat(batch, 1)
 
@@ -318,66 +315,39 @@ class axis_aligned_gmm_cmm_layer(torch.nn.Module):
         denom_safe_cmm = torch.sum(numer_safe_cmm, 1, keepdim=True)
         resp_cmm = numer_safe_cmm / denom_safe_cmm  # use broadcast
 
-        # Build the kmeans resp
-        # Obtain the exponents
-        expo = -0.5 * dist_sq_kmeans
-
-        # Obtain the "safe" (numerically stable) versions of the
-        #  exponents.  These "safe" exponents produce fake numer and denom
-        #  but guarantee that resp = fake_numer / fake_denom = numer / denom
-        #  where fake_numer and fake_denom are numerically stable
-        expo_safe_off = torch.mean(expo, dim=-1, keepdim=True)
-        expo_safe = expo - expo_safe_off
-
-        # Calculate the responsibilities
-        numer_safe = torch.exp(expo_safe)
-        denom_safe = torch.sum(numer_safe, 1, keepdim=True)
-        resp_kmeans = numer_safe / denom_safe
+        # # Build the kmeans resp
+        # # Obtain the exponents
+        # expo = -0.5 * dist_sq_kmeans
+        #
+        # # Obtain the "safe" (numerically stable) versions of the
+        # #  exponents.  These "safe" exponents produce fake numer and denom
+        # #  but guarantee that resp = fake_numer / fake_denom = numer / denom
+        # #  where fake_numer and fake_denom are numerically stable
+        # expo_safe_off = torch.mean(expo, dim=-1, keepdim=True)
+        # expo_safe = expo - expo_safe_off
+        #
+        # # Calculate the responsibilities
+        # numer_safe = torch.exp(expo_safe)
+        # denom_safe = torch.sum(numer_safe, 1, keepdim=True)
+        # resp_kmeans = numer_safe / denom_safe
 
 
         # argmax resp to assign to cluster
         # optimize CE over resp + L2 loss
-
-        # TODO build a normal Linear layer with 2D embedding space, see if 2D is enough representation space
-
-        # cluster_dist based on L2 of the whole point cloud, which is implicitly a compactness criteria
-        # cluster_assignment = torch.argmax(resp_kmeans, dim=-1)
         cluster_assignment = torch.argmax(resp_gmm, dim=-1)
 
-        # cluster_dist = torch.zeros_like(dist_sq_kmeans[:,0])
-        # for i in range(dist_sq_kmeans.shape[0]):
-        #     cluster_dist[i] = dist_sq_kmeans[i, cluster_assignment[i]]
-        # cluster_dist = torch.sqrt(cluster_dist)
-
         # version of cluster_dist which is based on the centroid distance from self.centers
-        cluster_dist = torch.zeros_like(resp_kmeans[0, :])
+        cluster_dist = torch.zeros_like(resp_gmm[0, :])
         for c in range(self.num_classes):
             if torch.any(c == cluster_assignment):
                 x_centroid = torch.mean(x[c==cluster_assignment, :], dim=0)
                 delta = self.centers[c, :] - x_centroid
                 delta = torch.sqrt(torch.sum(torch.pow(delta, 2), dim=-1))
                 cluster_dist[c] = delta
-        cluster_dist = torch.sum(cluster_dist)
+        # cluster_dist = torch.sum(cluster_dist)
 
 
         if not self.training and self.dim == 2:
-            self.D_list.append(self.D.detach().cpu().numpy().squeeze())
-
-            fig = plt.figure(figsize=(4, 4), dpi=400)
-            cmap = plt.get_cmap('tab10')
-            for c in range(self.num_classes):
-                tmpD = np.stack(self.D_list)
-                xs = tmpD[:, c, 0].reshape(-1)
-                ys = tmpD[:, c, 1].reshape(-1)
-                cs = cmap(c)
-                plt.plot(xs, ys, '*-', color=cs, markersize=4)
-                plt.plot(xs[-1], ys[-1], color=cs, markersize=8, marker='o')
-            # plt.xlim([-1, 2])
-            # plt.ylim([-1, 2])
-            plt.title("D vec locations")
-            plt.savefig('D_space_{:04d}.png'.format(self.count))
-            plt.close()
-
             fig = plt.figure(figsize=(4, 4), dpi=400)
             xcoord = x[:, 0].detach().cpu().numpy().squeeze()
             ycoord = x[:, 1].detach().cpu().numpy().squeeze()
@@ -401,12 +371,10 @@ class axis_aligned_gmm_cmm_layer(torch.nn.Module):
 
         resp_gmm = torch.clip(resp_gmm, min=1e-6)
         resp_cmm = torch.clip(resp_cmm, min=1e-6)
-        resp_kmeans = torch.clip(resp_kmeans, min=1e-6)
         resp_gmm = torch.log(resp_gmm)
         resp_cmm = torch.log(resp_cmm)
-        resp_kmeans = torch.log(resp_kmeans)
 
-        return resp_kmeans, resp_gmm, resp_cmm, cluster_dist
+        return resp_gmm, resp_cmm, cluster_dist
 
 
 class gmm_layer(torch.nn.Module):

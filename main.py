@@ -27,7 +27,7 @@ def main():
     parser.add_argument('--amp', action='store_true')
     # parser.add_argument('--inference-method', default='gmm', type=str, help='whether to use gmm or cauchy for inference.')
     # parser.add_argument('--pseudo-label-method', default="resp", type=str, help='method/algorithm to use for selecting valid psudo-label samples.')
-    parser.add_argument('--pseudo-label-threshold', default=0.9, type=float, help='Threshold when filtering pseudo-labeling.')
+    parser.add_argument('--pseudo-label-threshold', default=0.25, type=float, help='Threshold when filtering pseudo-labeling.')
     parser.add_argument('--soft-labels', help='enables soft labels', action='store_true')
     parser.add_argument('--supervised-pretrain', help='enables a fully supervised pre-train before starting the SSL', action='store_true')
     parser.add_argument('--supervised-pretrain-patience', default=5, type=int, help='number of epochs past optimal to explore before early stopping terminates training.')

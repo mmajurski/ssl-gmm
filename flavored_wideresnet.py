@@ -62,12 +62,16 @@ class NetworkBlock(nn.Module):
 
 
 class WideResNet(nn.Module):
-    def __init__(self, num_classes, last_layer:str='fc', depth=28, width=2):
+    def __init__(self, num_classes, last_layer:str='fc', depth=28, width=2, embedding_dim=10):
         assert (depth - 4) % 6 == 0, 'depth should be 6n+4'
 
         super(WideResNet, self).__init__()
         channels = [16, 16*width, 32*width, 64*width]
         n = (depth - 4) / 6
+        self.num_classes = num_classes
+        self.embedding_dim = embedding_dim
+        self.depth = depth
+        self.width = width
         self.channels = channels[3]
         self.last_layer = last_layer
 
@@ -83,17 +87,20 @@ class WideResNet(nn.Module):
         self.bn1 = nn.BatchNorm2d(channels[3], momentum=0.001)
         # self.relu = nn.ReLU(inplace=True)  # published wideresnet network
         self.relu = nn.LeakyReLU(negative_slope=0.1, inplace=True)
-        self.fc = nn.Linear(channels[3], num_classes)
+
 
         # TODO test replacing with a different embedding dimension, as the GMM cannot scale to imagenet 1000 classes
         if self.last_layer == 'fc':
-            pass
+            self.fc = nn.Linear(channels[3], num_classes)
         elif self.last_layer == 'gmm':
-            self.gmm_layer = lcl_models.axis_aligned_gmm_layer(num_classes, num_classes)
+            self.fc = nn.Linear(channels[3], embedding_dim)
+            self.gmm_layer = lcl_models.axis_aligned_gmm_layer(embedding_dim, num_classes)
         elif self.last_layer == 'cauchy':
-            self.cmm_layer = lcl_models.axis_aligned_gmm_layer(num_classes, num_classes, isCauchy=True)
+            self.fc = nn.Linear(channels[3], embedding_dim)
+            self.cmm_layer = lcl_models.axis_aligned_gmm_layer(embedding_dim, num_classes, isCauchy=True)
         elif self.last_layer == 'gmmcmm':
-            self.gmm_layer = lcl_models.axis_aligned_gmm_cmm_layer(num_classes, num_classes)
+            self.fc = nn.Linear(channels[3], embedding_dim)
+            self.gmm_layer = lcl_models.axis_aligned_gmm_cmm_layer(embedding_dim, num_classes)
 
         else:
             raise RuntimeError("Invalid last layer type: {}".format(self.last_layer))
@@ -108,13 +115,13 @@ class WideResNet(nn.Module):
         out = out.view(-1, self.channels)
         out = self.fc(out)
         if self.last_layer == 'fc':
-            out = torch.nn.functional.softmax(out, dim=-1)
+            pass
         elif self.last_layer == 'gmm':
             out = self.gmm_layer(out)
         elif self.last_layer == 'cauchy':
             out = self.cmm_layer(out)
         elif self.last_layer == 'gmmcmm':
-            resp_gmm, resp_cmm = self.gmm_layer(out)
-            return resp_gmm, resp_cmm
+            resp_gmm, resp_cmm, cluster_dist = self.gmm_layer(out)
+            return resp_gmm, resp_cmm, cluster_dist
         return out
 
