@@ -117,10 +117,12 @@ class FixMatchTrainer_gmm(trainer.SupervisedTrainer):
                 # logits_ul_strong = logits_ul[inputs_ul_weak.shape[0]:]
 
                 softmax_ul_weak = torch.nn.functional.softmax(logits_ul_weak, dim=-1)
+                softmax_gmm_ul_weak = torch.nn.functional.softmax(resp_gmm_ul_weak, dim=-1)
 
                 # sharpen the logits with tau, but in a manner which preserves sum to 1
                 if self.args.tau < 1.0:
                     softmax_ul_weak = sharpen_mixmatch(x=softmax_ul_weak, T=self.args.tau)
+                    softmax_gmm_ul_weak = sharpen_mixmatch(x=softmax_gmm_ul_weak, T=self.args.tau)
 
                 if self.args.soft_labels:
                     # convert hard labels in the fully labeled dataset into soft labels (i.e. one hot)
@@ -134,6 +136,12 @@ class FixMatchTrainer_gmm(trainer.SupervisedTrainer):
                     targets_weak_ul = pred_weak
 
                 valid_pl = score_weak >= torch.tensor(self.args.pseudo_label_threshold)
+                max_cmm_pl_score, _ = torch.max(score_weak, dim=0)
+                max_cmm_pl_score = max_cmm_pl_score.item()
+
+                sw, _ = torch.max(softmax_gmm_ul_weak, dim=-1)
+                max_gmm_pl_score, _ = torch.max(sw, dim=0)
+                max_gmm_pl_score = max_gmm_pl_score.item()
 
                 # capture the number of PL for this batch
                 pl_count = torch.sum(valid_pl).item()
@@ -219,6 +227,7 @@ class FixMatchTrainer_gmm(trainer.SupervisedTrainer):
                     gpu_mem_percent_used, memory_total_info = utils.get_gpu_memory()
                     gpu_mem_percent_used = [np.round(100 * x, 1) for x in gpu_mem_percent_used]
                     logging.info('  batch {}/{}  loss: {:8.8g}  lr: {:4.4g}  cpu_mem: {:2.1f}%  gpu_mem: {}% of {}MiB'.format(batch_idx, batch_count, batch_loss.item(), optimizer.param_groups[0]['lr'], cpu_mem_percent_used, gpu_mem_percent_used, memory_total_info))
+                    logging.info('  max GMM PL score: {:4.4g}  max CMM PL score: {:4.4g}'.format(max_gmm_pl_score, max_cmm_pl_score))
 
         if loss_nan_count > 0:
             logging.info("epoch has {} batches with nan loss.".format(loss_nan_count))
@@ -326,8 +335,7 @@ class FixMatchTrainer_gmm(trainer.SupervisedTrainer):
         test_loss = np.nanmean(loss_cmm_list)
         test_acc = np.nanmean(accuracy_cmm_list)
         train_stats.add(epoch, '{}_cmm_loss'.format(split_name), test_loss)
-        # train_stats.add(epoch, '{}_cmm_accuracy'.format(split_name), test_acc)
-        train_stats.add(epoch, '{}_accuracy'.format(split_name), test_acc)
+        train_stats.add(epoch, '{}_cmm_accuracy'.format(split_name), test_acc)
         logging.info('Test set (CMM): Average loss: {:.4f}, Accuracy: {}'.format(test_loss, test_acc))
 
         test_loss = np.nanmean(loss_cluster_list)

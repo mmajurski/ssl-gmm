@@ -222,7 +222,7 @@ def train(args):
         model_trainer.eval_model(model, val_dataset, criterion, train_stats, "val", epoch)
 
         val_loss = train_stats.get_epoch('val_loss', epoch=epoch)
-        val_accuracy = train_stats.get_epoch('val_accuracy', epoch=epoch)
+        val_accuracy = train_stats.get_epoch('val_cmm_accuracy', epoch=epoch)
         plateau_scheduler.step(val_accuracy)
 
         # update global metadata stats
