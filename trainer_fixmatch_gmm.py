@@ -50,14 +50,15 @@ class FixMatchTrainer_gmm(trainer.SupervisedTrainer):
         accuracy_list = list()
         pl_loss_list = list()
         pl_count_list = list()
+        pl_acc_list = list()
+        pl_acc_per_class = list()
+        pl_count_per_class = list()
+        pl_gt_count_per_class = list()
 
-        tp_counts_per_class = list()
-        fp_counts_per_class = list()
-        fn_counts_per_class = list()
         for i in range(self.args.num_classes):
-            tp_counts_per_class.append(0)
-            fp_counts_per_class.append(0)
-            fn_counts_per_class.append(0)
+            pl_acc_per_class.append(list())
+            pl_count_per_class.append(0)
+            pl_gt_count_per_class.append(0)
 
 
         cluster_criterion = torch.nn.MSELoss()
@@ -99,7 +100,8 @@ class FixMatchTrainer_gmm(trainer.SupervisedTrainer):
                 #         resp_gmm, resp_cmm, cluster_dist = model(inputs)
                 # else:
                 resp_gmm_l, resp_cmm_l, cluster_dist_l = model(inputs_l)
-                logits_l = resp_cmm_l
+                # logits_l = resp_cmm_l
+                logits_l = resp_gmm_l
 
                 max_l_cmm_score = torch.max(torch.nn.functional.softmax(resp_cmm_l, dim=-1))
                 max_l_cmm_score = max_l_cmm_score.item()
@@ -107,10 +109,12 @@ class FixMatchTrainer_gmm(trainer.SupervisedTrainer):
                 max_l_gmm_score = max_l_gmm_score.item()
 
                 resp_gmm_ul_weak, resp_cmm_ul_weak, _ = model(inputs_ul_weak)
-                logits_ul_weak = resp_cmm_ul_weak
+                # logits_ul_weak = resp_cmm_ul_weak
+                logits_ul_weak = resp_gmm_ul_weak
 
                 resp_gmm_ul_strong, resp_cmm_ul_strong, _ = model(inputs_ul_strong)
-                logits_ul_strong = resp_cmm_ul_strong
+                # logits_ul_strong = resp_cmm_ul_strong
+                logits_ul_strong = resp_gmm_ul_strong
 
                 # split the logits back into labeled and unlabeled
                 # logits_l = resp_cmm[:inputs_l.shape[0]]
@@ -122,11 +126,13 @@ class FixMatchTrainer_gmm(trainer.SupervisedTrainer):
 
                 softmax_ul_weak = torch.nn.functional.softmax(logits_ul_weak, dim=-1)
                 softmax_gmm_ul_weak = torch.nn.functional.softmax(resp_gmm_ul_weak, dim=-1)
+                softmax_cmm_ul_weak = torch.nn.functional.softmax(resp_cmm_ul_weak, dim=-1)
 
                 # sharpen the logits with tau, but in a manner which preserves sum to 1
                 if self.args.tau < 1.0:
                     softmax_ul_weak = sharpen_mixmatch(x=softmax_ul_weak, T=self.args.tau)
                     softmax_gmm_ul_weak = sharpen_mixmatch(x=softmax_gmm_ul_weak, T=self.args.tau)
+                    softmax_cmm_ul_weak = sharpen_mixmatch(x=softmax_cmm_ul_weak, T=self.args.tau)
 
                 if self.args.soft_labels:
                     # convert hard labels in the fully labeled dataset into soft labels (i.e. one hot)
@@ -139,22 +145,24 @@ class FixMatchTrainer_gmm(trainer.SupervisedTrainer):
                     score_weak, pred_weak = torch.max(softmax_ul_weak, dim=-1)
                     targets_weak_ul = pred_weak
 
-                pseudo_label_threshold = torch.quantile(score_weak.detach(), 0.98)
-                pseudo_label_threshold = torch.clip(pseudo_label_threshold, 0.25, 0.9)
-                # valid_pl = score_weak >= torch.tensor(self.args.pseudo_label_threshold)
-                valid_pl = score_weak >= pseudo_label_threshold
-                max_cmm_pl_score, _ = torch.max(score_weak, dim=0)
-                max_cmm_pl_score = max_cmm_pl_score.item()
+                # pseudo_label_threshold = torch.quantile(score_weak.detach(), 0.99)
+                # pseudo_label_threshold = torch.clip(pseudo_label_threshold, 0.5, 0.9)
+                # valid_pl = score_weak >= pseudo_label_threshold
+                valid_pl = score_weak >= torch.tensor(self.args.pseudo_label_threshold)
 
                 sw, _ = torch.max(softmax_gmm_ul_weak, dim=-1)
                 max_gmm_pl_score, _ = torch.max(sw, dim=0)
                 max_gmm_pl_score = max_gmm_pl_score.item()
 
+                sw, _ = torch.max(softmax_cmm_ul_weak, dim=-1)
+                max_cmm_pl_score, _ = torch.max(sw, dim=0)
+                max_cmm_pl_score = max_cmm_pl_score.item()
+
                 # capture the number of PL for this batch
                 pl_count = torch.sum(valid_pl).item()
 
                 # if pl_count == 0:
-                #     # grab the best one
+                #     # grab the best one if there are zero PL
                 #     val, idx = torch.max(score_weak, dim=0)
                 #     valid_pl = score_weak >= val
                 #     pl_count = torch.sum(valid_pl).item()
@@ -165,22 +173,12 @@ class FixMatchTrainer_gmm(trainer.SupervisedTrainer):
                     # capture the confusion matrix of the PL
                     preds = pred_weak[valid_pl]
                     tgts = targets_ul[valid_pl]
+                    acc_vec = preds == tgts
+                    pl_acc_list.extend(acc_vec.detach().cpu().tolist())
                     for c in range(self.args.num_classes):
-                        pos_idx = preds == c
-                        true_idx = tgts == c
-                        # if not torch.any(true_idx):
-                        #     continue
-                        pos_idx = pos_idx[true_idx]
-                        true_idx = true_idx[true_idx]
-
-                        tp_idx = torch.logical_and(true_idx, pos_idx)
-                        tp_counts_per_class[c] += torch.sum(tp_idx).item()
-
-                        fp_idx = torch.logical_and(torch.logical_not(true_idx), pos_idx)
-                        fp_counts_per_class[c] += torch.sum(fp_idx).item()
-
-                        fn_idx = torch.logical_and(true_idx, torch.logical_not(pos_idx))
-                        fn_counts_per_class[c] += torch.sum(fn_idx).item()
+                        pl_acc_per_class[c].extend(acc_vec[tgts == c].detach().cpu().tolist())
+                        pl_count_per_class[c] += torch.sum(preds == c).item()
+                        pl_gt_count_per_class[c] += torch.sum(tgts == c).item()
 
                 loss_l = criterion(logits_l, targets_l) + cluster_loss
 
@@ -241,7 +239,7 @@ class FixMatchTrainer_gmm(trainer.SupervisedTrainer):
                     logging.info('  batch {}/{}  loss: {:8.8g}  lr: {:4.4g}  cpu_mem: {:2.1f}%  gpu_mem: {}% of {}MiB'.format(batch_idx, batch_count, batch_loss.item(), optimizer.param_groups[0]['lr'], cpu_mem_percent_used, gpu_mem_percent_used, memory_total_info))
                     logging.info('    max GMM score: {:4.4g}  max CMM score: {:4.4g}'.format(max_l_gmm_score, max_l_cmm_score))
                     logging.info('    max GMM PL score: {:4.4g}  max CMM PL score: {:4.4g}'.format(max_gmm_pl_score, max_cmm_pl_score))
-                    logging.info("    Current PL threshold: {}".format(pseudo_label_threshold))
+                    # logging.info("    Current PL threshold: {}".format(pseudo_label_threshold))
 
 
 
@@ -255,29 +253,20 @@ class FixMatchTrainer_gmm(trainer.SupervisedTrainer):
 
         train_stats.add(epoch, 'train_pseudo_label_loss', np.mean(pl_loss_list))
 
-
-        tp = np.asarray(tp_counts_per_class)
-        fp = np.asarray(fp_counts_per_class)
-        fn = np.asarray(fn_counts_per_class)
-        pl_accuracy_per_class = tp / (tp + fp + fn)
-        pl_accuracy_per_class_list = pl_accuracy_per_class.tolist()
-        pl_accuracy_per_class[(tp + fp + fn) == 0] = np.nan
-        pl_accuracy = np.nanmean(pl_accuracy_per_class)
+        for c in range(len(pl_acc_per_class)):
+            pl_acc_per_class[c] = float(np.mean(pl_acc_per_class[c]))
+            pl_count_per_class[c] = int(np.sum(pl_count_per_class[c]))
+            pl_gt_count_per_class[c] = int(np.sum(pl_gt_count_per_class[c]))
+        pl_accuracy = np.mean(pl_acc_list)
 
         # get the average accuracy of the pseudo-labels (this data is not available in real SSL applications, since the unlabeled population would truly be unlabeled
         train_stats.add(epoch, 'pseudo_label_accuracy', float(pl_accuracy))
         train_stats.add(epoch, 'num_pseudo_labels', int(np.sum(pl_count_list)))
+        train_stats.add(epoch, 'pseudo_label_counts_per_class', pl_count_per_class)
+        train_stats.add(epoch, 'pseudo_label_gt_counts_per_class', pl_gt_count_per_class)
 
         # update the training metadata
-        pl_counts_per_class = (tp + fn)
-        pl_counts_per_class_list = pl_counts_per_class.tolist()
-        train_stats.add(epoch, 'pseudo_label_counts_per_class', pl_counts_per_class_list)
-        train_stats.add(epoch, 'pseudo_label_accuracy_per_class', pl_accuracy_per_class_list)
-
-        vals = tp / np.sum(tp + fn)
-        train_stats.add(epoch, 'pseudo_label_percentage_per_class', vals.tolist())
-        vals = (tp + fn) / (np.sum(tp + fn))
-        train_stats.add(epoch, 'pseudo_label_gt_percentage_per_class', vals.tolist())
+        train_stats.add(epoch, 'pseudo_label_accuracy_per_class', pl_acc_per_class)
 
 
 
