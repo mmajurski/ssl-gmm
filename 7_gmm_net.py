@@ -228,7 +228,7 @@ def test(model, device, test_loader, epoch, train_stats):
             batch_loss_gmm = criterion(resp_gmm, target)
             batch_loss_cmm = criterion(resp_cmm, target)
 
-            loss = batch_loss_cmm + cluster_loss + linear_loss
+            loss = batch_loss_cmm + cluster_loss
 
             # loss = (batch_loss_gmm + batch_loss_cmm) / 2.0
             # loss = criterion(output, target)
@@ -283,10 +283,10 @@ def test(model, device, test_loader, epoch, train_stats):
 
 def main(args):
     k = 1
-    output_folder = './models-20230330/adadelta-model-{:02d}-{}D-{}class-cmm+cluster'.format(k, args.dim, args.num_classes)
+    output_folder = './models-20230409/adadelta-model-{:02d}-{}D-{}class-cmm+cluster'.format(k, args.dim, args.num_classes)
     while os.path.exists(output_folder):
         k += 1
-        output_folder = './models-20230330/adadelta-model-{:02d}-{}D-{}class-cmm+cluster'.format(k, args.dim, args.num_classes)
+        output_folder = './models-20230409/adadelta-model-{:02d}-{}D-{}class-cmm+cluster'.format(k, args.dim, args.num_classes)
 
     os.makedirs(output_folder)
     import json
@@ -418,7 +418,7 @@ if __name__ == '__main__':
                         help='input batch size for testing (default: 1000)')
     parser.add_argument('--epochs', type=int, default=14, metavar='N',
                         help='number of epochs to train (default: 14)')
-    parser.add_argument('--dim', type=int, default=20, metavar='N',
+    parser.add_argument('--dim', type=int, default=2, metavar='N',
                         help='dimensionality of the gmm')
     parser.add_argument('--num-classes', type=int, default=10)
     parser.add_argument('--lr', type=float, default=0.1, metavar='LR',

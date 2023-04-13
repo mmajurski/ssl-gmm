@@ -220,6 +220,8 @@ class axis_aligned_gmm_cmm_layer(torch.nn.Module):
         with torch.no_grad():
             a = 0.2 * a + 0.9  # rand of [0.9, 1.1]
         self.D = torch.nn.Parameter(a)
+
+        self.D = torch.nn.Parameter(torch.ones(size=(self.num_classes, self.dim), requires_grad=True))
         self.count = 0
 
     def forward(self, x):
@@ -231,12 +233,14 @@ class axis_aligned_gmm_cmm_layer(torch.nn.Module):
         #  Sigma_inv  = Lt-1 D-1 L-1
         #
 
+        # with torch.no_grad():
         log_det = torch.zeros((self.num_classes), device=x.device, requires_grad=False)
         Sigma_inv = [None] * self.num_classes
         for k in range(self.num_classes):
             D = self.D[k,]  # get the num_classes x 1 vector of covariances
             # ensure positive
-            D = torch.abs(D) + 1e-4
+            D = torch.abs(D)
+            D = D + 1e-4
 
             # create inverse of D
             D_inv = 1.0 / D
