@@ -11,7 +11,6 @@ import cifar_datasets
 import metadata
 import lr_scheduler
 import flavored_wideresnet
-import trainer_mixed
 import utils
 import trainer
 import trainer_fixmatch
@@ -41,7 +40,7 @@ def fully_supervised_pretrain(model, train_dataset_labeled, val_dataset, criteri
         train_stats.plot_all_metrics(output_dirpath=args.output_dirpath)
 
         logging.info("  training")
-        model_trainer.train_epoch(model, train_dataset_labeled, optimizer, criterion, epoch, train_stats, nb_reps=args.nb_reps)
+        model_trainer.train_epoch(model, train_dataset_labeled, optimizer, criterion, epoch, train_stats)
 
         logging.info("  evaluating against validation data")
         model_trainer.eval_model(model, val_dataset, criterion, train_stats, "val", epoch)
@@ -100,7 +99,10 @@ def setup(args):
         elif args.last_layer == 'cauchy':
             if args.arch == 'wide_resnet':
                 model = flavored_wideresnet.WideResNet(num_classes=args.num_classes, last_layer=args.last_layer)
-        elif args.last_layer == 'gmmcmm':
+        elif args.last_layer == 'aa_gmm':
+            if args.arch == 'wide_resnet':
+                model = flavored_wideresnet.WideResNet(num_classes=args.num_classes, last_layer=args.last_layer)
+        elif args.last_layer == 'aa_gmm_d1':
             if args.arch == 'wide_resnet':
                 model = flavored_wideresnet.WideResNet(num_classes=args.num_classes, last_layer=args.last_layer)
 
@@ -132,6 +134,10 @@ def setup(args):
         train_dataset_unlabeled = None
 
     test_dataset = cifar_datasets.Cifar10(transform=cifar_datasets.Cifar10.TRANSFORM_TEST, train=False)
+
+    # adjust the len of the dataset to implement the nb_reps
+    train_dataset_labeled.set_nb_reps(args.nb_reps)
+    train_dataset_unlabeled.set_nb_reps(args.nb_reps)
 
     return model, train_dataset_labeled, train_dataset_unlabeled, val_dataset, test_dataset
 
@@ -165,8 +171,6 @@ def train(args):
     # supervised, fixmatch, fixmatch-gmm
     if args.trainer == 'supervised':
         model_trainer = trainer.SupervisedTrainer(args)
-    elif args.trainer == 'supervised-mixed':
-        model_trainer = trainer_mixed.SupervisedTrainerMixed(args)
     elif args.trainer == 'fixmatch':
         model_trainer = trainer_fixmatch.FixMatchTrainer(args)
     elif args.trainer == 'fixmatch-gmm':
@@ -197,7 +201,6 @@ def train(args):
 
     # Move model to device
     model.cuda()
-    model.output_only_gmm = False
 
     # setup early stopping on convergence using LR reduction on plateau
     optimizer = model_trainer.get_optimizer(model)
@@ -213,15 +216,7 @@ def train(args):
         logging.info("Epoch: {}".format(epoch))
 
         train_stats.plot_all_metrics(output_dirpath=args.output_dirpath)
-
-        logging.info("  training")
-        # import cProfile
-        # import pstats
-        # profile = cProfile.Profile()
-        # profile.runcall(model_trainer.train_epoch, model, train_dataset_labeled, optimizer, criterion, epoch, train_stats, nb_reps=args.nb_reps, unlabeled_dataset=train_dataset_unlabeled)
-        # ps = pstats.Stats(profile)
-        # ps.print_stats()
-        model_trainer.train_epoch(model, train_dataset_labeled, optimizer, criterion, epoch, train_stats, nb_reps=args.nb_reps, unlabeled_dataset=train_dataset_unlabeled)
+        model_trainer.train_epoch(model, train_dataset_labeled, optimizer, criterion, epoch, train_stats, unlabeled_dataset=train_dataset_unlabeled)
 
         logging.info("  evaluating against validation data")
         model_trainer.eval_model(model, val_dataset, criterion, train_stats, "val", epoch)

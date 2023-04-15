@@ -39,7 +39,7 @@ class SupervisedTrainer:
                 raise RuntimeError("Invalid optimizer: {}".format(self.args.optimizer))
         return optimizer
 
-    def train_epoch(self, model, pytorch_dataset, optimizer, criterion, epoch, train_stats, nb_reps=1, unlabeled_dataset=None):
+    def train_epoch(self, model, pytorch_dataset, optimizer, criterion, epoch, train_stats, unlabeled_dataset=None):
 
         loss_list = list()
         accuracy_list = list()
@@ -48,7 +48,7 @@ class SupervisedTrainer:
 
         dataloader = torch.utils.data.DataLoader(pytorch_dataset, batch_size=self.args.batch_size, shuffle=True, num_workers=self.args.num_workers, worker_init_fn=utils.worker_init_fn)
 
-        batch_count = nb_reps * len(dataloader)
+        batch_count = len(dataloader)
 
         if self.args.cycle_factor is None or self.args.cycle_factor == 0:
             cyclic_lr_scheduler = None
@@ -58,60 +58,57 @@ class SupervisedTrainer:
         start_time = time.time()
         loss_nan_count = 0
 
-        for rep_count in range(nb_reps):
-            for batch_idx, tensor_dict in enumerate(dataloader):
-                # adjust for the rep offset
-                batch_idx = rep_count * len(dataloader) + batch_idx
+        for batch_idx, tensor_dict in enumerate(dataloader):
 
-                optimizer.zero_grad()
+            optimizer.zero_grad()
 
-                inputs = tensor_dict[0].cuda()
-                labels = tensor_dict[1].cuda()
+            inputs = tensor_dict[0].cuda()
+            labels = tensor_dict[1].cuda()
 
-                # FP16 training
-                if self.args.amp:
-                    with torch.cuda.amp.autocast():
-                        outputs = model(inputs)
-                        batch_loss = criterion(outputs, labels)
-                        scaler.scale(batch_loss).backward()
-                        torch.nn.utils.clip_grad_value_(model.parameters(), 10)
-                        # scaler.step() first unscales the gradients of the optimizer's assigned params.
-                        # If these gradients do not contain infs or NaNs, optimizer.step() is then called,
-                        # otherwise, optimizer.step() is skipped.
-                        scaler.step(optimizer)
-                        # Updates the scale for next iteration.
-                        scaler.update()
-                else:
+            # FP16 training
+            if self.args.amp:
+                with torch.cuda.amp.autocast():
                     outputs = model(inputs)
                     batch_loss = criterion(outputs, labels)
-                    batch_loss.backward()
+                    scaler.scale(batch_loss).backward()
                     torch.nn.utils.clip_grad_value_(model.parameters(), 10)
-                    optimizer.step()
-                    if cyclic_lr_scheduler is not None:
-                        cyclic_lr_scheduler.step()
+                    # scaler.step() first unscales the gradients of the optimizer's assigned params.
+                    # If these gradients do not contain infs or NaNs, optimizer.step() is then called,
+                    # otherwise, optimizer.step() is skipped.
+                    scaler.step(optimizer)
+                    # Updates the scale for next iteration.
+                    scaler.update()
+            else:
+                outputs = model(inputs)
+                batch_loss = criterion(outputs, labels)
+                batch_loss.backward()
+                torch.nn.utils.clip_grad_value_(model.parameters(), 10)
+                optimizer.step()
+                if cyclic_lr_scheduler is not None:
+                    cyclic_lr_scheduler.step()
 
-                pred = torch.argmax(outputs, dim=-1)
-                if self.args.soft_labels:
-                    # convert soft labels into hard for accuracy
-                    labels = torch.argmax(labels, dim=-1)
-                accuracy = torch.sum(pred == labels) / len(pred)
+            pred = torch.argmax(outputs, dim=-1)
+            if self.args.soft_labels:
+                # convert soft labels into hard for accuracy
+                labels = torch.argmax(labels, dim=-1)
+            accuracy = torch.sum(pred == labels) / len(pred)
 
-                # nan loss values are ignored when using AMP, so ignore them for the average
-                if not np.isnan(batch_loss.detach().cpu().numpy()):
-                    loss_list.append(batch_loss.item())
-                    accuracy_list.append(accuracy.item())
-                else:
-                    loss_nan_count += 1
+            # nan loss values are ignored when using AMP, so ignore them for the average
+            if not np.isnan(batch_loss.detach().cpu().numpy()):
+                loss_list.append(batch_loss.item())
+                accuracy_list.append(accuracy.item())
+            else:
+                loss_nan_count += 1
 
-                    if loss_nan_count > int(0.5 * batch_count):
-                        raise RuntimeError("Loss is consistently nan (>50% of epoch), terminating train.")
+                if loss_nan_count > int(0.5 * batch_count):
+                    raise RuntimeError("Loss is consistently nan (>50% of epoch), terminating train.")
 
-                if batch_idx % 100 == 0:
-                    # log loss and current GPU utilization
-                    cpu_mem_percent_used = psutil.virtual_memory().percent
-                    gpu_mem_percent_used, memory_total_info = utils.get_gpu_memory()
-                    gpu_mem_percent_used = [np.round(100 * x, 1) for x in gpu_mem_percent_used]
-                    logging.info('  batch {}/{}  loss: {:8.8g}  lr: {:4.4g}  cpu_mem: {:2.1f}%  gpu_mem: {}% of {}MiB'.format(batch_idx, batch_count, batch_loss.item(), optimizer.param_groups[0]['lr'], cpu_mem_percent_used, gpu_mem_percent_used, memory_total_info))
+            if batch_idx % 100 == 0:
+                # log loss and current GPU utilization
+                cpu_mem_percent_used = psutil.virtual_memory().percent
+                gpu_mem_percent_used, memory_total_info = utils.get_gpu_memory()
+                gpu_mem_percent_used = [np.round(100 * x, 1) for x in gpu_mem_percent_used]
+                logging.info('  batch {}/{}  loss: {:8.8g}  lr: {:4.4g}  cpu_mem: {:2.1f}%  gpu_mem: {}% of {}MiB'.format(batch_idx, batch_count, batch_loss.item(), optimizer.param_groups[0]['lr'], cpu_mem_percent_used, gpu_mem_percent_used, memory_total_info))
 
         avg_loss = np.mean(loss_list)
         avg_accuracy = np.mean(accuracy_list)

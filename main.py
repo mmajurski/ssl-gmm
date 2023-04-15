@@ -24,7 +24,7 @@ def main():
     parser.add_argument('--num-lr-reductions', default=2, type=int)
     parser.add_argument('--nb-reps', default=128, help='the number of reps through the labeled portion of the dataset to form an epoch', type=int)
     parser.add_argument('--lr-reduction-factor', default=0.2, type=float)
-    parser.add_argument('--amp', action='store_true')
+    # parser.add_argument('--amp', action='store_true')
     # parser.add_argument('--inference-method', default='gmm', type=str, help='whether to use gmm or cauchy for inference.')
     # parser.add_argument('--pseudo-label-method', default="resp", type=str, help='method/algorithm to use for selecting valid psudo-label samples.')
     parser.add_argument('--pseudo-label-threshold', default=0.95, type=float, help='Threshold when filtering pseudo-labeling.')
@@ -37,9 +37,13 @@ def main():
     parser.add_argument('--optimizer', type=str, default='adamw',help='optimizer if nothing is passed AdamW would be used (currently supported sgd,adamw)')
     parser.add_argument('--cluster-per-class', default=1, type=int, help='number of clusters to create per class')
     parser.add_argument('--strong-augmentation', help='enables strong augmentation', action='store_true')
+    parser.add_argument('--D1', help='flag controls whether the GMM/CMM representation has a fixed D=1', action='store_true')
     parser.add_argument('--debug', help='enables debugging mode', action='store_true')
     # parser.add_argument('--skl',help='uses sklearn implementation of Gaussian Mixture',action='store_true')
-    parser.add_argument('--last-layer', type=str, default='gmmcmm', help='last layer to use in the NN (currently supported fc, gmm, cmm)')
+    parser.add_argument('--last-layer', type=str, default='aa_gmm_d1', help='last layer to use in the NN')
+    parser.add_argument('--loss-terms', type=str, default='gmm', help='what loss terms to be included (options are gmm, cmm, cluster_dist). For example "cmm+gmm+cluster_dist"')
+    parser.add_argument('--pseudo-label-determination', default="gmm", type=str, help='which set of logits to use when picking valid pseudo-labels. (gmm, cmm)')
+    parser.add_argument('--pseudo-label-target-logits', default="gmm", type=str, help='which set of logits to use as the optimization target for valid pseudo-labels. (gmm, cmm)')
     parser.add_argument('--trainer', type=str, default='fixmatch-gmm', help='trainer to use (currently supported supervised, fixmatch, fixmatch-gmm)')
 
 

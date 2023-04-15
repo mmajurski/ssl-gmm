@@ -57,6 +57,7 @@ class Cifar10(torch.utils.data.Dataset):
 
         self.lcl_fldr = lcl_fldr
         self.transform = transform
+        self.nb_reps = 1
         if empty:
             self.data = list()
             self.targets = list()
@@ -80,8 +81,12 @@ class Cifar10(torch.utils.data.Dataset):
             # cleanup the tmp CIFAR object
             del _dataset
 
+    def set_nb_reps(self, k):
+        self.nb_reps=k
+
     def __len__(self) -> int:
-        return len(self.data)
+        # nb_reps modifies the len to cause the model to iterate through the dataset multiple times before the iterator is exhausted
+        return self.nb_reps * len(self.data)
 
     def __getitem__(self, index: int) -> Tuple[Any, Any, int]:
         """
@@ -91,6 +96,8 @@ class Cifar10(torch.utils.data.Dataset):
         Returns:
             tuple: (image, target) where target is index of the target class.
         """
+        # account for nb_reps
+        index = np.mod(index, len(self.data))
         img, target = self.data[index], self.targets[index]
 
         # doing this so that it is consistent with all other datasets

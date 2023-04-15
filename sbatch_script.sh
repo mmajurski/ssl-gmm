@@ -8,9 +8,9 @@
 #SBATCH --nodes=1
 #SBATCH --nice
 #SBATCH --oversubscribe
-#SBATCH --cpus-per-task=16
+#SBATCH --cpus-per-task=12
 #SBATCH --gres=gpu:1
-#SBATCH --job-name=gmm
+#SBATCH --job-name=cmm
 #SBATCH -o log-%N.%j.out
 #SBATCH --time=128:0:0
 
@@ -24,9 +24,11 @@
 source /mnt/isgnas/home/mmajursk/miniconda3/etc/profile.d/conda.sh
 conda activate gmm
 
-PL_THRES=$1
-PL_METHOD=$2
-MODEL_NB=$3
+LAST_LAYER=$1
+MODEL_NB=$2
+PL_DETERM=$3
+PL_TARGET=$4
+LOSS_TERMS=$5
 
-python main.py --output-dirpath=./models-20230330/fixmatch-${PL_METHOD}-${MODEL_NB}-thres${PL_THRES} --trainer=fixmatch --last-layer=${PL_METHOD} --pseudo-label-threshold=${PL_THRES}
+python main.py --output-dirpath=./models-20230415/fixmatch-${LAST_LAYER}-${MODEL_NB}-pl${PL_DETERM}-pltgt${PL_TARGET}-loss${LOSS_TERMS} --trainer=fixmatch-gmm --last-layer=${LAST_LAYER} --pseudo-label-determination=${PL_DETERM} --pseudo-label-target-logits=${PL_TARGET} --loss-terms=${LOSS_TERMS}
 
