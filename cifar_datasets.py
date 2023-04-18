@@ -97,7 +97,7 @@ class Cifar10(torch.utils.data.Dataset):
             tuple: (image, target) where target is index of the target class.
         """
         # account for nb_reps
-        index = np.mod(index, len(self.data))
+        index = index % len(self.data)
         img, target = self.data[index], self.targets[index]
 
         # doing this so that it is consistent with all other datasets

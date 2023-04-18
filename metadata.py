@@ -1,21 +1,41 @@
 import os
 import json
-import copy
 import numpy as np
 import pandas as pd
+import logging
 import sklearn.metrics
 from matplotlib import pyplot as plt
-
-import logging
-logger = logging.getLogger()
 
 
 class TrainingStats():
     def __init__(self):
         self.epoch_data = list()
         self.global_data = dict()
-        self.metric_names = list()
         self.best_epoch = None
+        self.accumulator = dict()
+
+    def append_accumulate(self, metric_name: str, value):
+        if metric_name not in self.accumulator.keys():
+            self.accumulator[metric_name] = list()
+        self.accumulator[metric_name].append(value)
+
+    def close_accumulate(self, epoch, metric_name: str, method: str = 'mean', default_value=np.nan):
+        if metric_name not in self.accumulator.keys():
+            # metric is missing, add the default value
+            self.add(epoch, metric_name, default_value)
+            return
+
+        if method == 'mean' or method == 'avg' or method == 'average':
+            value = float(np.mean(self.accumulator[metric_name]))
+        elif method == 'sum':
+            value = float(np.sum(self.accumulator[metric_name]))
+        elif method == 'median':
+            value = float(np.median(self.accumulator[metric_name]))
+        else:
+            raise RuntimeError("Invalid accumulation method: {}".format(method))
+
+        self.add(epoch, metric_name, value)
+        del self.accumulator[metric_name]
 
     def add(self, epoch: int, metric_name: str, value):
         while len(self.epoch_data) <= epoch:
@@ -24,7 +44,7 @@ class TrainingStats():
         self.epoch_data[epoch]['epoch'] = epoch
         self.epoch_data[epoch][metric_name] = value
 
-        logger.info('{}: {}'.format(metric_name, value))
+        logging.info('{}: {}'.format(metric_name, value))
 
     def update_global(self, epoch):
         if epoch > len(self.epoch_data):
@@ -99,7 +119,7 @@ class TrainingStats():
 
         fig = plt.figure(figsize=(8, 4), dpi=200)
 
-        for cm in {'loss', 'accuracy'}:
+        for cm in {'loss', 'accuracy', 'wall_time'}:
             # core_metrics = ['train_{}'.format(cm),'val_{}'.format(cm),'test_{}'.format(cm)]
             # core_metrics = [a for a in core_metrics if a in col_list]
 

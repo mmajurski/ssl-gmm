@@ -54,7 +54,6 @@ class FixMatchTrainer_gmm(trainer.SupervisedTrainer):
         pl_acc_per_class = list()
         pl_count_per_class = list()
         pl_gt_count_per_class = list()
-
         for i in range(self.args.num_classes):
             pl_acc_per_class.append(list())
             pl_count_per_class.append(0)

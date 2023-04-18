@@ -211,6 +211,12 @@ def train(args):
 
     plateau_scheduler = lr_scheduler.ReduceLROnPlateau(optimizer, mode='max', factor=args.lr_reduction_factor, patience=args.patience, threshold=args.loss_eps, max_num_lr_reductions=args.num_lr_reductions, lr_reduction_callback=log_lr_reduction)
     # train epochs until loss converges
+
+    if args.use_ema:
+        from model_ema import ModelEMA
+        # model needs to already be on device
+        ema_model = ModelEMA(model, args.ema_decay)
+
     while not plateau_scheduler.is_done() and epoch < trainer.MAX_EPOCHS:
         epoch += 1
         logging.info("Epoch: {}".format(epoch))
@@ -218,11 +224,17 @@ def train(args):
         train_stats.plot_all_metrics(output_dirpath=args.output_dirpath)
         model_trainer.train_epoch(model, train_dataset_labeled, optimizer, criterion, epoch, train_stats, unlabeled_dataset=train_dataset_unlabeled)
 
+        if args.use_ema:
+            ema_model.update(model)
+            test_model = ema_model.ema
+        else:
+            test_model = model
+
         logging.info("  evaluating against validation data")
-        model_trainer.eval_model(model, val_dataset, criterion, train_stats, "val", epoch)
+        model_trainer.eval_model(test_model, val_dataset, criterion, train_stats, "val", epoch)
 
         val_loss = train_stats.get_epoch('val_loss', epoch=epoch)
-        val_accuracy = train_stats.get_epoch('val_gmm_accuracy', epoch=epoch)
+        val_accuracy = train_stats.get_epoch('val_accuracy', epoch=epoch)
         plateau_scheduler.step(val_accuracy)
 
         # update global metadata stats
@@ -237,16 +249,21 @@ def train(args):
         # if plateau_scheduler_sl.num_bad_epochs == 0:  # use if you only want literally the best epoch, instead of taking into account the loss eps
         if plateau_scheduler.is_equiv_to_best_epoch:
             logging.info('Updating best model with epoch: {} accuracy: {}'.format(epoch, val_accuracy))
-            best_model = copy.deepcopy(model)
+            if args.use_ema:
+                best_model = copy.deepcopy(ema_model.ema)
+            else:
+                best_model = copy.deepcopy(model)
             best_epoch = epoch
 
             # update the global metrics with the best epoch
             train_stats.update_global(epoch)
 
+
+
     best_model.cuda()  # move the model back to the GPU (saving moved the best model back to the cpu)
 
-    logging.info('Evaluating model against test dataset using softmax and gmm')
-    model_trainer.eval_model(model, test_dataset, criterion, train_stats, "test", epoch)
+    logging.info('Evaluating model against test dataset')
+    model_trainer.eval_model(best_model, test_dataset, criterion, train_stats, "test", epoch)
 
     # update the global metrics with the best epoch, to include test stats
     train_stats.update_global(best_epoch)
