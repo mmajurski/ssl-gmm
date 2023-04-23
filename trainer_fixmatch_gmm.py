@@ -22,7 +22,7 @@ def sharpen_mixmatch(x:torch.Tensor, T:float):
 
 class FixMatchTrainer_gmm(trainer.SupervisedTrainer):
 
-    def train_epoch(self, model, pytorch_dataset, optimizer, criterion, epoch, train_stats, unlabeled_dataset=None):
+    def train_epoch(self, model, pytorch_dataset, optimizer, criterion, epoch, train_stats, unlabeled_dataset=None, ema_model=None):
 
         if unlabeled_dataset is None:
             raise RuntimeError("Unlabeled dataset missing. Cannot use FixMatch train_epoch function without an unlabeled_dataset.")
@@ -45,12 +45,12 @@ class FixMatchTrainer_gmm(trainer.SupervisedTrainer):
         dataloader_ul = torch.utils.data.DataLoader(unlabeled_dataset, batch_size=self.args.mu*self.args.batch_size, shuffle=True, num_workers=self.args.num_workers, worker_init_fn=utils.worker_init_fn)
         iter_ul = iter(dataloader_ul)
 
-        loss_list = list()
-        accuracy_gmm_list = list()
-        accuracy_cmm_list = list()
-        pl_loss_list = list()
-        pl_count_list = list()
-        pl_acc_list = list()
+        # loss_list = list()
+        # accuracy_gmm_list = list()
+        # accuracy_cmm_list = list()
+        # pl_loss_list = list()
+        # pl_count_list = list()
+        # pl_acc_list = list()
         pl_acc_per_class = list()
         pl_count_per_class = list()
         pl_gt_count_per_class = list()
@@ -58,7 +58,6 @@ class FixMatchTrainer_gmm(trainer.SupervisedTrainer):
             pl_acc_per_class.append(list())
             pl_count_per_class.append(0)
             pl_gt_count_per_class.append(0)
-
 
         cluster_criterion = torch.nn.MSELoss()
 
@@ -109,23 +108,11 @@ class FixMatchTrainer_gmm(trainer.SupervisedTrainer):
             resp_gmm_ul_strong = resp_gmm_ul[inputs_ul_weak.shape[0]:]
             resp_cmm_ul_strong = resp_cmm_ul[inputs_ul_weak.shape[0]:]
 
-            # inputs_l = inputs_l.cuda()
-            # inputs_ul_weak = inputs_ul_weak.cuda()
-            # inputs_ul_strong = inputs_ul_strong.cuda()
-
-            # a_resp_gmm_l, a_resp_cmm_l, a_cluster_dist_l = model(inputs_l)
-            # delta_resp_gmm_l = torch.abs(a_resp_gmm_l - resp_gmm_l)
-            # delta_resp_cmm_l = torch.abs(a_resp_cmm_l - resp_cmm_l)
-            # delta_cluster_dist_l = torch.abs(a_cluster_dist_l - cluster_dist_l)
-
             max_l_cmm_score = torch.max(torch.nn.functional.softmax(resp_cmm_l, dim=-1))
             max_l_cmm_score = max_l_cmm_score.item()
             max_l_gmm_score = torch.max(torch.nn.functional.softmax(resp_gmm_l, dim=-1))
             max_l_gmm_score = max_l_gmm_score.item()
 
-            # a_resp_gmm_ul_weak, a_resp_cmm_ul_weak, _ = model(inputs_ul_weak)
-            # delta_resp_gmm_ul_weak = torch.abs(a_resp_gmm_ul_weak - resp_gmm_ul_weak)
-            # delta_resp_cmm_ul_weak = torch.abs(a_resp_cmm_ul_weak - resp_cmm_ul_weak)
             if self.args.pseudo_label_determination == 'gmm':
                 logits_ul_weak = resp_gmm_ul_weak
             elif self.args.pseudo_label_determination == 'cmm':
@@ -133,9 +120,6 @@ class FixMatchTrainer_gmm(trainer.SupervisedTrainer):
             else:
                 raise RuntimeError("Invalid PL determination value: {}".format(self.args.pseudo_label_determination))
 
-            # a_resp_gmm_ul_strong, a_resp_cmm_ul_strong, _ = model(inputs_ul_strong)
-            # delta_resp_gmm_ul_strong = torch.abs(a_resp_gmm_ul_strong - resp_gmm_ul_strong)
-            # delta_resp_cmm_ul_strong = torch.abs(a_resp_cmm_ul_strong - resp_cmm_ul_strong)
             if self.args.pseudo_label_target_logits == 'gmm':
                 logits_ul_strong = resp_gmm_ul_strong
             elif self.args.pseudo_label_target_logits == 'cmm':
@@ -186,14 +170,15 @@ class FixMatchTrainer_gmm(trainer.SupervisedTrainer):
             #     valid_pl = score_weak >= val
             #     pl_count = torch.sum(valid_pl).item()
 
-            pl_count_list.append(pl_count)
+            train_stats.append_accumulate('train_pseudo_label_count', pl_count)
 
             if pl_count > 0:
                 # capture the confusion matrix of the PL
                 preds = pred_weak[valid_pl]
                 tgts = targets_ul[valid_pl]
                 acc_vec = preds == tgts
-                pl_acc_list.extend(acc_vec.detach().cpu().tolist())
+                acc = torch.mean(acc_vec.detach().cpu().type(torch.FloatTensor))
+                train_stats.append_accumulate('train_pseudo_label_accuracy', acc.item())
                 for c in range(self.args.num_classes):
                     pl_acc_per_class[c].extend(acc_vec[tgts == c].detach().cpu().tolist())
                     pl_count_per_class[c] += torch.sum(preds == c).item()
@@ -233,7 +218,7 @@ class FixMatchTrainer_gmm(trainer.SupervisedTrainer):
 
             if pl_count > 0:
                 loss_ul = criterion(logits_ul_strong, targets_weak_ul)
-                pl_loss_list.append(loss_ul.item())
+                train_stats.append_accumulate('train_pseudo_label_loss', loss_ul.item())
             else:
                 loss_ul = torch.tensor(torch.nan).to(loss_l.device)
             if not torch.isnan(loss_ul):
@@ -247,15 +232,18 @@ class FixMatchTrainer_gmm(trainer.SupervisedTrainer):
             if cyclic_lr_scheduler is not None:
                 cyclic_lr_scheduler.step()
 
+            if ema_model is not None:
+                ema_model.update(model)
+
             # nan loss values are ignored when using AMP, so ignore them for the average
             if not torch.isnan(batch_loss):
                 if self.args.soft_labels:
                     targets_l = torch.argmax(targets_l, dim=-1)
                 accuracy_gmm = torch.mean((torch.argmax(resp_gmm_l, dim=-1) == targets_l).type(torch.float))
                 accuracy_cmm = torch.mean((torch.argmax(resp_cmm_l, dim=-1) == targets_l).type(torch.float))
-                loss_list.append(batch_loss.item())
-                accuracy_gmm_list.append(accuracy_gmm.item())
-                accuracy_cmm_list.append(accuracy_cmm.item())
+                train_stats.append_accumulate('train_loss', batch_loss.item())
+                train_stats.append_accumulate('train_gmm_accuracy', accuracy_gmm.item())
+                train_stats.append_accumulate('train_cmm_accuracy', accuracy_cmm.item())
             else:
                 loss_nan_count += 1
 
@@ -276,21 +264,20 @@ class FixMatchTrainer_gmm(trainer.SupervisedTrainer):
 
         train_stats.add(epoch, 'learning_rate', optimizer.param_groups[0]['lr'])
         train_stats.add(epoch, 'train_wall_time', time.time() - start_time)
-        train_stats.add(epoch, 'train_loss', np.mean(loss_list))
-        train_stats.add(epoch, 'train_gmm_accuracy', np.mean(accuracy_gmm_list))
-        train_stats.add(epoch, 'train_cmm_accuracy', np.mean(accuracy_cmm_list))
 
-        train_stats.add(epoch, 'train_pseudo_label_loss', np.mean(pl_loss_list))
+        train_stats.close_accumulate(epoch, 'train_pseudo_label_count', method='sum', default_value=0.0)  # default value in case no data was collected
+        train_stats.close_accumulate(epoch, 'train_pseudo_label_accuracy', method='avg', default_value=0.0)  # default value in case no data was collected
+        train_stats.close_accumulate(epoch, 'train_pseudo_label_loss', method='avg', default_value=0.0)  # default value in case no data was collected
+        train_stats.close_accumulate(epoch, 'train_loss', method='avg')
+        train_stats.close_accumulate(epoch, 'train_gmm_accuracy', method='avg')
+        train_stats.close_accumulate(epoch, 'train_cmm_accuracy', method='avg')
 
         for c in range(len(pl_acc_per_class)):
             pl_acc_per_class[c] = float(np.mean(pl_acc_per_class[c]))
             pl_count_per_class[c] = int(np.sum(pl_count_per_class[c]))
             pl_gt_count_per_class[c] = int(np.sum(pl_gt_count_per_class[c]))
-        pl_accuracy = np.mean(pl_acc_list)
 
         # get the average accuracy of the pseudo-labels (this data is not available in real SSL applications, since the unlabeled population would truly be unlabeled
-        train_stats.add(epoch, 'pseudo_label_accuracy', float(pl_accuracy))
-        train_stats.add(epoch, 'num_pseudo_labels', int(np.sum(pl_count_list)))
         train_stats.add(epoch, 'pseudo_label_counts_per_class', pl_count_per_class)
         train_stats.add(epoch, 'pseudo_label_gt_counts_per_class', pl_gt_count_per_class)
 
@@ -299,7 +286,7 @@ class FixMatchTrainer_gmm(trainer.SupervisedTrainer):
 
 
 
-    def eval_model(self, model, pytorch_dataset, criterion, train_stats, split_name, epoch):
+    def eval_model(self, model, pytorch_dataset, criterion, train_stats, split_name, epoch, args):
         if pytorch_dataset is None or len(pytorch_dataset) == 0:
             return
 
@@ -309,14 +296,6 @@ class FixMatchTrainer_gmm(trainer.SupervisedTrainer):
         model.eval()
         start_time = time.time()
 
-        loss_list = list()
-        # gt_labels = list()
-        loss_cluster_list = list()
-        loss_gmm_list = list()
-        loss_cmm_list = list()
-        accuracy_gmm_list = list()
-        accuracy_cmm_list = list()
-
         cluster_criterion = torch.nn.MSELoss()
 
         with torch.no_grad():
@@ -324,14 +303,9 @@ class FixMatchTrainer_gmm(trainer.SupervisedTrainer):
                 inputs = tensor_dict[0].cuda()
                 labels = tensor_dict[1].cuda()
 
-                # labels_cpu = labels.detach().cpu().numpy()
-                # gt_labels.extend(labels_cpu)
-
                 resp_gmm, resp_cmm, cluster_dist = model(inputs)
 
                 cluster_loss = cluster_criterion(cluster_dist, torch.zeros_like(cluster_dist))
-                loss_cluster_list.append(cluster_loss.item())
-
                 batch_loss_gmm = criterion(resp_gmm, labels)
                 batch_loss_cmm = criterion(resp_cmm, labels)
 
@@ -356,15 +330,21 @@ class FixMatchTrainer_gmm(trainer.SupervisedTrainer):
 
                 # loss = (batch_loss_gmm + batch_loss_cmm) / 2.0
                 # loss = criterion(output, target)
-                loss_list.append(loss.item())
-                loss_gmm_list.append(batch_loss_gmm.item())
-                loss_cmm_list.append(batch_loss_cmm.item())
+                train_stats.append_accumulate('{}_loss'.format(split_name), loss.item())
+                train_stats.append_accumulate('{}_cluster_loss'.format(split_name), cluster_loss.item())
+                train_stats.append_accumulate('{}_gmm_loss'.format(split_name), batch_loss_gmm.item())
+                train_stats.append_accumulate('{}_cmm_loss'.format(split_name), batch_loss_cmm.item())
 
                 # acc = torch.argmax(output, dim=-1) == target
                 acc_gmm = torch.argmax(resp_gmm, dim=-1) == labels
                 acc_cmm = torch.argmax(resp_cmm, dim=-1) == labels
-                accuracy_gmm_list.append(torch.mean(acc_gmm, dtype=torch.float32).item())
-                accuracy_cmm_list.append(torch.mean(acc_cmm, dtype=torch.float32).item())
+                resp_gmm_sm = resp_gmm.softmax(dim=-1)
+                resp_cmm_sm = resp_cmm.softmax(dim=-1)
+                gmm_cmm_sm = (resp_gmm_sm + resp_cmm_sm) / 2.0
+                acc_gmm_cmm = torch.argmax(gmm_cmm_sm, dim=-1) == labels
+                train_stats.append_accumulate('{}_gmm_accuracy'.format(split_name), torch.mean(acc_gmm, dtype=torch.float32).item())
+                train_stats.append_accumulate('{}_cmm_accuracy'.format(split_name), torch.mean(acc_cmm, dtype=torch.float32).item())
+                train_stats.append_accumulate('{}_gmmcmm_accuracy'.format(split_name), torch.mean(acc_gmm_cmm, dtype=torch.float32).item())
 
                 if batch_idx % 100 == 0:
                     # log loss and current GPU utilization
@@ -373,26 +353,28 @@ class FixMatchTrainer_gmm(trainer.SupervisedTrainer):
                     gpu_mem_percent_used = [np.round(100 * x, 1) for x in gpu_mem_percent_used]
                     logging.info('  batch {}/{}  loss: {:8.8g}  cpu_mem: {:2.1f}%  gpu_mem: {}% of {}MiB'.format(batch_idx, batch_count, loss.item(), cpu_mem_percent_used, gpu_mem_percent_used, memory_total_info))
 
+        train_stats.close_accumulate(epoch, '{}_loss'.format(split_name), method='avg')
+        train_stats.close_accumulate(epoch, '{}_cluster_loss'.format(split_name), method='avg')
+        train_stats.close_accumulate(epoch, '{}_gmm_loss'.format(split_name), method='avg')
+        train_stats.close_accumulate(epoch, '{}_cmm_loss'.format(split_name), method='avg')
+        train_stats.close_accumulate(epoch, '{}_gmm_accuracy'.format(split_name), method='avg')
+        train_stats.close_accumulate(epoch, '{}_cmm_accuracy'.format(split_name), method='avg')
+        train_stats.close_accumulate(epoch, '{}_gmmcmm_accuracy'.format(split_name), method='avg')
 
-        test_loss = np.nanmean(loss_list)
-        train_stats.add(epoch, '{}_loss'.format(split_name), test_loss)
-        logging.info('Test set: Average loss: {:.4f}'.format(test_loss))
-
-        test_loss = np.nanmean(loss_gmm_list)
-        test_acc = np.nanmean(accuracy_gmm_list)
-        train_stats.add(epoch, '{}_gmm_loss'.format(split_name), test_loss)
-        train_stats.add(epoch, '{}_gmm_accuracy'.format(split_name), test_acc)
-        logging.info('Test set (GMM): Average loss: {:.4f}, Accuracy: {}'.format(test_loss, test_acc))
-
-        test_loss = np.nanmean(loss_cmm_list)
-        test_acc = np.nanmean(accuracy_cmm_list)
-        train_stats.add(epoch, '{}_cmm_loss'.format(split_name), test_loss)
-        train_stats.add(epoch, '{}_cmm_accuracy'.format(split_name), test_acc)
-        logging.info('Test set (CMM): Average loss: {:.4f}, Accuracy: {}'.format(test_loss, test_acc))
-
-        test_loss = np.nanmean(loss_cluster_list)
-        train_stats.add(epoch, '{}_cluster_loss'.format(split_name), test_loss)
-        logging.info('Test set (GMM): Cluster loss: {:.4f}'.format(test_loss))
+        if args.val_acc_term == 'gmm':
+            # use just gmm for val acc
+            acc = train_stats.get_epoch('{}_gmm_accuracy'.format(split_name), epoch)
+            train_stats.add(epoch, '{}_accuracy'.format(split_name), acc)
+        elif args.val_acc_term == 'cmm':
+            # use just cmm for val acc
+            acc = train_stats.get_epoch('{}_cmm_accuracy'.format(split_name), epoch)
+            train_stats.add(epoch, '{}_accuracy'.format(split_name), acc)
+        elif args.val_acc_term == 'gmmcmm':
+            # use just average of gmm and cmm for val acc
+            acc = train_stats.get_epoch('{}_gmmcmm_accuracy'.format(split_name), epoch)
+            train_stats.add(epoch, '{}_accuracy'.format(split_name), acc)
+        else:
+            raise RuntimeError("Unknown args.val_acc_term={} codebase doesn't know which accuracy to return as val_accuracy for early stopping".format(args.val_acc_term))
 
         wall_time = time.time() - start_time
         train_stats.add(epoch, '{}_wall_time'.format(split_name), wall_time)

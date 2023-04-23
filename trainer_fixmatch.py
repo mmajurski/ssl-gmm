@@ -22,7 +22,7 @@ def sharpen_mixmatch(x:torch.Tensor, T:float):
 
 class FixMatchTrainer(trainer.SupervisedTrainer):
 
-    def train_epoch(self, model, pytorch_dataset, optimizer, criterion, epoch, train_stats, nb_reps=1, unlabeled_dataset=None):
+    def train_epoch(self, model, pytorch_dataset, optimizer, criterion, epoch, train_stats, nb_reps=1, unlabeled_dataset=None, ema_model=None):
 
         if unlabeled_dataset is None:
             raise RuntimeError("Unlabeled dataset missing. Cannot use FixMatch train_epoch function without an unlabeled_dataset.")
@@ -88,7 +88,8 @@ class FixMatchTrainer(trainer.SupervisedTrainer):
             softmax_ul_weak = logits_ul_weak  # the weights have already been softmaxed in the network
             # sharpen the logits with tau, but in a manner which preserves sum to 1
             if self.args.tau < 1.0:
-                softmax_ul_weak = sharpen_mixmatch(x=softmax_ul_weak, T=self.args.tau)
+                softmax_ul_weak = softmax_ul_weak / self.args.tau
+                # softmax_ul_weak = sharpen_mixmatch(x=softmax_ul_weak, T=self.args.tau)
 
             if self.args.soft_labels:
                 # convert hard labels in the fully labeled dataset into soft labels (i.e. one hot)
@@ -162,6 +163,9 @@ class FixMatchTrainer(trainer.SupervisedTrainer):
 
                 if loss_nan_count > int(0.5 * batch_count):
                     raise RuntimeError("Loss is consistently nan (>50% of epoch), terminating train.")
+
+            if ema_model is not None:
+                ema_model.update(model)
 
             if batch_idx % 100 == 0:
                 # log loss and current GPU utilization

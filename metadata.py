@@ -3,8 +3,6 @@ import json
 import numpy as np
 import pandas as pd
 import logging
-import sklearn.metrics
-from matplotlib import pyplot as plt
 
 
 class TrainingStats():
@@ -97,6 +95,9 @@ class TrainingStats():
         return self.global_data[metric_name]
 
     def render_and_save_confusion_matrix(self, y_true: np.ndarray, y_pred: np.ndarray, output_folder: str, metric_name: str, epoch: int = None):
+        from matplotlib import pyplot as plt
+        import sklearn.metrics
+
         ofldr = os.path.join(output_folder, 'confusion_matrix')
         if not os.path.exists(ofldr):
             os.makedirs(ofldr)
@@ -114,6 +115,8 @@ class TrainingStats():
         plt.close(fig)
 
     def plot_all_metrics(self, output_dirpath: str, all_one_figure: bool = False):
+        from matplotlib import pyplot as plt
+
         df = pd.DataFrame(self.epoch_data)
         col_list = list(df.columns)
 

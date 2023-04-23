@@ -24,24 +24,25 @@
 source /mnt/isgnas/home/mmajursk/miniconda3/etc/profile.d/conda.sh
 conda activate gmm
 
-#LAST_LAYER=$1
-#MODEL_NB=$2
-#PL_DETERM=$3
-#PL_TARGET=$4
-#LOSS_TERMS=$5
-#
-#python main.py --output-dirpath=./models-20230417/fixmatch-${LAST_LAYER}-${MODEL_NB}-pl${PL_DETERM}-pltgt${PL_TARGET}-loss${LOSS_TERMS} --trainer=fixmatch-gmm --last-layer=${LAST_LAYER} --pseudo-label-determination=${PL_DETERM} --pseudo-label-target-logits=${PL_TARGET} --loss-terms=${LOSS_TERMS}
+LAST_LAYER=$1
+MODEL_NB=$2
+PL_DETERM=$3
+PL_TARGET=$4
+LOSS_TERMS=$5
+VAL_ACC=$6
+
+python main.py --output-dirpath=./models-20230417/fixmatch-${LAST_LAYER}-${MODEL_NB}-pl${PL_DETERM}-pltgt${PL_TARGET}-loss${LOSS_TERMS}-valacc${VAL_ACC} --trainer=fixmatch-gmm --last-layer=${LAST_LAYER} --pseudo-label-determination=${PL_DETERM} --pseudo-label-target-logits=${PL_TARGET} --loss-terms=${LOSS_TERMS} --optimizer=adamw --learning-rate=3e-4 --val-acc-term=${VAL_ACC}
 
 
-MODEL_NB=$1
-TAU=$2
-EMA_FLAG=$3
+# MODEL_NB=$1
+# TAU=$2
+# EMA_FLAG=$3
 
-if [ "$EMA_FLAG" -gt 0 ]; then
-  python main.py --output-dirpath=./models-20230417/fixmatch-ema-${MODEL_NB}-T${TAU} --trainer=fixmatch --last-layer=fc --tau=${TAU} --use-ema
-else
-  python main.py --output-dirpath=./models-20230417/fixmatch-stock-${MODEL_NB}-T${TAU} --trainer=fixmatch --last-layer=fc --tau=${TAU}
-fi
+# if [ "$EMA_FLAG" -gt 0 ]; then
+#   python main.py --output-dirpath=./models-fixmatch-baseline/fixmatch-ema-${MODEL_NB}-T${TAU} --trainer=fixmatch --last-layer=fc --tau=${TAU} --use-ema
+# else
+#   python main.py --output-dirpath=./models-fixmatch-baseline/fixmatch-stock-${MODEL_NB}-T${TAU} --trainer=fixmatch --last-layer=fc --tau=${TAU}
+# fi
 
 
 

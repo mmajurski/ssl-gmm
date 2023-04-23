@@ -8,6 +8,7 @@ kmeans*/
 
 *.pyc
 *.png
+*.csv
 *.pt
 *.tar.gz
 *.zip

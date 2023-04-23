@@ -147,11 +147,8 @@ def train(args):
         # safety check that the output directory exists
         os.makedirs(args.output_dirpath)
 
-    logging.basicConfig(level=logging.INFO,
-                        format="%(asctime)s [%(levelname)s] [%(filename)s:%(lineno)d] %(message)s",
-                        filename=os.path.join(args.output_dirpath, 'log.txt'))
-    logging.getLogger().addHandler(logging.StreamHandler())
-
+    # add the file based handler to the logger
+    logging.getLogger().addHandler(logging.FileHandler(filename=os.path.join(args.output_dirpath, 'log.txt')))
     logging.info(args)
 
     model, train_dataset_labeled, train_dataset_unlabeled, val_dataset, test_dataset = setup(args)
@@ -216,24 +213,24 @@ def train(args):
         from model_ema import ModelEMA
         # model needs to already be on device
         ema_model = ModelEMA(model, args.ema_decay)
+    else:
+        ema_model = None
 
     while not plateau_scheduler.is_done() and epoch < trainer.MAX_EPOCHS:
         epoch += 1
         logging.info("Epoch: {}".format(epoch))
 
         train_stats.plot_all_metrics(output_dirpath=args.output_dirpath)
-        model_trainer.train_epoch(model, train_dataset_labeled, optimizer, criterion, epoch, train_stats, unlabeled_dataset=train_dataset_unlabeled)
+        model_trainer.train_epoch(model, train_dataset_labeled, optimizer, criterion, epoch, train_stats, unlabeled_dataset=train_dataset_unlabeled, ema_model=ema_model)
 
         if args.use_ema:
-            ema_model.update(model)
             test_model = ema_model.ema
         else:
             test_model = model
 
         logging.info("  evaluating against validation data")
-        model_trainer.eval_model(test_model, val_dataset, criterion, train_stats, "val", epoch)
+        model_trainer.eval_model(test_model, val_dataset, criterion, train_stats, "val", epoch, args)
 
-        val_loss = train_stats.get_epoch('val_loss', epoch=epoch)
         val_accuracy = train_stats.get_epoch('val_accuracy', epoch=epoch)
         plateau_scheduler.step(val_accuracy)
 
@@ -263,7 +260,7 @@ def train(args):
     best_model.cuda()  # move the model back to the GPU (saving moved the best model back to the cpu)
 
     logging.info('Evaluating model against test dataset')
-    model_trainer.eval_model(best_model, test_dataset, criterion, train_stats, "test", epoch)
+    model_trainer.eval_model(best_model, test_dataset, criterion, train_stats, "test", epoch, args)
 
     # update the global metrics with the best epoch, to include test stats
     train_stats.update_global(best_epoch)

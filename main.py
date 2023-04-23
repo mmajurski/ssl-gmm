@@ -1,5 +1,9 @@
 import argparse
 import logging
+logging.basicConfig(level=logging.INFO,
+                        format="%(asctime)s [%(levelname)s] [%(filename)s:%(lineno)d] %(message)s",
+                        handlers=[logging.StreamHandler()])
+
 import utils
 import train
 
@@ -19,6 +23,7 @@ def main():
     parser.add_argument('--loss-eps', default=1e-4, type=float, help='loss value eps for determining early stopping loss equivalence.')
     # parser.add_argument('--val-fraction', default=0.1, type=float, help='fraction of the training data to use for validation.')
     parser.add_argument('--patience', default=50, type=int, help='number of epochs past optimal to explore before early stopping terminates training.')
+    parser.add_argument('--val-acc-term', default='gmm', type=str, help='which accuracy to use for validation accuracy and early stopping (gmm, cmm, gmmcmm')
     parser.add_argument('--weight-decay', default=5e-4, type=float)
     parser.add_argument('--cycle-factor', default=2.0, type=float, help='Cycle factor for cyclic learning rate scheduler.')
     parser.add_argument('--num-lr-reductions', default=2, type=int)

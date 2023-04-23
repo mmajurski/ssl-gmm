@@ -39,7 +39,7 @@ class SupervisedTrainer:
                 raise RuntimeError("Invalid optimizer: {}".format(self.args.optimizer))
         return optimizer
 
-    def train_epoch(self, model, pytorch_dataset, optimizer, criterion, epoch, train_stats, unlabeled_dataset=None):
+    def train_epoch(self, model, pytorch_dataset, optimizer, criterion, epoch, train_stats, unlabeled_dataset=None, ema_model=None):
 
         model.train()
 
@@ -62,7 +62,10 @@ class SupervisedTrainer:
             inputs = tensor_dict[0].cuda()
             labels = tensor_dict[1].cuda()
 
-            outputs = model(inputs)
+            # outputs = model(inputs)
+            resp_gmm, resp_cmm, cluster_dist = model(inputs)
+            outputs = resp_gmm
+
             batch_loss = criterion(outputs, labels)
             batch_loss.backward()
             torch.nn.utils.clip_grad_value_(model.parameters(), 10)
@@ -86,6 +89,9 @@ class SupervisedTrainer:
             if loss_nan_count > int(0.5 * batch_count):
                 raise RuntimeError("Loss is consistently nan (>50% of epoch), terminating train.")
 
+            if ema_model is not None:
+                ema_model.update(model)
+
             if batch_idx % 100 == 0:
                 # log loss and current GPU utilization
                 cpu_mem_percent_used = psutil.virtual_memory().percent
@@ -104,7 +110,7 @@ class SupervisedTrainer:
         train_stats.close_accumulate(epoch, 'train_accuracy', method='avg')
 
 
-    def eval_model(self, model, pytorch_dataset, criterion, train_stats, split_name, epoch):
+    def eval_model(self, model, pytorch_dataset, criterion, train_stats, split_name, epoch, args):
         if pytorch_dataset is None or len(pytorch_dataset) == 0:
             return
 
@@ -119,7 +125,9 @@ class SupervisedTrainer:
                 inputs = tensor_dict[0].cuda()
                 labels = tensor_dict[1].cuda()
 
-                outputs = model(inputs)
+                # outputs = model(inputs)
+                resp_gmm, resp_cmm, cluster_dist = model(inputs)
+                outputs = resp_gmm
 
                 batch_loss = criterion(outputs, labels)
                 train_stats.append_accumulate('{}_loss'.format(split_name), batch_loss.item())

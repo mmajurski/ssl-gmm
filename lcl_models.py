@@ -276,6 +276,7 @@ class axis_aligned_gmm_cmm_D1_layer(torch.nn.Module):
                 delta = self.centers[c, :] - x_centroid
                 delta = torch.sqrt(torch.sum(torch.pow(delta, 2), dim=-1))
                 cluster_dist[c] = delta
+        # TODO look at using the cluster distance (which is a per image measure of the dist to the assigned cluster) and use that somehow for filtering PL.
 
         resp_gmm = torch.clip(resp_gmm, min=1e-8)
         resp_cmm = torch.clip(resp_cmm, min=1e-8)
