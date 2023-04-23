@@ -105,6 +105,9 @@ def setup(args):
         elif args.last_layer == 'aa_gmm_d1':
             if args.arch == 'wide_resnet':
                 model = flavored_wideresnet.WideResNet(num_classes=args.num_classes, last_layer=args.last_layer)
+        elif args.last_layer == 'kmeans_cmm':
+            if args.arch == 'wide_resnet':
+                model = flavored_wideresnet.WideResNet(num_classes=args.num_classes, last_layer=args.last_layer)
 
     if model is None:
         raise RuntimeError("Unsupported model architecture selection: {} with last layer: {}.".format(args.arch, args.last_layer))
