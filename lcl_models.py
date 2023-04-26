@@ -88,20 +88,18 @@ class kmeans_cmm_layer(torch.nn.Module):
         # argmax resp to assign to cluster
         # optimize CE over resp + L2 loss
 
-        #
-        # Vectorized version of cluster_dist
-        #
+        # argmax resp to assign to cluster
+        # optimize CE over resp + L2 loss
+        cluster_assignment = torch.argmax(resp_kmeans, dim=-1)
 
-        # Obtain cluster assignment from dist_sq directly
-        cluster_assignment = torch.argmin(dist_sq, dim=-1)
-
-        # Use one-hot encoding trick to extract the dist_sq
-        cluster_assignment_onehot = torch.nn.functional.one_hot(cluster_assignment, dist_sq.shape[1])
-        cluster_dist_sq_onehot = cluster_assignment_onehot * dist_sq
-        cluster_dist_sq = torch.sum(cluster_dist_sq_onehot, dim=-1)
-
-        # Take square root of dist_sq to get L2 norm
-        cluster_dist = torch.sqrt(cluster_dist_sq)
+        # version of cluster_dist which is based on the centroid distance from self.centers
+        cluster_dist = torch.zeros_like(resp_kmeans[0, :])
+        for c in range(self.num_classes):
+            if torch.any(c == cluster_assignment):
+                x_centroid = torch.mean(x[c == cluster_assignment, :], dim=0)
+                delta = self.centers[c, :] - x_centroid
+                delta = torch.sqrt(torch.sum(torch.pow(delta, 2), dim=-1))
+                cluster_dist[c] = delta
 
         resp_kmeans = torch.clip(resp_kmeans, min=1e-8)
         resp_cmm = torch.clip(resp_cmm, min=1e-8)
@@ -264,20 +262,6 @@ class axis_aligned_gmm_cmm_layer(torch.nn.Module):
                 delta = self.centers[c, :] - x_centroid
                 delta = torch.sqrt(torch.sum(torch.pow(delta, 2), dim=-1))
                 cluster_dist[c] = delta
-
-        # #
-        # # Vectorized version of cluster_dist
-        # #
-        # # Obtain cluster assignment from dist_sq directly
-        # cluster_assignment = torch.argmin(dist_sq, dim=-1)
-        #
-        # # Use one-hot encoding trick to extract the dist_sq
-        # cluster_assignment_onehot = torch.nn.functional.one_hot(cluster_assignment, dist_sq.shape[1])
-        # cluster_dist_sq_onehot = cluster_assignment_onehot * dist_sq
-        # cluster_dist_sq = torch.sum(cluster_dist_sq_onehot, dim=-1)
-        # # Take square root of dist_sq to get L2 norm
-        # cluster_dist = torch.sqrt(cluster_dist_sq)
-
 
         resp_gmm = torch.clip(resp_gmm, min=1e-8)
         resp_cmm = torch.clip(resp_cmm, min=1e-8)

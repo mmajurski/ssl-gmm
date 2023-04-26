@@ -10,7 +10,7 @@
 #SBATCH --oversubscribe
 #SBATCH --cpus-per-task=12
 #SBATCH --gres=gpu:1
-#SBATCH --job-name=fm-base
+#SBATCH --job-name=gmm
 #SBATCH -o log-%N.%j.out
 #SBATCH --time=128:0:0
 
@@ -24,32 +24,29 @@
 source /mnt/isgnas/home/mmajursk/miniconda3/etc/profile.d/conda.sh
 conda activate gmm
 
-# LAST_LAYER=$1
-# MODEL_NB=$2
-# PL_DETERM=$3
-# PL_TARGET=$4
-# LOSS_TERMS=$5
-# VAL_ACC=$6
-# EMA_FLAG=$7
-
-
-# if [ "$EMA_FLAG" -gt 0 ]; then
-# python main.py --output-dirpath=./models-20230417/fixmatch-${LAST_LAYER}-${MODEL_NB}-pl${PL_DETERM}-pltgt${PL_TARGET}-loss${LOSS_TERMS}-valacc${VAL_ACC}-ema${EMA_FLAG} --trainer=fixmatch-gmm --last-layer=${LAST_LAYER} --pseudo-label-determination=${PL_DETERM} --pseudo-label-target-logits=${PL_TARGET} --loss-terms=${LOSS_TERMS} --optimizer=adamw --learning-rate=3e-4 --val-acc-term=${VAL_ACC} --use-ema
-# else
-# python main.py --output-dirpath=./models-20230417/fixmatch-${LAST_LAYER}-${MODEL_NB}-pl${PL_DETERM}-pltgt${PL_TARGET}-loss${LOSS_TERMS}-valacc${VAL_ACC}-ema${EMA_FLAG} --trainer=fixmatch-gmm --last-layer=${LAST_LAYER} --pseudo-label-determination=${PL_DETERM} --pseudo-label-target-logits=${PL_TARGET} --loss-terms=${LOSS_TERMS} --optimizer=adamw --learning-rate=3e-4 --val-acc-term=${VAL_ACC} 
-# fi
-
-
-MODEL_NB=$1
-TAU=$2
-TAU_METHOD=$3
+LAST_LAYER=$1
+MODEL_NB=$2
+VAL_ACC=$3
 EMA_FLAG=$4
 
+
 if [ "$EMA_FLAG" -gt 0 ]; then
-  python main.py --output-dirpath=./models-fixmatch-baseline/fixmatch-ema-${MODEL_NB}-T${TAU}-TM${TAU_METHOD} --trainer=fixmatch --last-layer=fc --tau=${TAU} --tau-method=${TAU_METHOD} --use-ema
+  python main.py --output-dirpath=./models-20230417/fixmatch-${LAST_LAYER}-${MODEL_NB}-valacc${VAL_ACC}-ema${EMA_FLAG} --trainer=fixmatch-gmm --last-layer=${LAST_LAYER} --optimizer=adamw --learning-rate=3e-4 --val-acc-term=${VAL_ACC} --use-ema
 else
-  python main.py --output-dirpath=./models-fixmatch-baseline/fixmatch-stock-${MODEL_NB}-T${TAU}-TM${TAU_METHOD} --trainer=fixmatch --last-layer=fc --tau=${TAU} --tau-method=${TAU_METHOD}
+  python main.py --output-dirpath=./models-20230417/fixmatch-${LAST_LAYER}-${MODEL_NB}-valacc${VAL_ACC}-ema${EMA_FLAG} --trainer=fixmatch-gmm --last-layer=${LAST_LAYER} --optimizer=adamw --learning-rate=3e-4 --val-acc-term=${VAL_ACC}
 fi
+
+
+#MODEL_NB=$1
+#TAU=$2
+#TAU_METHOD=$3
+#EMA_FLAG=$4
+#
+#if [ "$EMA_FLAG" -gt 0 ]; then
+#  python main.py --output-dirpath=./models-fixmatch-baseline/fixmatch-ema-${MODEL_NB}-T${TAU}-TM${TAU_METHOD} --trainer=fixmatch --last-layer=fc --tau=${TAU} --tau-method=${TAU_METHOD} --use-ema
+#else
+#  python main.py --output-dirpath=./models-fixmatch-baseline/fixmatch-stock-${MODEL_NB}-T${TAU}-TM${TAU_METHOD} --trainer=fixmatch --last-layer=fc --tau=${TAU} --tau-method=${TAU_METHOD}
+#fi
 
 
 

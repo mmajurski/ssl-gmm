@@ -126,8 +126,9 @@ class SupervisedTrainer:
                 labels = tensor_dict[1].cuda()
 
                 # outputs = model(inputs)
-                resp_gmm, resp_cmm, cluster_dist = model(inputs)
-                outputs = resp_gmm
+                # resp_gmm, resp_cmm, cluster_dist = model(inputs)
+                # outputs = resp_gmm
+                outputs = model(inputs)
 
                 batch_loss = criterion(outputs, labels)
                 train_stats.append_accumulate('{}_loss'.format(split_name), batch_loss.item())

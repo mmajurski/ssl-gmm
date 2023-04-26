@@ -19,6 +19,7 @@ def main():
     parser.add_argument('--batch-size', default=64, type=int, help='batch size')
     parser.add_argument('--learning-rate', default=0.03, type=float, help='initial learning rate')  # 3e-4
     parser.add_argument('--tau', default=1.0, type=float, help='temperature value to sharpen the logits. Set to 1 to disable. If tau is 1, hard pseudo-labeling is used instead of soft pseudo-labeling.')
+    parser.add_argument('--tau-method', type=str, default='fixmatch', help='what type of tau temp scaling to use, (fixmatch or mixmatch)')
     parser.add_argument('--mu', default=7, type=int, help='the number of unlabeled batches per labeled batch factor.')
     parser.add_argument('--loss-eps', default=1e-4, type=float, help='loss value eps for determining early stopping loss equivalence.')
     # parser.add_argument('--val-fraction', default=0.1, type=float, help='fraction of the training data to use for validation.')
@@ -33,21 +34,18 @@ def main():
     parser.add_argument('--ema-decay', default=0.999, type=float)
     parser.add_argument('--pseudo-label-threshold', default=0.95, type=float, help='Threshold when filtering pseudo-labeling.')
     parser.add_argument('--soft-labels', help='enables soft labels', action='store_true')
-    parser.add_argument('--supervised-pretrain', help='enables a fully supervised pre-train before starting the SSL', action='store_true')
-    parser.add_argument('--supervised-pretrain-patience', default=5, type=int, help='number of epochs past optimal to explore before early stopping terminates training.')
     parser.add_argument('--num-classes', default=10, type=int, help='number of classes in the dataset.')
     parser.add_argument('--num-labeled-datapoints', default=250, type=int, help='number of labeled annotations in the dataset.')
     parser.add_argument('--starting-model', type=str, default=None, help='Pytorch model checkpoint to load instead of starting from random')
     parser.add_argument('--optimizer', type=str, default='sgd',help='optimizer if nothing is passed AdamW would be used (currently supported sgd,adamw)')
-    parser.add_argument('--cluster-per-class', default=1, type=int, help='number of clusters to create per class')
     parser.add_argument('--strong-augmentation', help='enables strong augmentation', action='store_true')
-    parser.add_argument('--D1', help='flag controls whether the GMM/CMM representation has a fixed D=1', action='store_true')
     parser.add_argument('--debug', help='enables debugging mode', action='store_true')
     # parser.add_argument('--skl',help='uses sklearn implementation of Gaussian Mixture',action='store_true')
     parser.add_argument('--last-layer', type=str, default='fc', help='last layer to use in the NN')
-    parser.add_argument('--loss-terms', type=str, default='gmm', help='what loss terms to be included (options are gmm, cmm, cluster_dist). For example "cmm+gmm+cluster_dist"')
-    parser.add_argument('--pseudo-label-determination', default="gmm", type=str, help='which set of logits to use when picking valid pseudo-labels. (gmm, cmm)')
-    parser.add_argument('--pseudo-label-target-logits', default="gmm", type=str, help='which set of logits to use as the optimization target for valid pseudo-labels. (gmm, cmm)')
+    # parser.add_argument('--loss-terms', type=str, default='gmm', help='what loss terms to be included (options are gmm, cmm, cluster_dist). For example "cmm+gmm+cluster_dist"')
+    # parser.add_argument('--pseudo-label-determination', default="gmm", type=str, help='which set of logits to use when picking valid pseudo-labels. (gmm, cmm)')
+    # parser.add_argument('--pseudo-label-target-logits', default="gmm", type=str, help='which set of logits to use as the optimization target for valid pseudo-labels. (gmm, cmm)')
+
     parser.add_argument('--trainer', type=str, default='fixmatch', help='trainer to use (currently supported supervised, fixmatch, fixmatch-gmm)')
 
 

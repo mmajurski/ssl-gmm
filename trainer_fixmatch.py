@@ -85,11 +85,15 @@ class FixMatchTrainer(trainer.SupervisedTrainer):
             logits_ul_weak = logits_ul[:inputs_ul_weak.shape[0]]
             logits_ul_strong = logits_ul[inputs_ul_weak.shape[0]:]
 
-            softmax_ul_weak = logits_ul_weak  # the weights have already been softmaxed in the network
+            softmax_ul_weak = torch.nn.functional.softmax(logits_ul_weak, dim=-1)
             # sharpen the logits with tau, but in a manner which preserves sum to 1
             if self.args.tau < 1.0:
-                softmax_ul_weak = softmax_ul_weak / self.args.tau
-                # softmax_ul_weak = sharpen_mixmatch(x=softmax_ul_weak, T=self.args.tau)
+                if self.args.tau_method == 'fixmatch':
+                    softmax_ul_weak = softmax_ul_weak / self.args.tau
+                elif self.args.tau_method == 'mixmatch':
+                    softmax_ul_weak = sharpen_mixmatch(x=softmax_ul_weak, T=self.args.tau)
+                else:
+                    raise RuntimeError("invalid tau method = {}".format(self.args.tau_method))
 
             if self.args.soft_labels:
                 # convert hard labels in the fully labeled dataset into soft labels (i.e. one hot)

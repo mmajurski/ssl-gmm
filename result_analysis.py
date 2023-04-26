@@ -6,39 +6,36 @@ import os
 directory = 'models-20230417'
 
 # columns to extract from file name
-config_columns = ['method', 'final_layer', 'run', 'pseudo_labeler', 'pl_target', 'loss']
+config_columns = ['method', 'final_layer', 'pseudo_labeler', 'pseudo_label_tgt', 'loss', 'val_acc_tgt', 'ema']
 # columns to extract from result file (stats.json)
-result_columns = ['val_gmm_accuracy', 'val_cmm_accuracy', 'num_epochs_trained', 'epoch',
-                  'train_gmm_accuracy', 'train_cmm_accuracy']
+result_columns = ['val_gmm_accuracy', 'val_cmm_accuracy']
 # create dataframe for storing results
 final_columns = config_columns + result_columns
 results_df = pd.DataFrame(columns=final_columns)
 
 
 
-def process_folder_name(f_name):
-    """
-       process folder name and return config_dict.
-
-       :param str f_name: Name of the folder
-       :return: config_dict containing config_columns and appropriate values
-       :rtype: dict
-       """
-    f_name_list = f_name.split('-')
-
-    return_dict = {'method': f_name_list[0], 'final_layer': f_name_list[1], 'run': f_name_list[2],
-                   'pseudo_labeler': f_name_list[3].lstrip('pl'), 'pl_target': f_name_list[4][5:],
-                   'loss': f_name_list[5].lstrip('loss'), 'val_acc_tgt': f_name_list[6].replace('valacc', ''),
-                   'ema': f_name_list[7].replace('ema', '')}
-
-    return return_dict
-
-
 # iterating over folders in the given directory
 for folder_name in os.listdir(directory):
 
     # getting configuration dictionary
-    config_dict = process_folder_name(folder_name)
+    # config_dict = process_folder_name(folder_name)
+
+    json_file_path = os.path.join(directory, folder_name, 'config.json')
+    with open(json_file_path) as json_file:
+        full_config_dict = json.load(json_file)
+
+    config_dict = dict()
+    config_dict['method'] = full_config_dict['trainer']
+    config_dict['final_layer'] = full_config_dict['last_layer']
+    config_dict['pseudo_labeler'] = full_config_dict['pseudo_label_determination']
+    config_dict['pseudo_label_tgt'] = full_config_dict['pseudo_label_target_logits']
+    config_dict['loss'] = full_config_dict['loss_terms']
+    config_dict['val_acc_tgt'] = full_config_dict['val_acc_term']
+    config_dict['ema'] = full_config_dict['use_ema']
+
+
+    config_dict = dict((k, config_dict[k]) for k in config_columns)
 
     # creating dictionary from stats.json file
     json_file_path = os.path.join(directory, folder_name, 'stats.json')

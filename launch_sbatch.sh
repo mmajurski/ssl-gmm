@@ -3,65 +3,45 @@
 
 
 
-##MODEL_NB=$1
-##TAU=$2
-##EMA_FLAG=$3
+## MODEL_NB=$1
+## TAU=$2
+## TAU_METHOD=$3
+## EMA_FLAG=$4
 #
-#for mn in 0 1 2 3 4 5
+#for mn in 0 1 2
 #do
 #
-#sbatch sbatch_script.sh ${mn} 1.0 0
-#sbatch sbatch_script.sh ${mn} 1.0 1
+#  for ema in 0 1
+#  do
 #
-#sbatch sbatch_script.sh ${mn} 0.95 0
-#sbatch sbatch_script.sh ${mn} 0.95 1
+#    # run tau 1.0, which only needs fixmatch, not mixmatch tau method
+#    sbatch sbatch_script.sh ${mn} 1.0 fixmatch ${ema}
 #
-#sbatch sbatch_script.sh ${mn} 0.9 0
-#sbatch sbatch_script.sh ${mn} 0.9 1
-#
-#sbatch sbatch_script.sh ${mn} 0.8 0
-#sbatch sbatch_script.sh ${mn} 0.8 1
-#
-#sbatch sbatch_script.sh ${mn} 0.7 0
-#sbatch sbatch_script.sh ${mn} 0.7 1
-#
-#sbatch sbatch_script.sh ${mn} 0.6 0
-#sbatch sbatch_script.sh ${mn} 0.6 1
-#
-#sbatch sbatch_script.sh ${mn} 0.5 0
-#sbatch sbatch_script.sh ${mn} 0.5 1
-#
-#sbatch sbatch_script.sh ${mn} 0.4 0
-#sbatch sbatch_script.sh ${mn} 0.4 1
-#
+#    for tau in 0.95 0.9 0.8 0.7 0.6 0.5
+#    do
+#      sbatch sbatch_script.sh ${mn} ${tau} fixmatch ${ema}
+#      sbatch sbatch_script.sh ${mn} ${tau} mixmatch ${ema}
+#    done
+#  done
 #done
 
 
-
+#
 #LAST_LAYER=$1
 #MODEL_NB=$2
-#PL_DETERM=$3
-#PL_TARGET=$4
-#LOSS_TERMS=$5
-#VAL_ACC=$6
+#VAL_ACC=$3
+ema=0
 
-for mn in 0 1 3
+for mn in 0 1 2 3 4 5
 do
+ for ll in "aa_gmm" "kmeans_cmm"
+ do
+   for va in "gmm" "cmm" "gmmcmm"
+   do
 
-  for ll in "aa_gmm" "aa_gmm_d1"
-  do
+     sbatch sbatch_script_gmm.sh ${ll} ${mn} ${va} ${ema}
 
-    for loss_term in "gmm+cluster" "cmm+cluster" "gmm+cmm+cluster"
-    do
-
-      for va in "gmm" "cmm" "gmmcmm"
-      do
-
-        sbatch sbatch_script.sh ${ll} ${mn} gmm gmm ${loss_term} ${va}
-        sbatch sbatch_script.sh ${ll} ${mn} gmm cmm ${loss_term} ${va}
-        sbatch sbatch_script.sh ${ll} ${mn} cmm cmm ${loss_term} ${va}
-
-      done
-    done
-  done
+   done
+ done
 done
+

@@ -113,29 +113,40 @@ class FixMatchTrainer_gmm(trainer.SupervisedTrainer):
             max_l_gmm_score = torch.max(torch.nn.functional.softmax(resp_gmm_l, dim=-1))
             max_l_gmm_score = max_l_gmm_score.item()
 
-            if self.args.pseudo_label_determination == 'gmm':
+            if self.args.val_acc_term == 'gmm':
                 logits_ul_weak = resp_gmm_ul_weak
-            elif self.args.pseudo_label_determination == 'cmm':
-                logits_ul_weak = resp_cmm_ul_weak
-            else:
-                raise RuntimeError("Invalid PL determination value: {}".format(self.args.pseudo_label_determination))
-
-            if self.args.pseudo_label_target_logits == 'gmm':
                 logits_ul_strong = resp_gmm_ul_strong
-            elif self.args.pseudo_label_target_logits == 'cmm':
+            elif self.args.val_acc_term == 'cmm':
+                logits_ul_weak = resp_cmm_ul_weak
                 logits_ul_strong = resp_cmm_ul_strong
+            elif self.args.val_acc_term == 'gmmcmm':
+                a = torch.nn.functional.softmax(resp_gmm_ul_weak, dim=-1)
+                b = torch.nn.functional.softmax(resp_cmm_ul_weak, dim=-1)
+                logits_ul_weak = torch.log((a + b) / 2.0)
+
+                a = torch.nn.functional.softmax(resp_gmm_ul_strong, dim=-1)
+                b = torch.nn.functional.softmax(resp_cmm_ul_strong, dim=-1)
+                logits_ul_strong = torch.log((a + b) / 2.0)
             else:
-                raise RuntimeError("Invalid PL target logit value: {}".format(self.args.pseudo_label_target_logits))
+                raise RuntimeError("Invalid val_acc_term = {}".format(self.args.val_acc_term))
 
             softmax_ul_weak = torch.nn.functional.softmax(logits_ul_weak, dim=-1)
             softmax_gmm_ul_weak = torch.nn.functional.softmax(resp_gmm_ul_weak, dim=-1)
             softmax_cmm_ul_weak = torch.nn.functional.softmax(resp_cmm_ul_weak, dim=-1)
 
-            # sharpen the logits with tau, but in a manner which preserves sum to 1
             if self.args.tau < 1.0:
-                softmax_ul_weak = sharpen_mixmatch(x=softmax_ul_weak, T=self.args.tau)
-                softmax_gmm_ul_weak = sharpen_mixmatch(x=softmax_gmm_ul_weak, T=self.args.tau)
-                softmax_cmm_ul_weak = sharpen_mixmatch(x=softmax_cmm_ul_weak, T=self.args.tau)
+                if self.args.tau_method == 'fixmatch':
+                    # sharpen the logits with tau
+                    softmax_ul_weak = softmax_ul_weak / self.args.tau
+                    softmax_gmm_ul_weak = softmax_gmm_ul_weak / self.args.tau
+                    softmax_cmm_ul_weak = softmax_cmm_ul_weak / self.args.tau
+                elif self.args.tau_method == 'mixmatch':
+                    # sharpen the logits with tau, but in a manner which preserves sum to 1
+                    softmax_ul_weak = sharpen_mixmatch(x=softmax_ul_weak, T=self.args.tau)
+                    softmax_gmm_ul_weak = sharpen_mixmatch(x=softmax_gmm_ul_weak, T=self.args.tau)
+                    softmax_cmm_ul_weak = sharpen_mixmatch(x=softmax_cmm_ul_weak, T=self.args.tau)
+                else:
+                    raise RuntimeError("invalid tau method = {}".format(self.args.tau_method))
 
             sw, _ = torch.max(softmax_gmm_ul_weak, dim=-1)
             max_gmm_pl_score, _ = torch.max(sw, dim=0)
@@ -185,26 +196,24 @@ class FixMatchTrainer_gmm(trainer.SupervisedTrainer):
                     pl_gt_count_per_class[c] += torch.sum(tgts == c).item()
 
             loss_l = None
-            if 'gmm' in self.args.loss_terms:
+            if 'gmm' in self.args.val_acc_term:
                 batch_loss_gmm = criterion(resp_gmm_l, targets_l)
                 if loss_l is None:
                     loss_l = batch_loss_gmm
                 else:
                     loss_l += batch_loss_gmm
-            if 'cmm' in self.args.loss_terms:
+            if 'cmm' in self.args.val_acc_term:
                 batch_loss_cmm = criterion(resp_cmm_l, targets_l)
                 if loss_l is None:
                     loss_l = batch_loss_cmm
                 else:
                     loss_l += batch_loss_cmm
-            if 'cluster' in self.args.loss_terms:
-                cluster_loss = cluster_criterion(cluster_dist_l, torch.zeros_like(cluster_dist_l))
-                if loss_l is None:
-                    loss_l = cluster_loss
-                else:
-                    loss_l += cluster_loss
+
+            cluster_loss = cluster_criterion(cluster_dist_l, torch.zeros_like(cluster_dist_l))
             if loss_l is None:
-                raise RuntimeError("No labeled loss terms selected")
+                loss_l = cluster_loss
+            else:
+                loss_l += cluster_loss
 
             if self.args.soft_labels:
                 # remove the invalid elements before the loss is calculated
