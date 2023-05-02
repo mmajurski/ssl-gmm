@@ -3,12 +3,12 @@ import json
 import os
 
 # folder to read files from
-directory = 'models-20230417'
+directory = 'models-20230425'
 
 # columns to extract from file name
-config_columns = ['method', 'final_layer', 'pseudo_labeler', 'pseudo_label_tgt', 'loss', 'val_acc_tgt', 'ema']
+config_columns = ['method', 'final_layer', 'val_acc_tgt', 'ema']
 # columns to extract from result file (stats.json)
-result_columns = ['val_gmm_accuracy', 'val_cmm_accuracy']
+result_columns = ['val_gmm_accuracy', 'val_cmm_accuracy', 'test_gmm_accuracy', 'test_cmm_accuracy']
 # create dataframe for storing results
 final_columns = config_columns + result_columns
 results_df = pd.DataFrame(columns=final_columns)
@@ -28,9 +28,6 @@ for folder_name in os.listdir(directory):
     config_dict = dict()
     config_dict['method'] = full_config_dict['trainer']
     config_dict['final_layer'] = full_config_dict['last_layer']
-    config_dict['pseudo_labeler'] = full_config_dict['pseudo_label_determination']
-    config_dict['pseudo_label_tgt'] = full_config_dict['pseudo_label_target_logits']
-    config_dict['loss'] = full_config_dict['loss_terms']
     config_dict['val_acc_tgt'] = full_config_dict['val_acc_term']
     config_dict['ema'] = full_config_dict['use_ema']
 

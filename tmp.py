@@ -1,14 +1,11 @@
 import os
 import shutil
-import numpy as np
-import torch
-
-a = torch.from_numpy(np.asarray([0.01, 0.09, 0.2, 0.7]))
-b = torch.log(a)
-c = torch.nn.functional.softmax(b)
-delta = torch.abs(a - c)
-print(delta)
 
 
+ifp = '/mnt/isgnas/home/mmajursk/gmm/models-20230425'
+fns = [fn for fn in os.listdir(ifp) if fn.startswith('fix')]
+fns.sort()
 
+for fn in fns:
+    a = os.path.join(ifp, fn, 'model.pt')
 

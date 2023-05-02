@@ -319,23 +319,20 @@ class FixMatchTrainer_gmm(trainer.SupervisedTrainer):
                 batch_loss_cmm = criterion(resp_cmm, labels)
 
                 loss = None
-                if 'gmm' in self.args.loss_terms:
+                if 'gmm' in self.args.val_acc_term:
                     if loss is None:
                         loss = batch_loss_gmm
                     else:
                         loss += batch_loss_gmm
-                if 'cmm' in self.args.loss_terms:
+                if 'cmm' in self.args.val_acc_term:
                     if loss is None:
                         loss = batch_loss_cmm
                     else:
                         loss += batch_loss_cmm
-                if 'cluster' in self.args.loss_terms:
-                    if loss is None:
-                        loss = cluster_loss
-                    else:
-                        loss += cluster_loss
                 if loss is None:
-                    raise RuntimeError("No labeled loss terms selected")
+                    loss = cluster_loss
+                else:
+                    loss += cluster_loss
 
                 # loss = (batch_loss_gmm + batch_loss_cmm) / 2.0
                 # loss = criterion(output, target)

@@ -42,6 +42,7 @@ def main():
     parser.add_argument('--debug', help='enables debugging mode', action='store_true')
     # parser.add_argument('--skl',help='uses sklearn implementation of Gaussian Mixture',action='store_true')
     parser.add_argument('--last-layer', type=str, default='fc', help='last layer to use in the NN')
+    parser.add_argument('--num-epochs', default=None, type=int, help='number of epochs to train. If this is non-None it will suppress the use of a validation split, and blindly run the training for N epochs.')
     # parser.add_argument('--loss-terms', type=str, default='gmm', help='what loss terms to be included (options are gmm, cmm, cluster_dist). For example "cmm+gmm+cluster_dist"')
     # parser.add_argument('--pseudo-label-determination', default="gmm", type=str, help='which set of logits to use when picking valid pseudo-labels. (gmm, cmm)')
     # parser.add_argument('--pseudo-label-target-logits', default="gmm", type=str, help='which set of logits to use as the optimization target for valid pseudo-labels. (gmm, cmm)')
@@ -63,11 +64,13 @@ def main():
 
     try:
         train.train(args)
+        logging.shutdown()
         return 0
     except:
         import traceback
         tb = traceback.format_exc()
         logging.info(tb)
+        logging.shutdown()
         return 1
 
 

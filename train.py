@@ -70,16 +70,19 @@ def setup(args):
     else:
         raise RuntimeError("unsupported CIFAR class count: {}".format(args.num_classes))
 
+    val_dataset = None
     if args.num_labeled_datapoints > 0:
-        # split the data class balanced based on a total count.
-        # returns subset, remainder
-        val_dataset, train_dataset = train_dataset.data_split_class_balanced(subset_count=args.num_labeled_datapoints)
-        # set the validation augmentation to just normalize (.dataset since val_dataset is a Subset, not a full dataset)
-        val_dataset.set_transforms(cifar_datasets.Cifar10.TRANSFORM_TEST)
+        if args.num_epochs is None:
+            # split the data class balanced based on a total count.
+            # returns subset, remainder
+            val_dataset, train_dataset = train_dataset.data_split_class_balanced(subset_count=args.num_labeled_datapoints)
+            # set the validation augmentation to just normalize (.dataset since val_dataset is a Subset, not a full dataset)
+            val_dataset.set_transforms(cifar_datasets.Cifar10.TRANSFORM_TEST)
 
         train_dataset_labeled, train_dataset_unlabeled = train_dataset.data_split_class_balanced(subset_count=args.num_labeled_datapoints)
     else:
-        val_dataset, train_dataset = train_dataset.data_split_class_balanced(subset_count=int(0.1*len(train_dataset)))
+        if args.num_epochs is None:
+            val_dataset, train_dataset = train_dataset.data_split_class_balanced(subset_count=int(0.1*len(train_dataset)))
         train_dataset_labeled = train_dataset
         train_dataset_unlabeled = None
 
@@ -98,7 +101,10 @@ def train(args):
         os.makedirs(args.output_dirpath)
 
     # add the file based handler to the logger
-    logging.getLogger().addHandler(logging.FileHandler(filename=os.path.join(args.output_dirpath, 'log.txt')))
+    fh = logging.FileHandler(filename=os.path.join(args.output_dirpath, 'log.txt'))
+    fh.setFormatter(logging.Formatter("%(asctime)s [%(levelname)s] [%(filename)s:%(lineno)d] %(message)s"))
+    logging.getLogger().addHandler(fh)
+
     logging.info(args)
 
     model, train_dataset_labeled, train_dataset_unlabeled, val_dataset, test_dataset = setup(args)
@@ -153,6 +159,9 @@ def train(args):
     else:
         ema_model = None
 
+    if args.num_epochs is not None:
+        trainer.MAX_EPOCHS = args.num_epochs
+
     while not plateau_scheduler.is_done() and epoch < trainer.MAX_EPOCHS:
         epoch += 1
         logging.info("Epoch: {}".format(epoch))
@@ -160,20 +169,21 @@ def train(args):
         train_stats.plot_all_metrics(output_dirpath=args.output_dirpath)
         model_trainer.train_epoch(model, train_dataset_labeled, optimizer, criterion, epoch, train_stats, unlabeled_dataset=train_dataset_unlabeled, ema_model=ema_model)
 
-        if args.use_ema:
-            test_model = ema_model.ema
-        else:
-            test_model = model
+        if val_dataset is not None:
+            if args.use_ema:
+                test_model = ema_model.ema
+            else:
+                test_model = model
 
-        logging.info("  evaluating against validation data")
-        model_trainer.eval_model(test_model, val_dataset, criterion, train_stats, "val", epoch, args)
+            logging.info("  evaluating against validation data")
+            model_trainer.eval_model(test_model, val_dataset, criterion, train_stats, "val", epoch, args)
 
-        val_accuracy = train_stats.get_epoch('val_accuracy', epoch=epoch)
-        plateau_scheduler.step(val_accuracy)
+            val_accuracy = train_stats.get_epoch('val_accuracy', epoch=epoch)
+            plateau_scheduler.step(val_accuracy)
+            train_stats.add_global('val_wall_time', train_stats.get('val_wall_time', aggregator='sum'))
 
         # update global metadata stats
         train_stats.add_global('training_wall_time', train_stats.get('train_wall_time', aggregator='sum'))
-        train_stats.add_global('val_wall_time', train_stats.get('val_wall_time', aggregator='sum'))
         train_stats.add_global('num_epochs_trained', epoch)
 
         # write copy of current metadata metrics to disk
@@ -181,8 +191,8 @@ def train(args):
 
         # handle early stopping when loss converges
         # if plateau_scheduler_sl.num_bad_epochs == 0:  # use if you only want literally the best epoch, instead of taking into account the loss eps
-        if plateau_scheduler.is_equiv_to_best_epoch:
-            logging.info('Updating best model with epoch: {} accuracy: {}'.format(epoch, val_accuracy))
+        if args.num_epochs is not None or plateau_scheduler.is_equiv_to_best_epoch:
+            logging.info('Updating best model with epoch: {}'.format(epoch))
             if args.use_ema:
                 best_model = copy.deepcopy(ema_model.ema)
             else:
