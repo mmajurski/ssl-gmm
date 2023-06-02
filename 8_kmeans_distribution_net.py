@@ -8,7 +8,12 @@ from torchvision import datasets, transforms
 import torchvision.transforms as T
 from torch.optim.lr_scheduler import StepLR
 import torchvision.models.resnet as resnet
-import sys
+import copy
+import os
+import numpy as np
+
+import metadata
+import lr_scheduler
 
 
 class kmeans_distribution_layer(torch.nn.Module):
@@ -102,13 +107,22 @@ class kmeans_distribution_layer(torch.nn.Module):
 		# Obtain cluster assignment from dist_sq directly
 		cluster_assignment = torch.argmin(dist_sq, dim=-1)
 
-		# Use one-hot encoding trick to extract the dist_sq
+		# # This computes the L2 loss over all the points, as opposed to the required L2 loss for the centroids
+		# # Use one-hot encoding trick to extract the dist_sq
 		cluster_assignment_onehot = torch.nn.functional.one_hot(cluster_assignment, dist_sq.shape[1])
-		cluster_dist_sq_onehot	= cluster_assignment_onehot * dist_sq
-		cluster_dist_sq		   = torch.sum(cluster_dist_sq_onehot, dim=-1)
+		# cluster_dist_sq_onehot	= cluster_assignment_onehot * dist_sq
+		# cluster_dist_sq		   = torch.sum(cluster_dist_sq_onehot, dim=-1)
+		# # Take square root of dist_sq to get L2 norm
+		# cluster_dist = torch.sqrt(cluster_dist_sq)
 
-		# Take square root of dist_sq to get L2 norm
-		cluster_dist = torch.sqrt(cluster_dist_sq)
+		# version of cluster_dist which is based on the centroid distance from self.centers
+		cluster_dist = torch.zeros_like(resp_kmeans[0, :])
+		for c in range(self.num_classes):
+			if torch.any(c == cluster_assignment):
+				x_centroid = torch.mean(x[c == cluster_assignment, :], dim=0)
+				delta = self.centers[c, :] - x_centroid
+				delta = torch.sqrt(torch.sum(torch.pow(delta, 2), dim=-1))
+				cluster_dist[c] = delta
 
 		resp_kmeans = torch.clip(resp_kmeans, min=1e-8)
 		resp_cmm = torch.clip(resp_cmm, min=1e-8)
@@ -125,7 +139,7 @@ class kmeans_distribution_layer(torch.nn.Module):
 		#   OUTPUT:  cluster_weight  [classes]
 		#                  number of samples for each class
 		#----------------------------------------
-		cluster_weight = torch.sum(cluster_assignment_onehot,axis=0)
+		cluster_weight = torch.sum(cluster_assignment_onehot, axis=0)
 		cluster_assignment_onehot_rep = cluster_assignment_onehot.unsqueeze(2).repeat(1, 1, self.dim)
 		x_onehot_rep = x_rep * cluster_assignment_onehot_rep
 
@@ -273,7 +287,7 @@ class Net(nn.Module):
 
 
 
-def train(args, model, device, train_loader, optimizer, epoch):
+def train(args, model, device, train_loader, optimizer, epoch, train_stats):
 	model.train()
 
 	for batch_idx, (data, target) in enumerate(train_loader):
@@ -289,6 +303,9 @@ def train(args, model, device, train_loader, optimizer, epoch):
 		output_L2        = output[2][:]
 		output_mean_mse  = output[3]
 		output_covar_mse = output[4]
+
+		pred = torch.argmax(output_kmeans, dim=-1)
+		accuracy = torch.sum(pred == target) / len(pred)
 
 		# calculate y and yhat
 		y=F.one_hot(target,num_class)
@@ -308,6 +325,13 @@ def train(args, model, device, train_loader, optimizer, epoch):
 		
 #		if (epoch < 2):
 #			loss = loss + torch.sum( output_L2 )
+
+		if not np.isnan(loss.item()):
+			train_stats.append_accumulate('train_loss', loss.item())
+			train_stats.append_accumulate('train_accuracy', accuracy.item())
+			train_stats.append_accumulate('train_bce_loss', loss_bce.item())
+			train_stats.append_accumulate('train_mean_mse_loss', output_mean_mse.item())
+			train_stats.append_accumulate('train_covar_mse_loss', output_covar_mse.item())
 		
 		loss.backward()
 		optimizer.step()
@@ -321,9 +345,16 @@ def train(args, model, device, train_loader, optimizer, epoch):
 			if args.dry_run:
 				break
 
+	train_stats.add(epoch, 'learning_rate', optimizer.param_groups[0]['lr'])
+	train_stats.close_accumulate(epoch, 'train_loss', method='avg')
+	train_stats.close_accumulate(epoch, 'train_accuracy', method='avg')
+	train_stats.close_accumulate(epoch, 'train_bce_loss', method='avg')
+	train_stats.close_accumulate(epoch, 'train_mean_mse_loss', method='avg')
+	train_stats.close_accumulate(epoch, 'train_covar_mse_loss', method='avg')
 
 
-def test(model, device, test_loader):
+
+def test(model, device, test_loader, epoch, train_stats):
 	model.eval()
 	test_loss = 0
 	correct = 0
@@ -343,12 +374,20 @@ def test(model, device, test_loader):
 			test_loss += F.nll_loss(output_kmeans, target, reduction='sum').item()  # sum up batch loss
 			pred = output_kmeans.argmax(dim=1, keepdim=True)  # get the index of the max log-probability
 			correct += pred.eq(target.view_as(pred)).sum().item()
+			pred = torch.argmax(output_kmeans, dim=-1)
+			accuracy = torch.sum(pred == target) / len(pred)
+
+			if not np.isnan(test_loss):
+				# train_stats.append_accumulate('test_loss', test_loss)
+				train_stats.append_accumulate('test_accuracy', accuracy.item())
 
 	test_loss /= len(test_loader.dataset)
 
 	print('\nTest set: Average loss: {:.4f}, Accuracy: {}/{} ({:.0f}%)\n'.format(
 		test_loss, correct, len(test_loader.dataset),
 		100. * correct / len(test_loader.dataset)))
+	# train_stats.close_accumulate(epoch, 'test_loss', method='avg')
+	train_stats.close_accumulate(epoch, 'test_accuracy', method='avg')
 
 
 def main():
@@ -358,7 +397,7 @@ def main():
 						help='input batch size for training (default: 64)')
 	parser.add_argument('--test-batch-size', type=int, default=1000, metavar='N',
 						help='input batch size for testing (default: 1000)')
-	parser.add_argument('--epochs', type=int, default=14, metavar='N',
+	parser.add_argument('--epochs', type=int, default=100, metavar='N',
 						help='number of epochs to train (default: 14)')
 	parser.add_argument('--lr', type=float, default=1.0, metavar='LR',
 						help='learning rate (default: 1.0)')
@@ -376,6 +415,10 @@ def main():
 						help='how many batches to wait before logging training status')
 	parser.add_argument('--save-model', action='store_true', default=False,
 						help='For Saving the current Model')
+	parser.add_argument('--num-lr-reductions', default=2, type=int)
+	parser.add_argument('--lr-reduction-factor', default=0.2, type=float)
+	parser.add_argument('--patience', default=4, type=int, help='number of epochs past optimal to explore before early stopping terminates training.')
+	parser.add_argument('--loss-eps', default=1e-4, type=float, help='loss value eps for determining early stopping loss equivalence.')
 	args = parser.parse_args()
 	use_cuda = not args.no_cuda and torch.cuda.is_available()
 	use_mps = not args.no_mps and torch.backends.mps.is_available()
@@ -392,7 +435,7 @@ def main():
 	train_kwargs = {'batch_size': args.batch_size}
 	test_kwargs = {'batch_size': args.test_batch_size}
 	if use_cuda:
-		cuda_kwargs = {'num_workers': 1,
+		cuda_kwargs = {'num_workers': 0,
 					   'pin_memory': True,
 					   'shuffle': True}
 		train_kwargs.update(cuda_kwargs)
@@ -418,24 +461,61 @@ def main():
 
 	#layers = dict(model.named_children())
 	layers = dict(model.named_modules())
-	print(layers)
+	# print(layers)
 	
 #	sys.exit(0)
 #	#input ("press enter")
 	
 	
 	optimizer = optim.Adadelta(model.parameters(), lr=args.lr)
+	train_stats = metadata.TrainingStats()
 
-	scheduler = StepLR(optimizer, step_size=1, gamma=args.gamma)
-	for epoch in range(1, args.epochs + 1):
-		train(args, model, device, train_loader, optimizer, epoch)
+	output_dirpath = './covar-model'
+	if not os.path.exists(output_dirpath):
+		os.makedirs(output_dirpath)
+
+	# scheduler = StepLR(optimizer, step_size=1, gamma=args.gamma)
+	# for epoch in range(1, args.epochs + 1):
+	# 	train(args, model, device, train_loader, optimizer, epoch)
+	# 	torch.cuda.empty_cache()
+	# 	torch.cuda.synchronize()
+	# 	test(model, device, test_loader)
+	# 	scheduler.step()
+
+
+	plateau_scheduler = lr_scheduler.ReduceLROnPlateau(optimizer, mode='max', factor=args.lr_reduction_factor, patience=args.patience, threshold=args.loss_eps, max_num_lr_reductions=args.num_lr_reductions)
+
+	epoch = -1
+	MAX_EPOCHS = args.epochs+1
+	best_model = copy.deepcopy(model)
+	best_epoch = 0
+
+	while not plateau_scheduler.is_done() and epoch < MAX_EPOCHS:
+		epoch += 1
+		print("Epoch: {}".format(epoch))
+
+		train_stats.plot_all_metrics(output_dirpath=output_dirpath)
+		train(args, model, device, train_loader, optimizer, epoch, train_stats)
+
 		torch.cuda.empty_cache()
 		torch.cuda.synchronize()
-		test(model, device, test_loader)
-		scheduler.step()
+		test(model, device, test_loader, epoch, train_stats)
 
-	if args.save_model:
-		torch.save(model.state_dict(), "mnist_cnn.pt")
+		test_accuracy = train_stats.get_epoch('test_accuracy', epoch=epoch)
+		plateau_scheduler.step(test_accuracy)
+
+		if plateau_scheduler.is_equiv_to_best_epoch:
+			print('Updating best model with epoch: {}'.format(epoch))
+			best_model = copy.deepcopy(model)
+
+			# update the global metrics with the best epoch
+			train_stats.update_global(epoch)
+
+
+	train_stats.export(output_dirpath)  # update metrics data on disk
+	best_model.cpu()  # move to cpu before saving to simplify loading the model
+	torch.save(best_model, os.path.join(output_dirpath, 'model.pt'))
+
 
 
 if __name__ == '__main__':
