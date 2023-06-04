@@ -105,6 +105,9 @@ class WideResNet(nn.Module):
         elif self.last_layer == 'kmeans_cmm':
             self.fc = nn.Linear(channels[3], embedding_dim)
             self.gmm_layer = lcl_models.kmeans_cmm_layer(embedding_dim, num_classes, return_gmm=True, return_cmm=True, return_cluster_dist=True)
+        elif self.last_layer == 'kmeans_distribution':
+            self.fc = nn.Linear(channels[3], embedding_dim)
+            self.kmeans_layer = lcl_models.kmeans_distribution_layer(embedding_dim, num_classes, return_mean_mse=True, return_covar_mse=True)
         else:
             raise RuntimeError("Invalid last layer type: {}".format(self.last_layer))
 
@@ -129,5 +132,7 @@ class WideResNet(nn.Module):
             return self.gmm_layer(out)
         elif self.last_layer == 'kmeans_cmm':
             return self.gmm_layer(out)
+        elif self.last_layer == 'kmeans_distribution':
+            return self.kmeans_layer(out)
         return out
 

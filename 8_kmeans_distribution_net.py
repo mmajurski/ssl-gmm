@@ -11,22 +11,21 @@ import torchvision.models.resnet as resnet
 import copy
 import os
 import numpy as np
+import imageio
+from matplotlib import pyplot as plt
 
 import metadata
 import lr_scheduler
 
 
 class kmeans_distribution_layer(torch.nn.Module):
-	def __init__(self, embeddign_dim: int, num_classes: int, return_gmm: bool = True, return_cmm: bool = True, return_cluster_dist: bool = True, return_mean_mse: bool = True, return_covar_mse: bool = True):
+	def __init__(self, embeddign_dim: int, num_classes: int, return_mean_mse: bool = True, return_covar_mse: bool = True):
 		super().__init__()
 
 		self.dim = embeddign_dim
 		self.num_classes = num_classes
 		self.centers = torch.nn.Parameter(torch.rand(size=(self.num_classes, self.dim), requires_grad=True))
 
-		self.return_gmm = return_gmm
-		self.return_cmm = return_cmm
-		self.return_cluster_dist = return_cluster_dist
 		self.return_mean_mse = return_mean_mse
 		self.return_covar_mse = return_covar_mse
 
@@ -50,16 +49,11 @@ class kmeans_distribution_layer(torch.nn.Module):
 		dist_sq = diff*diff
 		dist_sq = torch.sum(dist_sq,2)
 
-		#   GMM
-		# dist_sq = (x-mu) Sigma_inv (x-mu)T
 		#   K-means
 		# dist_sq = (x-mu) dot (x-mu)
 
 		# Obtain the exponents
 		expo_kmeans = -0.5 * dist_sq
-		a = torch.add(dist_sq, 1)
-		b = -((1 + self.dim) / 2)
-		expo_cmm = torch.pow(a, b)
 
 		# Obtain the "safe" (numerically stable) versions of the
 		#  exponents.  These "safe" exponents produce fake numer and denom
@@ -67,67 +61,18 @@ class kmeans_distribution_layer(torch.nn.Module):
 		#  where fake_numer and fake_denom are numerically stable
 		expo_safe_off_kmeans, _ = torch.max(expo_kmeans, dim=-1, keepdim=True)
 		expo_safe_kmeans = expo_kmeans - expo_safe_off_kmeans  # use broadcast instead of the repeat
-		expo_safe_off_cmm, _ = torch.max(expo_cmm, dim=-1, keepdim=True)
-		expo_safe_cmm = expo_cmm - expo_safe_off_cmm  # use broadcast instead of the repeat
-		
+
 		# Calculate the responsibilities kmeans
 		numer_safe_kmeans = torch.exp(expo_safe_kmeans)
 		denom_safe_kmeans = torch.sum(numer_safe_kmeans, 1, keepdim=True)
 		resp_kmeans = numer_safe_kmeans / denom_safe_kmeans  # use broadcast
 
-		# Calculate the responsibilities cmm
-		numer_safe_cmm = torch.exp(expo_safe_cmm)
-		denom_safe_cmm = torch.sum(numer_safe_cmm, 1, keepdim=True)
-		resp_cmm = numer_safe_cmm / denom_safe_cmm  # use broadcast
-
-		# # Build the kmeans resp
-		# dist_sq_kmeans = torch.sum(diff * diff, dim=2)
-		# # Obtain the exponents
-		# expo = -0.5 * dist_sq_kmeans
-		#
-		# # Obtain the "safe" (numerically stable) versions of the
-		# #  exponents.  These "safe" exponents produce fake numer and denom
-		# #  but guarantee that resp = fake_numer / fake_denom = numer / denom
-		# #  where fake_numer and fake_denom are numerically stable
-		# expo_safe_off = torch.mean(expo, dim=-1, keepdim=True)
-		# expo_safe = expo - expo_safe_off
-		#
-		# # Calculate the responsibilities
-		# numer_safe = torch.exp(expo_safe)
-		# denom_safe = torch.sum(numer_safe, 1, keepdim=True)
-		# resp_kmeans = numer_safe / denom_safe
-
-		# argmax resp to assign to cluster
-		# optimize CE over resp + L2 loss
-
-		#
-		# Vectorized version of cluster_dist
-		#
-		
 		# Obtain cluster assignment from dist_sq directly
 		cluster_assignment = torch.argmin(dist_sq, dim=-1)
-
-		# # This computes the L2 loss over all the points, as opposed to the required L2 loss for the centroids
-		# # Use one-hot encoding trick to extract the dist_sq
 		cluster_assignment_onehot = torch.nn.functional.one_hot(cluster_assignment, dist_sq.shape[1])
-		# cluster_dist_sq_onehot	= cluster_assignment_onehot * dist_sq
-		# cluster_dist_sq		   = torch.sum(cluster_dist_sq_onehot, dim=-1)
-		# # Take square root of dist_sq to get L2 norm
-		# cluster_dist = torch.sqrt(cluster_dist_sq)
-
-		# version of cluster_dist which is based on the centroid distance from self.centers
-		cluster_dist = torch.zeros_like(resp_kmeans[0, :])
-		for c in range(self.num_classes):
-			if torch.any(c == cluster_assignment):
-				x_centroid = torch.mean(x[c == cluster_assignment, :], dim=0)
-				delta = self.centers[c, :] - x_centroid
-				delta = torch.sqrt(torch.sum(torch.pow(delta, 2), dim=-1))
-				cluster_dist[c] = delta
 
 		resp_kmeans = torch.clip(resp_kmeans, min=1e-8)
-		resp_cmm = torch.clip(resp_cmm, min=1e-8)
 		resp_kmeans = torch.log(resp_kmeans)
-		resp_cmm = torch.log(resp_cmm)
 
 
 		#----------------------------------------
@@ -222,12 +167,7 @@ class kmeans_distribution_layer(torch.nn.Module):
 	
 	
 		outputs = list()
-		if self.return_gmm:
-			outputs.append(resp_kmeans)
-		if self.return_cmm:
-			outputs.append(resp_cmm)
-		if self.return_cluster_dist:
-			outputs.append(cluster_dist)
+		outputs.append(resp_kmeans)
 		if self.return_mean_mse:
 			outputs.append(empirical_mean_mse)
 		if self.return_covar_mse:
@@ -239,21 +179,27 @@ class kmeans_distribution_layer(torch.nn.Module):
 class Net(nn.Module):
 	def __init__(self):
 		super(Net, self).__init__()
+
+		self.dim = 8
+		self.num_classes = 10
+		self.count = 0
 		
 		#----------
 		# The architecture
 		#----------
 		self.conv1 = nn.Conv2d(1, 32, 3, 1)
+		# self.conv1 = nn.Conv2d(3, 32, 3, 1)  # for cifar10
 		self.conv2 = nn.Conv2d(32, 64, 3, 1)
 		self.dropout1 = nn.Dropout(0.25)
 		self.dropout2 = nn.Dropout(0.5)
 		self.fc1 = nn.Linear(9216, 128)
-		self.fc2 = nn.Linear(128, 8)
+		# self.fc1 = nn.Linear(12544, 128)  # for cifar10
+		self.fc2 = nn.Linear(128, self.dim)
 		
 		#----------
 		# The k-means layer
 		#----------
-		self.last_layer = kmeans_distribution_layer(8, 10, return_gmm=True, return_cmm=True, return_cluster_dist=True)
+		self.last_layer = kmeans_distribution_layer(self.dim, self.num_classes)
 
 	def forward(self, x):
 
@@ -281,7 +227,26 @@ class Net(nn.Module):
 		#	 not we take log, because this model
 		#	 outputs log softmax
 #		output = torch.log(resp_list[0])
-		output = resp_list[1]
+		output = resp_list[0]
+
+		if not self.training and self.dim == 2:
+			cluster_assignment = torch.argmax(output, dim=-1)
+
+			fig = plt.figure(figsize=(4, 4), dpi=400)
+			xcoord = x[:, 0].detach().cpu().numpy().squeeze()
+			ycoord = x[:, 1].detach().cpu().numpy().squeeze()
+			c_ids = cluster_assignment.detach().cpu().numpy().squeeze()
+			cmap = plt.get_cmap('tab10')
+			for c in range(self.num_classes):
+				idx = c_ids == c
+				cs = [cmap(c)]
+				xs = xcoord[idx]
+				ys = ycoord[idx]
+				plt.scatter(xs, ys, c=cs, alpha=0.1, s=8)
+			plt.title('Epoch {}'.format(self.count))
+			plt.savefig('feature_space_{:04d}.png'.format(self.count))
+			self.count += 1
+			plt.close()
 
 		return resp_list
 
@@ -289,6 +254,8 @@ class Net(nn.Module):
 
 def train(args, model, device, train_loader, optimizer, epoch, train_stats):
 	model.train()
+	criterion = torch.nn.CrossEntropyLoss()
+	# criterion_bce = torch.nn.BCELoss()
 
 	for batch_idx, (data, target) in enumerate(train_loader):
 		data, target = data.to(device), target.to(device)
@@ -299,26 +266,15 @@ def train(args, model, device, train_loader, optimizer, epoch, train_stats):
 		optimizer.zero_grad()
 		output = model(data)
 		output_kmeans    = output[0][:,:num_class]
-		output_cmm       = output[1][:,:num_class]
-		output_L2        = output[2][:]
-		output_mean_mse  = output[3]
-		output_covar_mse = output[4]
+		output_mean_mse  = output[1]
+		output_covar_mse = output[2]
 
 		pred = torch.argmax(output_kmeans, dim=-1)
 		accuracy = torch.sum(pred == target) / len(pred)
 
-		# calculate y and yhat
-		y=F.one_hot(target,num_class)
-		yhat=torch.softmax(output_kmeans,dim=1)
+		loss_ce = criterion(output_kmeans, target)
 
-		# implement log_loss by hand
-		minus_one_over_N = (-1.0 / (batch_size*num_class))
-				
-		log_yhat=torch.log(torch.clamp(yhat,min=0.0001))
-		log_one_minus_yhat=torch.log(torch.clamp(1.0-yhat,min=0.0001))
-		presum=(y * log_yhat + (1.0-y)*log_one_minus_yhat) * minus_one_over_N
-		loss_bce = torch.sum(  presum  )
-		loss = loss_bce + output_mean_mse + output_covar_mse
+		loss = loss_ce + output_mean_mse + output_covar_mse
 		
 		#print("loss:", loss, "bce", loss_bce, "output_empirical", output_empirical)
 		#input("press enter")
@@ -329,7 +285,7 @@ def train(args, model, device, train_loader, optimizer, epoch, train_stats):
 		if not np.isnan(loss.item()):
 			train_stats.append_accumulate('train_loss', loss.item())
 			train_stats.append_accumulate('train_accuracy', accuracy.item())
-			train_stats.append_accumulate('train_bce_loss', loss_bce.item())
+			train_stats.append_accumulate('train_ce_loss', loss_ce.item())
 			train_stats.append_accumulate('train_mean_mse_loss', output_mean_mse.item())
 			train_stats.append_accumulate('train_covar_mse_loss', output_covar_mse.item())
 		
@@ -341,14 +297,14 @@ def train(args, model, device, train_loader, optimizer, epoch, train_stats):
 			#	epoch, batch_idx * len(data), len(train_loader.dataset),
 			#	100. * batch_idx / len(train_loader), loss.item()))
 			print("Train Epoch: %d [%d/%d] (%.0f)    Loss: %.6f    Bce: %.6f    Mean_mse %.6f  Covar_mse %.6f" %
-				(epoch, batch_idx*len(data), len(train_loader.dataset), 100.0 * batch_idx / len(train_loader), loss.item(), loss_bce.item(), output_mean_mse.item(), output_covar_mse.item() ) )
+				(epoch, batch_idx*len(data), len(train_loader.dataset), 100.0 * batch_idx / len(train_loader), loss.item(), loss_ce.item(), output_mean_mse.item(), output_covar_mse.item() ) )
 			if args.dry_run:
 				break
 
 	train_stats.add(epoch, 'learning_rate', optimizer.param_groups[0]['lr'])
 	train_stats.close_accumulate(epoch, 'train_loss', method='avg')
 	train_stats.close_accumulate(epoch, 'train_accuracy', method='avg')
-	train_stats.close_accumulate(epoch, 'train_bce_loss', method='avg')
+	train_stats.close_accumulate(epoch, 'train_ce_loss', method='avg')
 	train_stats.close_accumulate(epoch, 'train_mean_mse_loss', method='avg')
 	train_stats.close_accumulate(epoch, 'train_covar_mse_loss', method='avg')
 
@@ -358,6 +314,8 @@ def test(model, device, test_loader, epoch, train_stats):
 	model.eval()
 	test_loss = 0
 	correct = 0
+	criterion = torch.nn.CrossEntropyLoss()
+
 	with torch.no_grad():
 		for data, target in test_loader:
 			data, target = data.to(device), target.to(device)
@@ -367,27 +325,35 @@ def test(model, device, test_loader, epoch, train_stats):
 			num_class  = 10
 
 			output = model(data)
-			output_kmeans = output[0][:,:num_class]
-			output_cmm    = output[1][:,:num_class]
-			output_L2     = output[2][:]
+			output_kmeans = output[0][:, :num_class]
+			output_mean_mse = output[1]
+			output_covar_mse = output[2]
+			loss_ce = criterion(output_kmeans, target)
 
-			test_loss += F.nll_loss(output_kmeans, target, reduction='sum').item()  # sum up batch loss
+			# test_loss += F.nll_loss(output_kmeans, target, reduction='sum').item()  # sum up batch loss
+			test_loss += loss_ce.item()
 			pred = output_kmeans.argmax(dim=1, keepdim=True)  # get the index of the max log-probability
 			correct += pred.eq(target.view_as(pred)).sum().item()
+
 			pred = torch.argmax(output_kmeans, dim=-1)
 			accuracy = torch.sum(pred == target) / len(pred)
 
-			if not np.isnan(test_loss):
-				# train_stats.append_accumulate('test_loss', test_loss)
-				train_stats.append_accumulate('test_accuracy', accuracy.item())
+
+			train_stats.append_accumulate('test_accuracy', accuracy.item())
+			train_stats.append_accumulate('test_ce_loss', loss_ce.item())
+			train_stats.append_accumulate('test_mean_mse_loss', output_mean_mse.item())
+			train_stats.append_accumulate('test_covar_mse_loss', output_covar_mse.item())
 
 	test_loss /= len(test_loader.dataset)
 
 	print('\nTest set: Average loss: {:.4f}, Accuracy: {}/{} ({:.0f}%)\n'.format(
 		test_loss, correct, len(test_loader.dataset),
 		100. * correct / len(test_loader.dataset)))
-	# train_stats.close_accumulate(epoch, 'test_loss', method='avg')
+
 	train_stats.close_accumulate(epoch, 'test_accuracy', method='avg')
+	train_stats.close_accumulate(epoch, 'test_ce_loss', method='avg')
+	train_stats.close_accumulate(epoch, 'test_mean_mse_loss', method='avg')
+	train_stats.close_accumulate(epoch, 'test_covar_mse_loss', method='avg')
 
 
 def main():
@@ -441,16 +407,24 @@ def main():
 		train_kwargs.update(cuda_kwargs)
 		test_kwargs.update(cuda_kwargs)
 
-	transform=transforms.Compose([
-		transforms.ToTensor(),
-		transforms.Normalize((0.1307,), (0.3081,))
+	use_MNIST = False
+	if use_MNIST:
+
+
+		transform = transforms.Compose([
+			transforms.ToTensor(),
+			transforms.Normalize((0.1307,), (0.3081,))
 		])
-	dataset1 = datasets.MNIST('../data', train=True, download=True,
-					   transform=transform)
-	dataset2 = datasets.MNIST('../data', train=False,
-					   transform=transform)
-	train_loader = torch.utils.data.DataLoader(dataset1,**train_kwargs)
-	test_loader = torch.utils.data.DataLoader(dataset2, **test_kwargs)
+		train_dataset = datasets.MNIST('../data', train=True, download=True, transform=transform)
+		test_dataset = datasets.MNIST('../data', train=False, transform=transform)
+	else:
+		import cifar_datasets
+		train_dataset = cifar_datasets.Cifar10(transform=cifar_datasets.Cifar10.TRANSFORM_WEAK_TRAIN, train=True)
+		test_dataset = cifar_datasets.Cifar10(transform=cifar_datasets.Cifar10.TRANSFORM_TEST, train=False)
+
+	test_kwargs['batch_size'] = len(test_dataset)
+	train_loader = torch.utils.data.DataLoader(train_dataset,**train_kwargs)
+	test_loader = torch.utils.data.DataLoader(test_dataset, **test_kwargs)
 
 	#input("10")
 
@@ -470,7 +444,7 @@ def main():
 	optimizer = optim.Adadelta(model.parameters(), lr=args.lr)
 	train_stats = metadata.TrainingStats()
 
-	output_dirpath = './covar-model'
+	output_dirpath = './models-covar/id-0001-cifar10'
 	if not os.path.exists(output_dirpath):
 		os.makedirs(output_dirpath)
 
@@ -515,6 +489,22 @@ def main():
 	train_stats.export(output_dirpath)  # update metrics data on disk
 	best_model.cpu()  # move to cpu before saving to simplify loading the model
 	torch.save(best_model, os.path.join(output_dirpath, 'model.pt'))
+
+	# build gif, and remove tmp files
+	fns = [fn for fn in os.listdir('./') if fn.startswith('feature_space_')]
+	fns.sort()
+	if len(fns) > 0:
+		fps = 2
+		if len(fns) > 50:
+			fps = 4
+		if len(fns) > 100:
+			fps = 8
+		with imageio.get_writer(os.path.join(output_dirpath, 'feature_space.gif'), mode='I', fps=fps) as writer:
+			for filename in fns:
+				image = imageio.imread(filename)
+				writer.append_data(image)
+		for fn in fns:
+			os.remove(fn)
 
 
 

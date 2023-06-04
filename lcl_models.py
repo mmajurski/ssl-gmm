@@ -6,6 +6,164 @@ import torchvision.models
 from matplotlib import pyplot as plt
 
 
+class kmeans_distribution_layer(torch.nn.Module):
+    def __init__(self, embeddign_dim: int, num_classes: int, return_mean_mse: bool = True, return_covar_mse: bool = True):
+        super().__init__()
+
+        self.dim = embeddign_dim
+        self.num_classes = num_classes
+        self.centers = torch.nn.Parameter(torch.rand(size=(self.num_classes, self.dim), requires_grad=True))
+
+        self.return_mean_mse = return_mean_mse
+        self.return_covar_mse = return_covar_mse
+
+    def forward(self, x):
+        batch = x.size()[0]  # batch size
+
+        # ---
+        # Calculate distance to cluster centers
+        # ---
+        # Upsample the x-data to [batch, num_classes, dim]
+        x_rep = x.unsqueeze(1).repeat(1, self.num_classes, 1)
+
+        # Upsample the clusters to [batch, num_classes, dim]
+        centers_rep = self.centers.unsqueeze(0).repeat(batch, 1, 1)
+
+        # Subtract to get diff of [batch, num_classes, dim]
+        diff = x_rep - centers_rep
+
+        # Obtain the square distance to each cluster
+        #  of size [batch, dim]
+        dist_sq = diff * diff
+        dist_sq = torch.sum(dist_sq, 2)
+
+        #   K-means
+        # dist_sq = (x-mu) dot (x-mu)
+
+        # Obtain the exponents
+        expo_kmeans = -0.5 * dist_sq
+
+        # Obtain the "safe" (numerically stable) versions of the
+        #  exponents.  These "safe" exponents produce fake numer and denom
+        #  but guarantee that resp = fake_numer / fake_denom = numer / denom
+        #  where fake_numer and fake_denom are numerically stable
+        expo_safe_off_kmeans, _ = torch.max(expo_kmeans, dim=-1, keepdim=True)
+        expo_safe_kmeans = expo_kmeans - expo_safe_off_kmeans  # use broadcast instead of the repeat
+
+        # Calculate the responsibilities kmeans
+        numer_safe_kmeans = torch.exp(expo_safe_kmeans)
+        denom_safe_kmeans = torch.sum(numer_safe_kmeans, 1, keepdim=True)
+        resp_kmeans = numer_safe_kmeans / denom_safe_kmeans  # use broadcast
+
+        # Obtain cluster assignment from dist_sq directly
+        cluster_assignment = torch.argmin(dist_sq, dim=-1)
+        cluster_assignment_onehot = torch.nn.functional.one_hot(cluster_assignment, dist_sq.shape[1])
+
+        resp_kmeans = torch.clip(resp_kmeans, min=1e-8)
+        resp_kmeans = torch.log(resp_kmeans)
+
+        # ----------------------------------------
+        # Calculate the empirical cluster mean / covariance
+        #   OUTPUT:  empirical_mean  [classes dim]
+        #                  cluster centers for the current minibatch
+        #   OUTPUT:  empirical_covar [classes dim dim]
+        #                  gaussian covariance matrices for the current minibatch
+        #   OUTPUT:  cluster_weight  [classes]
+        #                  number of samples for each class
+        # ----------------------------------------
+        cluster_weight = torch.sum(cluster_assignment_onehot, axis=0)
+        cluster_assignment_onehot_rep = cluster_assignment_onehot.unsqueeze(2).repeat(1, 1, self.dim)
+        x_onehot_rep = x_rep * cluster_assignment_onehot_rep
+
+        #
+        # Calculate the empirical mean
+        #
+        empirical_total = torch.sum(x_onehot_rep, axis=0)
+        empirical_count = cluster_weight.unsqueeze(1).repeat(1, self.dim)
+        empirical_mean = empirical_total / (empirical_count + 0.0000001)
+
+        #
+        # Calculate the empirical covariance
+        #
+        empirical_mean_rep = empirical_mean.unsqueeze(0).repeat(batch, 1, 1)
+        empirical_mean_rep = empirical_mean_rep * cluster_assignment_onehot_rep
+        x_mu_rep = x_onehot_rep - empirical_mean_rep
+
+        # perform batch matrix multiplication
+        x_mu_rep_B = torch.transpose(x_mu_rep, 0, 1)
+        x_mu_rep_A = torch.transpose(x_mu_rep_B, 1, 2)
+
+        empirical_covar_total = torch.bmm(x_mu_rep_A, x_mu_rep_B)
+        empirical_covar_count = empirical_count.unsqueeze(2).repeat(1, 1, self.dim)
+
+        empirical_covar = empirical_covar_total / (empirical_covar_count + 0.0000001)
+
+        # ----------------------------------------
+        # Calculate a loss distance of the empirical measures from ideal
+        # ----------------------------------------
+
+        # ------
+        # calculate empirical_mean_loss
+        #  weighted L2 loss of each empirical mean from the cluster centers
+        # ------
+
+        # calculate empirical weighted dist squares (for means)
+        empirical_diff = empirical_mean - self.centers
+        empirical_diff_sq = empirical_diff * empirical_diff
+        empirical_dist_sq = torch.sum(empirical_diff_sq, axis=1)
+        empirical_wei_dist_sq = cluster_weight * empirical_dist_sq
+
+        # create identity covariance of size [class dim dim]
+        # identity_covar = torch.eye(self.dim).unsqueeze(0).repeat(self.num_classes,1,1)
+        zeros = empirical_covar - empirical_covar
+        zeros = torch.sum(zeros, axis=0)
+        identity_covar = zeros.fill_diagonal_(1.0)
+        identity_covar = identity_covar.unsqueeze(0).repeat(self.num_classes, 1, 1)
+
+        # separate diagonal and off diagonal elements for covar loss
+        empirical_covar_diag = empirical_covar * identity_covar
+        empirical_covar_off_diag = empirical_covar * (1.0 - identity_covar)
+
+        # calculate diagonal distance squared
+        empirical_covar_diag_dist_sq = empirical_covar_diag - identity_covar
+        empirical_covar_diag_dist_sq = empirical_covar_diag_dist_sq * empirical_covar_diag_dist_sq
+        empirical_covar_diag_dist_sq = torch.sum(empirical_covar_diag_dist_sq, axis=2)
+        empirical_covar_diag_dist_sq = torch.sum(empirical_covar_diag_dist_sq, axis=1)
+
+        # calculate diagonal weighted distance squared
+        empirical_covar_diag_wei_dist_sq = cluster_weight * empirical_covar_diag_dist_sq / (batch * self.dim)
+
+        # calculate off diagonal distance squared
+        empirical_covar_off_diag_dist_sq = empirical_covar_off_diag * empirical_covar_off_diag
+        empirical_covar_off_diag_dist_sq = torch.sum(empirical_covar_off_diag_dist_sq, axis=2)
+        empirical_covar_off_diag_dist_sq = torch.sum(empirical_covar_off_diag_dist_sq, axis=1)
+
+        # Calculate off-diagonal weighted distance squared
+        empirical_covar_off_diag_wei_dist_sq = cluster_weight * empirical_covar_off_diag_dist_sq / (batch * self.dim * (self.dim - 1.0))
+
+        # Add together to get covariance loss
+        empirical_covar_dist_sq = empirical_covar_diag_wei_dist_sq + empirical_covar_off_diag_wei_dist_sq
+
+        # ------------------
+        # return mean and covariance weighted mse loss
+        # ------------------
+        empirical_mean_mse = torch.sum(empirical_wei_dist_sq) / (batch * self.dim)
+        empirical_covar_mse = torch.sum(empirical_covar_dist_sq)
+
+        # TODO make the above work per image, instead of for the whole batch
+
+        outputs = list()
+        outputs.append(resp_kmeans)
+        if self.return_mean_mse:
+            # outputs.append(empirical_mean_mse)  # outputs a single value
+            outputs.append(empirical_wei_dist_sq)
+        if self.return_covar_mse:
+            # outputs.append(empirical_covar_mse)  # outputs a single value
+            outputs.append(empirical_covar_dist_sq)
+
+        return outputs
+
+
 class kmeans_cmm_layer(torch.nn.Module):
     def __init__(self, embeddign_dim: int, num_classes: int, return_gmm: bool = True, return_cmm: bool = True, return_cluster_dist: bool = True):
         super().__init__()

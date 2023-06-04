@@ -15,6 +15,7 @@ import utils
 import trainer
 import trainer_fixmatch
 import trainer_fixmatch_gmm
+import trainer_fixmatch_kmeanscovar
 import lcl_models
 
 
@@ -53,6 +54,9 @@ def setup(args):
             if args.arch == 'wide_resnet':
                 model = flavored_wideresnet.WideResNet(num_classes=args.num_classes, last_layer=args.last_layer)
         elif args.last_layer == 'kmeans_cmm':
+            if args.arch == 'wide_resnet':
+                model = flavored_wideresnet.WideResNet(num_classes=args.num_classes, last_layer=args.last_layer)
+        elif args.last_layer == 'kmeans_distribution':
             if args.arch == 'wide_resnet':
                 model = flavored_wideresnet.WideResNet(num_classes=args.num_classes, last_layer=args.last_layer)
 
@@ -128,6 +132,8 @@ def train(args):
         model_trainer = trainer_fixmatch.FixMatchTrainer(args)
     elif args.trainer == 'fixmatch-gmm':
         model_trainer = trainer_fixmatch_gmm.FixMatchTrainer_gmm(args)
+    elif args.trainer == 'fixmatch-kmeanscovar':
+        model_trainer = trainer_fixmatch_kmeanscovar.FixMatchTrainer(args)
     else:
         raise RuntimeError("Invalid trainer request: {}".format(args.trainer))
     logging.info("trainer setup")
