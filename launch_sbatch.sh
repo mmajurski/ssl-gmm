@@ -32,16 +32,11 @@
 #VAL_ACC=$3
 ema=0
 
-for mn in 0 1 2 3 4 5
+for mn in 0 1 2 3 4
 do
- for ll in "aa_gmm" "kmeans_cmm"
+ for ll in "aa_gmm" "aa_gmm_d1" "kmeans_cmm" "kmeans_layer"
  do
-   for va in "gmm" "cmm" "gmmcmm"
-   do
-
-     sbatch sbatch_script_gmm.sh ${ll} ${mn} ${va} ${ema}
-
-   done
+     sbatch sbatch_script_gmm.sh ${ll} ${mn} ${ema}
  done
 done
 

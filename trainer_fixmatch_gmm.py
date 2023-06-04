@@ -10,6 +10,7 @@ import psutil
 import cifar_datasets
 import utils
 import trainer
+import embedding_constraints
 
 
 def sharpen_mixmatch(x:torch.Tensor, T:float):
@@ -60,6 +61,10 @@ class FixMatchTrainer_gmm(trainer.SupervisedTrainer):
             pl_gt_count_per_class.append(0)
 
         cluster_criterion = torch.nn.MSELoss()
+        if self.args.last_layer == 'kmeans_layer':
+            emb_constraint = embedding_constraints.mean_covar
+        else:
+            emb_constraint = embedding_constraints.l2_cluster_centroid
 
         for batch_idx, tensor_dict_l in enumerate(dataloader):
             optimizer.zero_grad()
@@ -84,103 +89,51 @@ class FixMatchTrainer_gmm(trainer.SupervisedTrainer):
             # inputs = inputs.cuda()
 
             inputs = torch.cat((inputs_l, inputs_ul_weak, inputs_ul_strong))
+
             inputs = inputs.cuda()
             targets_l = targets_l.cuda()
             targets_ul = targets_ul.cuda()
-            resp_gmm, resp_cmm, cluster_dist = model(inputs)
-
-            # logits_l = logits[:inputs_l.shape[0]]
-            # logits_ul = logits[inputs_l.shape[0]:]
-            # logits_ul_weak = logits_ul[:inputs_ul_weak.shape[0]]
-            # logits_ul_strong = logits_ul[inputs_ul_weak.shape[0]:]
+            embedding, logits = model(inputs)
 
             # split the logits back into labeled and unlabeled
-            resp_gmm_l = resp_gmm[:inputs_l.shape[0]]
-            resp_cmm_l = resp_cmm[:inputs_l.shape[0]]
-            cluster_dist_l = cluster_dist[:inputs_l.shape[0]]
+            logits_l = logits[:inputs_l.shape[0]]
+            logits_ul = logits[inputs_l.shape[0]:]
+            logits_ul_weak = logits_ul[:inputs_ul_weak.shape[0]]
+            logits_ul_strong = logits_ul[inputs_ul_weak.shape[0]:]
 
-            resp_gmm_ul = resp_gmm[inputs_l.shape[0]:]
-            resp_cmm_ul = resp_cmm[inputs_l.shape[0]:]
+            embedding_l = embedding[:inputs_l.shape[0]]
+            embedding_ul = embedding[inputs_l.shape[0]:]
+            embedding_ul_weak = embedding_ul[:inputs_ul_weak.shape[0]]
+            embedding_ul_strong = embedding_ul[inputs_ul_weak.shape[0]:]
 
-            resp_gmm_ul_weak = resp_gmm_ul[:inputs_ul_weak.shape[0]]
-            resp_cmm_ul_weak = resp_cmm_ul[:inputs_ul_weak.shape[0]]
+            cluster_dist_l = emb_constraint(embedding_l, model.last_layer.centers, logits_l)
 
-            resp_gmm_ul_strong = resp_gmm_ul[inputs_ul_weak.shape[0]:]
-            resp_cmm_ul_strong = resp_cmm_ul[inputs_ul_weak.shape[0]:]
-
-            max_l_cmm_score = torch.max(torch.nn.functional.softmax(resp_cmm_l, dim=-1))
-            max_l_cmm_score = max_l_cmm_score.item()
-            max_l_gmm_score = torch.max(torch.nn.functional.softmax(resp_gmm_l, dim=-1))
-            max_l_gmm_score = max_l_gmm_score.item()
-
-            if self.args.val_acc_term == 'gmm':
-                logits_ul_weak = resp_gmm_ul_weak
-                logits_ul_strong = resp_gmm_ul_strong
-            elif self.args.val_acc_term == 'cmm':
-                logits_ul_weak = resp_cmm_ul_weak
-                logits_ul_strong = resp_cmm_ul_strong
-            elif self.args.val_acc_term == 'gmmcmm':
-                a = torch.nn.functional.softmax(resp_gmm_ul_weak, dim=-1)
-                b = torch.nn.functional.softmax(resp_cmm_ul_weak, dim=-1)
-                logits_ul_weak = torch.log((a + b) / 2.0)
-
-                a = torch.nn.functional.softmax(resp_gmm_ul_strong, dim=-1)
-                b = torch.nn.functional.softmax(resp_cmm_ul_strong, dim=-1)
-                logits_ul_strong = torch.log((a + b) / 2.0)
-            else:
-                raise RuntimeError("Invalid val_acc_term = {}".format(self.args.val_acc_term))
+            max_l_score = torch.max(torch.nn.functional.softmax(logits_l, dim=-1))
+            max_l_score = max_l_score.item()
 
             softmax_ul_weak = torch.nn.functional.softmax(logits_ul_weak, dim=-1)
-            softmax_gmm_ul_weak = torch.nn.functional.softmax(resp_gmm_ul_weak, dim=-1)
-            softmax_cmm_ul_weak = torch.nn.functional.softmax(resp_cmm_ul_weak, dim=-1)
 
             if self.args.tau < 1.0:
                 if self.args.tau_method == 'fixmatch':
                     # sharpen the logits with tau
                     softmax_ul_weak = softmax_ul_weak / self.args.tau
-                    softmax_gmm_ul_weak = softmax_gmm_ul_weak / self.args.tau
-                    softmax_cmm_ul_weak = softmax_cmm_ul_weak / self.args.tau
                 elif self.args.tau_method == 'mixmatch':
                     # sharpen the logits with tau, but in a manner which preserves sum to 1
                     softmax_ul_weak = sharpen_mixmatch(x=softmax_ul_weak, T=self.args.tau)
-                    softmax_gmm_ul_weak = sharpen_mixmatch(x=softmax_gmm_ul_weak, T=self.args.tau)
-                    softmax_cmm_ul_weak = sharpen_mixmatch(x=softmax_cmm_ul_weak, T=self.args.tau)
                 else:
                     raise RuntimeError("invalid tau method = {}".format(self.args.tau_method))
 
-            sw, _ = torch.max(softmax_gmm_ul_weak, dim=-1)
-            max_gmm_pl_score, _ = torch.max(sw, dim=0)
-            max_gmm_pl_score = max_gmm_pl_score.item()
+            sw, _ = torch.max(softmax_ul_weak, dim=-1)
+            max_pl_score, _ = torch.max(sw, dim=0)
+            max_pl_score = max_pl_score.item()
 
-            sw, _ = torch.max(softmax_cmm_ul_weak, dim=-1)
-            max_cmm_pl_score, _ = torch.max(sw, dim=0)
-            max_cmm_pl_score = max_cmm_pl_score.item()
+            score_weak, pred_weak = torch.max(softmax_ul_weak, dim=-1)
+            targets_weak_ul = pred_weak
 
-            if self.args.soft_labels:
-                # convert hard labels in the fully labeled dataset into soft labels (i.e. one hot)
-                targets_l = torch.nn.functional.one_hot(targets_l, num_classes=self.args.num_classes).type(torch.float)
-                targets_l = targets_l.cuda()
-
-                score_weak, pred_weak = torch.max(softmax_ul_weak, dim=-1)
-                targets_weak_ul = softmax_ul_weak
-            else:
-                score_weak, pred_weak = torch.max(softmax_ul_weak, dim=-1)
-                targets_weak_ul = pred_weak
-
-            # pseudo_label_threshold = torch.quantile(score_weak.detach(), 0.99)
-            # pseudo_label_threshold = torch.clip(pseudo_label_threshold, 0.5, 0.9)
-            # valid_pl = score_weak >= pseudo_label_threshold
             valid_pl = score_weak >= torch.tensor(self.args.pseudo_label_threshold)
 
             # capture the number of PL for this batch
             pl_count = torch.sum(valid_pl).item()
-
-            # if pl_count == 0:
-            #     # grab the best one if there are zero PL
-            #     val, idx = torch.max(score_weak, dim=0)
-            #     valid_pl = score_weak >= val
-            #     pl_count = torch.sum(valid_pl).item()
-
             train_stats.append_accumulate('train_pseudo_label_count', pl_count)
 
             if pl_count > 0:
@@ -195,45 +148,37 @@ class FixMatchTrainer_gmm(trainer.SupervisedTrainer):
                     pl_count_per_class[c] += torch.sum(preds == c).item()
                     pl_gt_count_per_class[c] += torch.sum(tgts == c).item()
 
-            loss_l = None
-            if 'gmm' in self.args.val_acc_term:
-                batch_loss_gmm = criterion(resp_gmm_l, targets_l)
-                if loss_l is None:
-                    loss_l = batch_loss_gmm
-                else:
-                    loss_l += batch_loss_gmm
-            if 'cmm' in self.args.val_acc_term:
-                batch_loss_cmm = criterion(resp_cmm_l, targets_l)
-                if loss_l is None:
-                    loss_l = batch_loss_cmm
-                else:
-                    loss_l += batch_loss_cmm
-
+            loss_logits = criterion(logits_l, targets_l)
             cluster_loss = cluster_criterion(cluster_dist_l, torch.zeros_like(cluster_dist_l))
-            if loss_l is None:
-                loss_l = cluster_loss
-            else:
-                loss_l += cluster_loss
+            loss_l = loss_logits + cluster_loss
 
-            if self.args.soft_labels:
-                # remove the invalid elements before the loss is calculated
-                logits_ul_strong = logits_ul_strong[valid_pl, :]
-                targets_weak_ul = targets_weak_ul[valid_pl, :]
-            else:
-                # use CE = -100 to invalidate certain labels
-                # targets_weak_ul[torch.logical_not(valid_pl)] = -100
-                logits_ul_strong = logits_ul_strong[valid_pl]
-                targets_weak_ul = targets_weak_ul[valid_pl]
+            # keep just those labels which are valid PL
+            logits_ul_strong = logits_ul_strong[valid_pl]
+            logits_ul_weak = logits_ul_weak[valid_pl]
+            targets_weak_ul = targets_weak_ul[valid_pl]
+            embedding_ul_strong = embedding_ul_strong[valid_pl]
+            embedding_ul_weak = embedding_ul_weak[valid_pl]
 
             if pl_count > 0:
                 loss_ul = criterion(logits_ul_strong, targets_weak_ul)
                 train_stats.append_accumulate('train_pseudo_label_loss', loss_ul.item())
+
+
+                cluster_dist_ul_strong = emb_constraint(embedding_ul_strong, model.last_layer.centers, logits_ul_weak)
+                cluster_dist_ul_weak = emb_constraint(embedding_ul_weak, model.last_layer.centers, logits_ul_weak)
+
+                cluster_loss_ul_strong = cluster_criterion(cluster_dist_ul_strong, torch.zeros_like(cluster_dist_ul_strong))
+                cluster_loss_ul_weak = cluster_criterion(cluster_dist_ul_weak, torch.zeros_like(cluster_dist_ul_weak))
+                cluster_loss_ul = cluster_loss_ul_strong + cluster_loss_ul_weak
+                train_stats.append_accumulate('train_pseudo_label_cluster_loss', cluster_loss_ul.item())
             else:
                 loss_ul = torch.tensor(torch.nan).to(loss_l.device)
+                cluster_loss_ul = torch.tensor(torch.nan).to(loss_l.device)
+            batch_loss = loss_l
             if not torch.isnan(loss_ul):
-                batch_loss = loss_l + loss_ul
-            else:
-                batch_loss = loss_l
+                batch_loss += loss_ul
+            if not torch.isnan(cluster_loss_ul):
+                batch_loss += cluster_loss_ul
 
             batch_loss.backward()
             torch.nn.utils.clip_grad_value_(model.parameters(), 50)
@@ -246,13 +191,9 @@ class FixMatchTrainer_gmm(trainer.SupervisedTrainer):
 
             # nan loss values are ignored when using AMP, so ignore them for the average
             if not torch.isnan(batch_loss):
-                if self.args.soft_labels:
-                    targets_l = torch.argmax(targets_l, dim=-1)
-                accuracy_gmm = torch.mean((torch.argmax(resp_gmm_l, dim=-1) == targets_l).type(torch.float))
-                accuracy_cmm = torch.mean((torch.argmax(resp_cmm_l, dim=-1) == targets_l).type(torch.float))
+                accuracy = torch.mean((torch.argmax(logits_l, dim=-1) == targets_l).type(torch.float))
                 train_stats.append_accumulate('train_loss', batch_loss.item())
-                train_stats.append_accumulate('train_gmm_accuracy', accuracy_gmm.item())
-                train_stats.append_accumulate('train_cmm_accuracy', accuracy_cmm.item())
+                train_stats.append_accumulate('train_accuracy', accuracy.item())
             else:
                 loss_nan_count += 1
 
@@ -265,8 +206,8 @@ class FixMatchTrainer_gmm(trainer.SupervisedTrainer):
                 gpu_mem_percent_used, memory_total_info = utils.get_gpu_memory()
                 gpu_mem_percent_used = [np.round(100 * x, 1) for x in gpu_mem_percent_used]
                 logging.info('  batch {}/{}  loss: {:8.8g}  lr: {:4.4g}  cpu_mem: {:2.1f}%  gpu_mem: {}% of {}MiB'.format(batch_idx, batch_count, batch_loss.item(), optimizer.param_groups[0]['lr'], cpu_mem_percent_used, gpu_mem_percent_used, memory_total_info))
-                logging.info('    max GMM score: {:4.4g}  max CMM score: {:4.4g}'.format(max_l_gmm_score, max_l_cmm_score))
-                logging.info('    max GMM PL score: {:4.4g}  max CMM PL score: {:4.4g}'.format(max_gmm_pl_score, max_cmm_pl_score))
+                logging.info('    max resp score: {:4.4g}'.format(max_l_score))
+                logging.info('    max resp PL score: {:4.4g}'.format(max_pl_score))
 
         if loss_nan_count > 0:
             logging.info("epoch has {} batches with nan loss.".format(loss_nan_count))
@@ -277,9 +218,9 @@ class FixMatchTrainer_gmm(trainer.SupervisedTrainer):
         train_stats.close_accumulate(epoch, 'train_pseudo_label_count', method='sum', default_value=0.0)  # default value in case no data was collected
         train_stats.close_accumulate(epoch, 'train_pseudo_label_accuracy', method='avg', default_value=0.0)  # default value in case no data was collected
         train_stats.close_accumulate(epoch, 'train_pseudo_label_loss', method='avg', default_value=0.0)  # default value in case no data was collected
+        train_stats.close_accumulate(epoch, 'train_pseudo_label_cluster_loss', method='avg', default_value=0.0)  # default value in case no data was collected
         train_stats.close_accumulate(epoch, 'train_loss', method='avg')
-        train_stats.close_accumulate(epoch, 'train_gmm_accuracy', method='avg')
-        train_stats.close_accumulate(epoch, 'train_cmm_accuracy', method='avg')
+        train_stats.close_accumulate(epoch, 'train_accuracy', method='avg')
 
         for c in range(len(pl_acc_per_class)):
             pl_acc_per_class[c] = float(np.mean(pl_acc_per_class[c]))
@@ -312,45 +253,19 @@ class FixMatchTrainer_gmm(trainer.SupervisedTrainer):
                 inputs = tensor_dict[0].cuda()
                 labels = tensor_dict[1].cuda()
 
-                resp_gmm, resp_cmm, cluster_dist = model(inputs)
+                embedding, logits = model(inputs)
+                cluster_dist = embedding_constraints.l2_cluster_centroid(embedding, model.last_layer.centers, logits)
 
                 cluster_loss = cluster_criterion(cluster_dist, torch.zeros_like(cluster_dist))
-                batch_loss_gmm = criterion(resp_gmm, labels)
-                batch_loss_cmm = criterion(resp_cmm, labels)
+                loss_logits = criterion(logits, labels)
+                loss = loss_logits + cluster_loss
 
-                loss = None
-                if 'gmm' in self.args.val_acc_term:
-                    if loss is None:
-                        loss = batch_loss_gmm
-                    else:
-                        loss += batch_loss_gmm
-                if 'cmm' in self.args.val_acc_term:
-                    if loss is None:
-                        loss = batch_loss_cmm
-                    else:
-                        loss += batch_loss_cmm
-                if loss is None:
-                    loss = cluster_loss
-                else:
-                    loss += cluster_loss
-
-                # loss = (batch_loss_gmm + batch_loss_cmm) / 2.0
-                # loss = criterion(output, target)
                 train_stats.append_accumulate('{}_loss'.format(split_name), loss.item())
                 train_stats.append_accumulate('{}_cluster_loss'.format(split_name), cluster_loss.item())
-                train_stats.append_accumulate('{}_gmm_loss'.format(split_name), batch_loss_gmm.item())
-                train_stats.append_accumulate('{}_cmm_loss'.format(split_name), batch_loss_cmm.item())
+                train_stats.append_accumulate('{}_logit_loss'.format(split_name), loss_logits.item())
 
-                # acc = torch.argmax(output, dim=-1) == target
-                acc_gmm = torch.argmax(resp_gmm, dim=-1) == labels
-                acc_cmm = torch.argmax(resp_cmm, dim=-1) == labels
-                resp_gmm_sm = resp_gmm.softmax(dim=-1)
-                resp_cmm_sm = resp_cmm.softmax(dim=-1)
-                gmm_cmm_sm = (resp_gmm_sm + resp_cmm_sm) / 2.0
-                acc_gmm_cmm = torch.argmax(gmm_cmm_sm, dim=-1) == labels
-                train_stats.append_accumulate('{}_gmm_accuracy'.format(split_name), torch.mean(acc_gmm, dtype=torch.float32).item())
-                train_stats.append_accumulate('{}_cmm_accuracy'.format(split_name), torch.mean(acc_cmm, dtype=torch.float32).item())
-                train_stats.append_accumulate('{}_gmmcmm_accuracy'.format(split_name), torch.mean(acc_gmm_cmm, dtype=torch.float32).item())
+                acc = torch.argmax(logits, dim=-1) == labels
+                train_stats.append_accumulate('{}_accuracy'.format(split_name), torch.mean(acc, dtype=torch.float32).item())
 
                 if batch_idx % 100 == 0:
                     # log loss and current GPU utilization
@@ -361,26 +276,8 @@ class FixMatchTrainer_gmm(trainer.SupervisedTrainer):
 
         train_stats.close_accumulate(epoch, '{}_loss'.format(split_name), method='avg')
         train_stats.close_accumulate(epoch, '{}_cluster_loss'.format(split_name), method='avg')
-        train_stats.close_accumulate(epoch, '{}_gmm_loss'.format(split_name), method='avg')
-        train_stats.close_accumulate(epoch, '{}_cmm_loss'.format(split_name), method='avg')
-        train_stats.close_accumulate(epoch, '{}_gmm_accuracy'.format(split_name), method='avg')
-        train_stats.close_accumulate(epoch, '{}_cmm_accuracy'.format(split_name), method='avg')
-        train_stats.close_accumulate(epoch, '{}_gmmcmm_accuracy'.format(split_name), method='avg')
-
-        if args.val_acc_term == 'gmm':
-            # use just gmm for val acc
-            acc = train_stats.get_epoch('{}_gmm_accuracy'.format(split_name), epoch)
-            train_stats.add(epoch, '{}_accuracy'.format(split_name), acc)
-        elif args.val_acc_term == 'cmm':
-            # use just cmm for val acc
-            acc = train_stats.get_epoch('{}_cmm_accuracy'.format(split_name), epoch)
-            train_stats.add(epoch, '{}_accuracy'.format(split_name), acc)
-        elif args.val_acc_term == 'gmmcmm':
-            # use just average of gmm and cmm for val acc
-            acc = train_stats.get_epoch('{}_gmmcmm_accuracy'.format(split_name), epoch)
-            train_stats.add(epoch, '{}_accuracy'.format(split_name), acc)
-        else:
-            raise RuntimeError("Unknown args.val_acc_term={} codebase doesn't know which accuracy to return as val_accuracy for early stopping".format(args.val_acc_term))
+        train_stats.close_accumulate(epoch, '{}_logit_loss'.format(split_name), method='avg')
+        train_stats.close_accumulate(epoch, '{}_accuracy'.format(split_name), method='avg')
 
         wall_time = time.time() - start_time
         train_stats.add(epoch, '{}_wall_time'.format(split_name), wall_time)

@@ -74,9 +74,6 @@ class SupervisedTrainer:
                 cyclic_lr_scheduler.step()
 
             pred = torch.argmax(outputs, dim=-1)
-            if self.args.soft_labels:
-                # convert soft labels into hard for accuracy
-                labels = torch.argmax(labels, dim=-1)
             accuracy = torch.sum(pred == labels) / len(pred)
 
             # nan loss values are ignored when using AMP, so ignore them for the average
@@ -133,9 +130,6 @@ class SupervisedTrainer:
                 batch_loss = criterion(outputs, labels)
                 train_stats.append_accumulate('{}_loss'.format(split_name), batch_loss.item())
                 pred = torch.argmax(outputs, dim=-1)
-                if self.args.soft_labels:
-                    # convert soft labels into hard for accuracy
-                    labels = torch.argmax(labels, dim=-1)
                 accuracy = torch.sum(pred == labels) / len(pred)
                 train_stats.append_accumulate('{}_accuracy'.format(split_name), accuracy.item())
 

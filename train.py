@@ -16,49 +16,52 @@ import trainer
 import trainer_fixmatch
 import trainer_fixmatch_gmm
 import trainer_fixmatch_kmeanscovar
-import lcl_models
 
 
 
 def setup(args):
-    # load stock models from https://pytorch.org/vision/stable/models.html
-    model = None
-    if args.starting_model is not None:
-        # warning, this over rides the args.arch selection
-        logging.info("Loading requested starting model from '{}'".format(args.starting_model))
-        model = torch.load(args.starting_model)
-    else:
-        if args.last_layer == 'fc':
-            if args.arch == 'resnet18':
-                model = torchvision.models.resnet18(pretrained=False, num_classes=args.num_classes)
-                # model = flavored_resnets.ResNet18(num_classes=args.num_classes)
-            if args.arch == 'resnet34':
-                model = torchvision.models.resnet34(pretrained=False, num_classes=args.num_classes)
-            if args.arch == 'resnext50_32x4d':
-                model = torchvision.models.resnext50_32x4d(pretrained=False, num_classes=args.num_classes)
-            if args.arch == 'wide_resnet50_2':
-                model = torchvision.models.wide_resnet50_2(pretrained=False, num_classes=args.num_classes)
-            if args.arch == 'wide_resnet':
-                model = flavored_wideresnet.WideResNet(num_classes=args.num_classes, last_layer=args.last_layer)
+    # model = flavored_wideresnet.WideResNet(num_classes=args.num_classes, last_layer=args.last_layer)
+    model = flavored_wideresnet.WideResNetMajurski(num_classes=args.num_classes, last_layer=args.last_layer)
 
-        elif args.last_layer == 'gmm':
-            if args.arch == 'wide_resnet':
-                model = flavored_wideresnet.WideResNet(num_classes=args.num_classes, last_layer=args.last_layer)
-        elif args.last_layer == 'cauchy':
-            if args.arch == 'wide_resnet':
-                model = flavored_wideresnet.WideResNet(num_classes=args.num_classes, last_layer=args.last_layer)
-        elif args.last_layer == 'aa_gmm':
-            if args.arch == 'wide_resnet':
-                model = flavored_wideresnet.WideResNet(num_classes=args.num_classes, last_layer=args.last_layer)
-        elif args.last_layer == 'aa_gmm_d1':
-            if args.arch == 'wide_resnet':
-                model = flavored_wideresnet.WideResNet(num_classes=args.num_classes, last_layer=args.last_layer)
-        elif args.last_layer == 'kmeans_cmm':
-            if args.arch == 'wide_resnet':
-                model = flavored_wideresnet.WideResNet(num_classes=args.num_classes, last_layer=args.last_layer)
-        elif args.last_layer == 'kmeans_distribution':
-            if args.arch == 'wide_resnet':
-                model = flavored_wideresnet.WideResNet(num_classes=args.num_classes, last_layer=args.last_layer)
+    # # load stock models from https://pytorch.org/vision/stable/models.html
+    # model = None
+    #
+    # if args.starting_model is not None:
+    #     # warning, this over rides the args.arch selection
+    #     logging.info("Loading requested starting model from '{}'".format(args.starting_model))
+    #     model = torch.load(args.starting_model)
+    # else:
+    #     if args.last_layer == 'fc':
+    #         if args.arch == 'resnet18':
+    #             model = torchvision.models.resnet18(pretrained=False, num_classes=args.num_classes)
+    #             # model = flavored_resnets.ResNet18(num_classes=args.num_classes)
+    #         if args.arch == 'resnet34':
+    #             model = torchvision.models.resnet34(pretrained=False, num_classes=args.num_classes)
+    #         if args.arch == 'resnext50_32x4d':
+    #             model = torchvision.models.resnext50_32x4d(pretrained=False, num_classes=args.num_classes)
+    #         if args.arch == 'wide_resnet50_2':
+    #             model = torchvision.models.wide_resnet50_2(pretrained=False, num_classes=args.num_classes)
+    #         if args.arch == 'wide_resnet':
+    #             model = flavored_wideresnet.WideResNet(num_classes=args.num_classes, last_layer=args.last_layer)
+    #
+    #     elif args.last_layer == 'gmm':
+    #         if args.arch == 'wide_resnet':
+    #             model = flavored_wideresnet.WideResNet(num_classes=args.num_classes, last_layer=args.last_layer)
+    #     elif args.last_layer == 'cauchy':
+    #         if args.arch == 'wide_resnet':
+    #             model = flavored_wideresnet.WideResNet(num_classes=args.num_classes, last_layer=args.last_layer)
+    #     elif args.last_layer == 'aa_gmm':
+    #         if args.arch == 'wide_resnet':
+    #             model = flavored_wideresnet.WideResNet(num_classes=args.num_classes, last_layer=args.last_layer)
+    #     elif args.last_layer == 'aa_gmm_d1':
+    #         if args.arch == 'wide_resnet':
+    #             model = flavored_wideresnet.WideResNet(num_classes=args.num_classes, last_layer=args.last_layer)
+    #     elif args.last_layer == 'kmeans_cmm':
+    #         if args.arch == 'wide_resnet':
+    #             model = flavored_wideresnet.WideResNet(num_classes=args.num_classes, last_layer=args.last_layer)
+    #     elif args.last_layer == 'kmeans_distribution':
+    #         if args.arch == 'wide_resnet':
+    #             model = flavored_wideresnet.WideResNet(num_classes=args.num_classes, last_layer=args.last_layer)
 
     if model is None:
         raise RuntimeError("Unsupported model architecture selection: {} with last layer: {}.".format(args.arch, args.last_layer))

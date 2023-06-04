@@ -250,7 +250,15 @@ class kmeans_cmm_layer(torch.nn.Module):
         # optimize CE over resp + L2 loss
         cluster_assignment = torch.argmax(resp_kmeans, dim=-1)
 
-        # version of cluster_dist which is based on the centroid distance from self.centers
+        # Use one-hot encoding trick to extract the dist_sq
+        cluster_assignment_onehot = torch.nn.functional.one_hot(cluster_assignment, dist_sq.shape[1])
+        cluster_dist_sq_onehot = cluster_assignment_onehot * dist_sq
+        cluster_dist_sq = torch.sum(cluster_dist_sq_onehot, dim=-1)
+
+        # Take square root of dist_sq to get L2 norm
+        cluster_dist = torch.sqrt(cluster_dist_sq)
+
+
         cluster_dist = torch.zeros_like(resp_kmeans[0, :])
         for c in range(self.num_classes):
             if torch.any(c == cluster_assignment):

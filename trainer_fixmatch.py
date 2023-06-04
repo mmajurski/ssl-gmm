@@ -95,16 +95,8 @@ class FixMatchTrainer(trainer.SupervisedTrainer):
                 else:
                     raise RuntimeError("invalid tau method = {}".format(self.args.tau_method))
 
-            if self.args.soft_labels:
-                # convert hard labels in the fully labeled dataset into soft labels (i.e. one hot)
-                targets_l = torch.nn.functional.one_hot(targets_l, num_classes=self.args.num_classes).type(torch.float)
-                targets_l = targets_l.cuda()
-
-                score_weak, pred_weak = torch.max(softmax_ul_weak, dim=-1)
-                targets_weak_ul = softmax_ul_weak
-            else:
-                score_weak, pred_weak = torch.max(softmax_ul_weak, dim=-1)
-                targets_weak_ul = pred_weak
+            score_weak, pred_weak = torch.max(softmax_ul_weak, dim=-1)
+            targets_weak_ul = pred_weak
 
             valid_pl = score_weak >= torch.tensor(self.args.pseudo_label_threshold)
 
@@ -128,15 +120,10 @@ class FixMatchTrainer(trainer.SupervisedTrainer):
 
             loss_l = criterion(logits_l, targets_l)
 
-            if self.args.soft_labels:
-                # remove the invalid elements before the loss is calculated
-                logits_ul_strong = logits_ul_strong[valid_pl, :]
-                targets_weak_ul = targets_weak_ul[valid_pl, :]
-            else:
-                # use CE = -100 to invalidate certain labels
-                # targets_weak_ul[torch.logical_not(valid_pl)] = -100
-                logits_ul_strong = logits_ul_strong[valid_pl]
-                targets_weak_ul = targets_weak_ul[valid_pl]
+            # use CE = -100 to invalidate certain labels
+            # targets_weak_ul[torch.logical_not(valid_pl)] = -100
+            logits_ul_strong = logits_ul_strong[valid_pl]
+            targets_weak_ul = targets_weak_ul[valid_pl]
 
             if pl_count > 0:
                 loss_ul = criterion(logits_ul_strong, targets_weak_ul)
@@ -157,8 +144,6 @@ class FixMatchTrainer(trainer.SupervisedTrainer):
 
             # nan loss values are ignored when using AMP, so ignore them for the average
             if not torch.isnan(batch_loss):
-                if self.args.soft_labels:
-                    targets_l = torch.argmax(targets_l, dim=-1)
                 accuracy = torch.mean((torch.argmax(logits_l, dim=-1) == targets_l).type(torch.float))
                 train_stats.append_accumulate('train_loss', batch_loss.item())
                 train_stats.append_accumulate('train_accuracy', accuracy.item())

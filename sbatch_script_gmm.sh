@@ -26,14 +26,13 @@ conda activate gmm
 
 LAST_LAYER=$1
 MODEL_NB=$2
-VAL_ACC=$3
-EMA_FLAG=$4
+EMA_FLAG=$3
 
 
 if [ "$EMA_FLAG" -gt 0 ]; then
-  python main.py --output-dirpath=./models-20230417/fixmatch-${LAST_LAYER}-${MODEL_NB}-valacc${VAL_ACC}-ema${EMA_FLAG} --trainer=fixmatch-gmm --last-layer=${LAST_LAYER} --optimizer=adamw --learning-rate=3e-4 --val-acc-term=${VAL_ACC} --use-ema
+  python main.py --output-dirpath=./models-20230417/fixmatch-${LAST_LAYER}-${MODEL_NB}-valacc${VAL_ACC}-ema${EMA_FLAG} --trainer=fixmatch-gmm --last-layer=${LAST_LAYER} --optimizer=adamw --learning-rate=3e-4 --use-ema
 else
-  python main.py --output-dirpath=./models-20230417/fixmatch-${LAST_LAYER}-${MODEL_NB}-valacc${VAL_ACC}-ema${EMA_FLAG} --trainer=fixmatch-gmm --last-layer=${LAST_LAYER} --optimizer=adamw --learning-rate=3e-4 --val-acc-term=${VAL_ACC}
+  python main.py --output-dirpath=./models-20230417/fixmatch-${LAST_LAYER}-${MODEL_NB}-valacc${VAL_ACC}-ema${EMA_FLAG} --trainer=fixmatch-gmm --last-layer=${LAST_LAYER} --optimizer=adamw --learning-rate=3e-4
 fi
 
 
