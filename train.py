@@ -15,7 +15,6 @@ import utils
 import trainer
 import trainer_fixmatch
 import trainer_fixmatch_gmm
-import trainer_fixmatch_kmeanscovar
 
 
 
@@ -135,8 +134,6 @@ def train(args):
         model_trainer = trainer_fixmatch.FixMatchTrainer(args)
     elif args.trainer == 'fixmatch-gmm':
         model_trainer = trainer_fixmatch_gmm.FixMatchTrainer_gmm(args)
-    elif args.trainer == 'fixmatch-kmeanscovar':
-        model_trainer = trainer_fixmatch_kmeanscovar.FixMatchTrainer(args)
     else:
         raise RuntimeError("Invalid trainer request: {}".format(args.trainer))
     logging.info("trainer setup")
@@ -153,7 +150,6 @@ def train(args):
 
     # setup early stopping on convergence using LR reduction on plateau
     optimizer = model_trainer.get_optimizer(model)
-
 
     def log_lr_reduction():
         logging.info("Learning rate reduced")

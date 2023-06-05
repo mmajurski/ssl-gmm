@@ -40,18 +40,14 @@ class FixMatchTrainer_gmm(trainer.SupervisedTrainer):
         if self.args.cycle_factor is None or self.args.cycle_factor == 0:
             cyclic_lr_scheduler = None
         else:
-            cyclic_lr_scheduler = torch.optim.lr_scheduler.CyclicLR(optimizer, base_lr=(self.args.learning_rate / self.args.cycle_factor), max_lr=(self.args.learning_rate * self.args.cycle_factor), step_size_up=int(batch_count / 2), cycle_momentum=False)
+            epoch_init_lr = optimizer.param_groups[0]['lr']
+            train_stats.add(epoch, 'learning_rate', epoch_init_lr)
+            cyclic_lr_scheduler = torch.optim.lr_scheduler.CyclicLR(optimizer, base_lr=(epoch_init_lr / self.args.cycle_factor), max_lr=(epoch_init_lr * self.args.cycle_factor), step_size_up=int(batch_count / 2), cycle_momentum=False)
 
         unlabeled_dataset.set_transforms(cifar_datasets.Cifar10.TRANSFORM_FIXMATCH)
         dataloader_ul = torch.utils.data.DataLoader(unlabeled_dataset, batch_size=self.args.mu*self.args.batch_size, shuffle=True, num_workers=self.args.num_workers, worker_init_fn=utils.worker_init_fn)
         iter_ul = iter(dataloader_ul)
 
-        # loss_list = list()
-        # accuracy_gmm_list = list()
-        # accuracy_cmm_list = list()
-        # pl_loss_list = list()
-        # pl_count_list = list()
-        # pl_acc_list = list()
         pl_acc_per_class = list()
         pl_count_per_class = list()
         pl_gt_count_per_class = list()
@@ -163,7 +159,6 @@ class FixMatchTrainer_gmm(trainer.SupervisedTrainer):
                 loss_ul = criterion(logits_ul_strong, targets_weak_ul)
                 train_stats.append_accumulate('train_pseudo_label_loss', loss_ul.item())
 
-
                 cluster_dist_ul_strong = emb_constraint(embedding_ul_strong, model.last_layer.centers, logits_ul_weak)
                 cluster_dist_ul_weak = emb_constraint(embedding_ul_weak, model.last_layer.centers, logits_ul_weak)
 
@@ -212,7 +207,6 @@ class FixMatchTrainer_gmm(trainer.SupervisedTrainer):
         if loss_nan_count > 0:
             logging.info("epoch has {} batches with nan loss.".format(loss_nan_count))
 
-        train_stats.add(epoch, 'learning_rate', optimizer.param_groups[0]['lr'])
         train_stats.add(epoch, 'train_wall_time', time.time() - start_time)
 
         train_stats.close_accumulate(epoch, 'train_pseudo_label_count', method='sum', default_value=0.0)  # default value in case no data was collected
@@ -234,7 +228,10 @@ class FixMatchTrainer_gmm(trainer.SupervisedTrainer):
         # update the training metadata
         train_stats.add(epoch, 'pseudo_label_accuracy_per_class', pl_acc_per_class)
 
-
+        if cyclic_lr_scheduler is not None:
+            # reset any leftover changes to the learning rate
+            for param_group in optimizer.param_groups:
+                param_group['lr'] = epoch_init_lr
 
     def eval_model(self, model, pytorch_dataset, criterion, train_stats, split_name, epoch, args):
         if pytorch_dataset is None or len(pytorch_dataset) == 0:
