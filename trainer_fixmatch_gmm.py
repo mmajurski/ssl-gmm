@@ -84,6 +84,7 @@ class FixMatchTrainer_gmm(trainer.SupervisedTrainer):
             # inputs = torch.cat((inputs_l, inputs_ul_weak, inputs_ul_strong))
             # inputs = inputs.cuda()
 
+            # TODO test using the EMA model as the PL estimator
             inputs = torch.cat((inputs_l, inputs_ul_weak, inputs_ul_strong))
 
             inputs = inputs.cuda()
@@ -159,6 +160,7 @@ class FixMatchTrainer_gmm(trainer.SupervisedTrainer):
                 loss_ul = criterion(logits_ul_strong, targets_weak_ul)
                 train_stats.append_accumulate('train_pseudo_label_loss', loss_ul.item())
 
+                # TODO determine if the cluster constraint should be enforced on the weak or strong or none of the PL data
                 cluster_dist_ul_strong = emb_constraint(embedding_ul_strong, model.last_layer.centers, logits_ul_weak)
                 cluster_dist_ul_weak = emb_constraint(embedding_ul_weak, model.last_layer.centers, logits_ul_weak)
 

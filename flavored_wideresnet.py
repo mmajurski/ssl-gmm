@@ -141,13 +141,25 @@ class WideResNetMajurski(nn.Module):
         elif self.last_layer_name == 'aa_cmm':
             self.fc = nn.Linear(channels[3], embedding_dim)
             self.last_layer = lcl_models2.axis_aligned_gmm_cmm_layer(embedding_dim, num_classes, return_gmm=False, return_cmm=True)
+        elif self.last_layer_name == 'aa_gmmcmm':
+            self.fc = nn.Linear(channels[3], embedding_dim)
+            self.last_layer = lcl_models2.axis_aligned_gmm_cmm_layer(embedding_dim, num_classes, return_gmm=True, return_cmm=True)
         elif self.last_layer_name == 'aa_gmm_d1':
             self.fc = nn.Linear(channels[3], embedding_dim)
             self.last_layer = lcl_models2.axis_aligned_gmm_cmm_D1_layer(embedding_dim, num_classes, return_gmm=True, return_cmm=False)
         elif self.last_layer_name == 'aa_cmm_d1':
             self.fc = nn.Linear(channels[3], embedding_dim)
             self.last_layer = lcl_models2.axis_aligned_gmm_cmm_D1_layer(embedding_dim, num_classes, return_gmm=False, return_cmm=True)
+        elif self.last_layer_name == 'aa_gmmcmm_d1':
+            self.fc = nn.Linear(channels[3], embedding_dim)
+            self.last_layer = lcl_models2.axis_aligned_gmm_cmm_D1_layer(embedding_dim, num_classes, return_gmm=True, return_cmm=True)
+        elif self.last_layer_name == 'kmeans_gmm':
+            self.fc = nn.Linear(channels[3], embedding_dim)
+            self.last_layer = lcl_models2.kmeans_cmm_layer(embedding_dim, num_classes, return_gmm=True, return_cmm=False)
         elif self.last_layer_name == 'kmeans_cmm':
+            self.fc = nn.Linear(channels[3], embedding_dim)
+            self.last_layer = lcl_models2.kmeans_cmm_layer(embedding_dim, num_classes, return_gmm=False, return_cmm=True)
+        elif self.last_layer_name == 'kmeans_gmmcmm':
             self.fc = nn.Linear(channels[3], embedding_dim)
             self.last_layer = lcl_models2.kmeans_cmm_layer(embedding_dim, num_classes, return_gmm=True, return_cmm=True)
         elif self.last_layer_name == 'kmeans_layer':

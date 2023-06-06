@@ -3,14 +3,12 @@
 # MODIFY THESE OPTIONS
 
 #SBATCH --partition=isg
-#SBATCH --exclude=p100
-#SBATCH --requeue
+#SBATCH --exclude=p100,quebec,echo,foxtrot
 #SBATCH --nodes=1
-#SBATCH --nice
 #SBATCH --oversubscribe
 #SBATCH --cpus-per-task=12
 #SBATCH --gres=gpu:1
-#SBATCH --job-name=gmm
+#SBATCH --job-name=gmm-d16
 #SBATCH -o log-%N.%j.out
 #SBATCH --time=128:0:0
 
@@ -27,12 +25,14 @@ conda activate gmm
 LAST_LAYER=$1
 MODEL_NB=$2
 EMA_FLAG=$3
+LEARNING_RATE=$4
+EMBD_DIM=$5
 
 
 if [ "$EMA_FLAG" -gt 0 ]; then
-  python main.py --output-dirpath=./models-20230417/fixmatch-${LAST_LAYER}-${MODEL_NB}-valacc${VAL_ACC}-ema${EMA_FLAG} --trainer=fixmatch-gmm --last-layer=${LAST_LAYER} --optimizer=adamw --learning-rate=3e-4 --use-ema
+  python main.py --output-dirpath=./models-20230604/fixmatch-${LAST_LAYER}-${MODEL_NB}-lr${LEARNING_RATE}-embd${EMBD_DIM}-ema${EMA_FLAG} --trainer=fixmatch-gmm --last-layer=${LAST_LAYER} --optimizer=adamw --learning-rate=${LEARNING_RATE} --use-ema --embedding_dim=${EMBD_DIM}
 else
-  python main.py --output-dirpath=./models-20230417/fixmatch-${LAST_LAYER}-${MODEL_NB}-valacc${VAL_ACC}-ema${EMA_FLAG} --trainer=fixmatch-gmm --last-layer=${LAST_LAYER} --optimizer=adamw --learning-rate=3e-4
+  python main.py --output-dirpath=./models-20230604/fixmatch-${LAST_LAYER}-${MODEL_NB}-lr${LEARNING_RATE}-embd${EMBD_DIM}-ema${EMA_FLAG} --trainer=fixmatch-gmm --last-layer=${LAST_LAYER} --optimizer=adamw --learning-rate=${LEARNING_RATE} --embedding_dim=${EMBD_DIM}
 fi
 
 

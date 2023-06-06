@@ -3,12 +3,12 @@ import json
 import os
 
 # folder to read files from
-directory = 'models-20230425'
+directory = 'models-20230604'
 
 # columns to extract from file name
-config_columns = ['method', 'final_layer', 'val_acc_tgt', 'ema']
+config_columns = ['method', 'last_layer', 'ema', 'lr_decay', 'embedding_dim']
 # columns to extract from result file (stats.json)
-result_columns = ['val_gmm_accuracy', 'val_cmm_accuracy', 'test_gmm_accuracy', 'test_cmm_accuracy']
+result_columns = ['val_accuracy', 'test_accuracy']
 # create dataframe for storing results
 final_columns = config_columns + result_columns
 results_df = pd.DataFrame(columns=final_columns)
@@ -27,9 +27,14 @@ for folder_name in os.listdir(directory):
 
     config_dict = dict()
     config_dict['method'] = full_config_dict['trainer']
-    config_dict['final_layer'] = full_config_dict['last_layer']
-    config_dict['val_acc_tgt'] = full_config_dict['val_acc_term']
+    config_dict['last_layer'] = full_config_dict['last_layer']
     config_dict['ema'] = full_config_dict['use_ema']
+    if 'embedding_dim' not in full_config_dict.keys():
+        full_config_dict['embedding_dim'] = 8
+    config_dict['embedding_dim'] = full_config_dict['embedding_dim']
+    config_dict['lr_decay'] = True
+    if folder_name.startswith('nolrdecay'):
+        config_dict['lr_decay'] = False
 
 
     config_dict = dict((k, config_dict[k]) for k in config_columns)
