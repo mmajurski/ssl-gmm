@@ -13,3 +13,4 @@ conda install pytorch torchvision pytorch-cuda=11.7 -c pytorch -c nvidia -y
 
 conda install pandas matplotlib scikit-learn jsonpickle psutil -y
 
+pip install optuna

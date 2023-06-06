@@ -167,7 +167,7 @@ def train(args):
     if args.num_epochs is not None:
         trainer.MAX_EPOCHS = args.num_epochs
 
-    while not plateau_scheduler.is_done() and epoch < trainer.MAX_EPOCHS:
+    while not plateau_scheduler.is_done() and epoch <= trainer.MAX_EPOCHS:
         epoch += 1
         logging.info("Epoch: {}".format(epoch))
 
@@ -224,3 +224,5 @@ def train(args):
     train_stats.export(args.output_dirpath)  # update metrics data on disk
     best_model.cpu()  # move to cpu before saving to simplify loading the model
     torch.save(best_model, os.path.join(args.output_dirpath, 'model.pt'))
+
+    return train_stats

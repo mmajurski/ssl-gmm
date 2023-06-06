@@ -5,6 +5,7 @@ data/
 # ignore all model directories
 model*/
 kmeans*/
+study.db
 
 *.pyc
 *.png

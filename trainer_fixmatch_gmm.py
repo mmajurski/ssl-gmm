@@ -103,8 +103,6 @@ class FixMatchTrainer_gmm(trainer.SupervisedTrainer):
             embedding_ul_weak = embedding_ul[:inputs_ul_weak.shape[0]]
             embedding_ul_strong = embedding_ul[inputs_ul_weak.shape[0]:]
 
-            cluster_dist_l = emb_constraint(embedding_l, model.last_layer.centers, logits_l)
-
             max_l_score = torch.max(torch.nn.functional.softmax(logits_l, dim=-1))
             max_l_score = max_l_score.item()
 
@@ -146,6 +144,7 @@ class FixMatchTrainer_gmm(trainer.SupervisedTrainer):
                     pl_gt_count_per_class[c] += torch.sum(tgts == c).item()
 
             loss_logits = criterion(logits_l, targets_l)
+            cluster_dist_l = emb_constraint(embedding_l, model.last_layer.centers, logits_l)
             cluster_loss = cluster_criterion(cluster_dist_l, torch.zeros_like(cluster_dist_l))
             loss_l = loss_logits + cluster_loss
 
@@ -160,7 +159,6 @@ class FixMatchTrainer_gmm(trainer.SupervisedTrainer):
                 loss_ul = criterion(logits_ul_strong, targets_weak_ul)
                 train_stats.append_accumulate('train_pseudo_label_loss', loss_ul.item())
 
-                # TODO determine if the cluster constraint should be enforced on the weak or strong or none of the PL data
                 cluster_dist_ul_strong = emb_constraint(embedding_ul_strong, model.last_layer.centers, logits_ul_weak)
                 cluster_dist_ul_weak = emb_constraint(embedding_ul_weak, model.last_layer.centers, logits_ul_weak)
 
