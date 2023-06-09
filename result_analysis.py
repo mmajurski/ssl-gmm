@@ -5,7 +5,7 @@ import json
 import os
 
 # folder to read files from
-directory = 'models-optuna'
+directory = 'models-optuna2'
 
 # columns to extract from file name
 config_columns = ['method', 'last_layer', 'ema', 'embedding_dim']
@@ -61,4 +61,4 @@ for folder_name in os.listdir(directory):
     results_df = pd.concat([results_df, row_df])
 
 # exporting to excel file
-results_df.to_csv('results.csv', index=False)
+results_df.to_csv('results2.csv', index=False)
