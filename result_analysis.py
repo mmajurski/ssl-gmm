@@ -1,14 +1,16 @@
+import copy
+
 import pandas as pd
 import json
 import os
 
 # folder to read files from
-directory = 'models-20230604'
+directory = 'models-optuna'
 
 # columns to extract from file name
-config_columns = ['method', 'last_layer', 'ema', 'lr_decay', 'embedding_dim']
+config_columns = ['method', 'last_layer', 'ema', 'embedding_dim']
 # columns to extract from result file (stats.json)
-result_columns = ['val_accuracy', 'test_accuracy']
+result_columns = ['val_accuracy', 'test_accuracy', 'wall_time', 'epoch']
 # create dataframe for storing results
 final_columns = config_columns + result_columns
 results_df = pd.DataFrame(columns=final_columns)
@@ -32,10 +34,6 @@ for folder_name in os.listdir(directory):
     if 'embedding_dim' not in full_config_dict.keys():
         full_config_dict['embedding_dim'] = 8
     config_dict['embedding_dim'] = full_config_dict['embedding_dim']
-    config_dict['lr_decay'] = True
-    if folder_name.startswith('nolrdecay'):
-        config_dict['lr_decay'] = False
-
 
     config_dict = dict((k, config_dict[k]) for k in config_columns)
 
@@ -50,7 +48,11 @@ for folder_name in os.listdir(directory):
     # result_dict['pseudo_label_accuracy_per_class'] = str(result_dict['pseudo_label_accuracy_per_class'])
 
     # only keeping the desired columns
-    result_dict = dict((k, result_dict[k]) for k in result_columns)
+    result_columns_lcl = copy.deepcopy(result_columns)
+    for c in result_columns:
+        if c not in result_dict.keys():
+            result_columns_lcl.remove(c)
+    result_dict = dict((k, result_dict[k]) for k in result_columns_lcl)
     # combining both the dictionaries
     combined_dict = config_dict | result_dict
 

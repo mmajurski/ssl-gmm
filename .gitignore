@@ -6,6 +6,7 @@ data/
 model*/
 kmeans*/
 study.db
+study-bck.db
 
 *.pyc
 *.png
