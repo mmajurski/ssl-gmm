@@ -20,7 +20,7 @@ import trainer_fixmatch_gmm
 
 def setup(args):
     # model = flavored_wideresnet.WideResNet(num_classes=args.num_classes, last_layer=args.last_layer)
-    model = flavored_wideresnet.WideResNetMajurski(num_classes=args.num_classes, last_layer=args.last_layer, embedding_dim=args.embedding_dim)
+    model = flavored_wideresnet.WideResNetMajurski(num_classes=args.num_classes, last_layer=args.last_layer, embedding_dim=args.embedding_dim, num_pre_fc=args.nprefc)
 
     # # load stock models from https://pytorch.org/vision/stable/models.html
     # model = None

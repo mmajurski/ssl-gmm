@@ -5,10 +5,10 @@ import json
 import os
 
 # folder to read files from
-directory = 'models-optuna2'
+directory = 'models-optuna'
 
 # columns to extract from file name
-config_columns = ['method', 'last_layer', 'ema', 'embedding_dim']
+config_columns = ['method', 'last_layer', 'ema', 'embedding_dim', 'model']
 # columns to extract from result file (stats.json)
 result_columns = ['val_accuracy', 'test_accuracy', 'wall_time', 'epoch']
 # create dataframe for storing results
@@ -29,6 +29,7 @@ for folder_name in os.listdir(directory):
 
     config_dict = dict()
     config_dict['method'] = full_config_dict['trainer']
+    config_dict['model'] = folder_name
     config_dict['last_layer'] = full_config_dict['last_layer']
     config_dict['ema'] = full_config_dict['use_ema']
     if 'embedding_dim' not in full_config_dict.keys():
@@ -61,4 +62,4 @@ for folder_name in os.listdir(directory):
     results_df = pd.concat([results_df, row_df])
 
 # exporting to excel file
-results_df.to_csv('results2.csv', index=False)
+results_df.to_csv('results.csv', index=False)

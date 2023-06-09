@@ -103,12 +103,13 @@ class WideResNet(nn.Module):
 
 
 class WideResNetMajurski(nn.Module):
-    def __init__(self, num_classes, last_layer:str='gmm', depth=28, width=2, embedding_dim=8):
+    def __init__(self, num_classes, last_layer:str='gmm', depth=28, width=2, embedding_dim=8, num_pre_fc=0):
         assert (depth - 4) % 6 == 0, 'depth should be 6n+4'
 
         super(WideResNetMajurski, self).__init__()
         channels = [16, 16*width, 32*width, 64*width]
         n = (depth - 4) / 6
+        self.num_pre_fc = num_pre_fc
         self.num_classes = num_classes
         self.embedding_dim = embedding_dim
         self.depth = depth
@@ -128,6 +129,14 @@ class WideResNetMajurski(nn.Module):
         self.bn1 = nn.BatchNorm2d(channels[3], momentum=0.001)
         # self.relu = nn.ReLU(inplace=True)  # published wideresnet network
         self.relu = nn.LeakyReLU(negative_slope=0.1, inplace=True)
+
+        self.pre_fc_1 = None
+        self.pre_fc_2 = None
+        if self.num_pre_fc == 1:
+            self.pre_fc_1 = nn.Linear(channels[3], channels[3])
+        if self.num_pre_fc == 2:
+            self.pre_fc_1 = nn.Linear(channels[3], channels[3])
+            self.pre_fc_2 = nn.Linear(channels[3], channels[3])
 
         # if self.last_layer == 'gmm':
         #     self.fc = nn.Linear(channels[3], embedding_dim)
@@ -167,6 +176,15 @@ class WideResNetMajurski(nn.Module):
         out = self.relu(self.bn1(out))
         out = F.adaptive_avg_pool2d(out, 1)
         out = out.view(-1, self.channels)
+
+        if self.pre_fc_1 is not None:
+            out = self.pre_fc_1(out)
+            out = self.relu(out)
+        if self.pre_fc_2 is not None:
+            out = self.pre_fc_2(out)
+            out = self.relu(out)
+
         embedding = self.fc(out)
+
         logits = self.last_layer(embedding)
         return embedding, logits

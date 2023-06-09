@@ -144,6 +144,16 @@ def main():
     # best_params = study.best_params
     print(study.best_trial)
 
+def print_best_study():
+    study_name = "study"  # Unique identifier of the study.
+    storage_name = "sqlite:///{}.db".format(study_name)
+    if not os.path.exists('study.db'):
+        return
+
+    study = optuna.load_study(study_name=study_name, storage=storage_name)
+    print(study.best_trial)
+
 
 if __name__ == "__main__":
-    main()
+    print_best_study()
+    # main()

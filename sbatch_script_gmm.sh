@@ -3,12 +3,12 @@
 # MODIFY THESE OPTIONS
 
 #SBATCH --partition=isg
-#SBATCH --exclude=p100,quebec,echo,foxtrot
+#SBATCH --exclude=p100,quebec,echo,kilo,lima,mike
 #SBATCH --nodes=1
 #SBATCH --oversubscribe
 #SBATCH --cpus-per-task=12
 #SBATCH --gres=gpu:1
-#SBATCH --job-name=gmm-d16
+#SBATCH --job-name=gmm
 #SBATCH -o log-%N.%j.out
 #SBATCH --time=128:0:0
 
@@ -23,31 +23,18 @@ source /mnt/isgnas/home/mmajursk/miniconda3/etc/profile.d/conda.sh
 conda activate gmm
 
 LAST_LAYER=$1
-MODEL_NB=$2
-EMA_FLAG=$3
-LEARNING_RATE=$4
-EMBD_DIM=$5
+EMA_FLAG=$2
+LEARNING_RATE=$3
+EMBD_DIM=$4
+PRE_FC=$5
+MODEL_FP=$6
 
 
 if [ "$EMA_FLAG" -gt 0 ]; then
-  python main.py --output-dirpath=./models-20230604/fixmatch-${LAST_LAYER}-${MODEL_NB}-lr${LEARNING_RATE}-embd${EMBD_DIM}-ema${EMA_FLAG} --trainer=fixmatch-gmm --last-layer=${LAST_LAYER} --optimizer=adamw --learning-rate=${LEARNING_RATE} --use-ema --embedding_dim=${EMBD_DIM}
+  python main.py --output-dirpath=${MODEL_FP} --trainer=fixmatch-gmm --last-layer=${LAST_LAYER} --optimizer=adamw --learning-rate=${LEARNING_RATE} --use-ema --embedding_dim=${EMBD_DIM} --nprefc=${PRE_FC}
 else
-  python main.py --output-dirpath=./models-20230604/fixmatch-${LAST_LAYER}-${MODEL_NB}-lr${LEARNING_RATE}-embd${EMBD_DIM}-ema${EMA_FLAG} --trainer=fixmatch-gmm --last-layer=${LAST_LAYER} --optimizer=adamw --learning-rate=${LEARNING_RATE} --embedding_dim=${EMBD_DIM}
+  python main.py --output-dirpath=${MODEL_FP} --trainer=fixmatch-gmm --last-layer=${LAST_LAYER} --optimizer=adamw --learning-rate=${LEARNING_RATE} --embedding_dim=${EMBD_DIM} --nprefc=${PRE_FC}
 fi
-
-
-#MODEL_NB=$1
-#TAU=$2
-#TAU_METHOD=$3
-#EMA_FLAG=$4
-#
-#if [ "$EMA_FLAG" -gt 0 ]; then
-#  python main.py --output-dirpath=./models-fixmatch-baseline/fixmatch-ema-${MODEL_NB}-T${TAU}-TM${TAU_METHOD} --trainer=fixmatch --last-layer=fc --tau=${TAU} --tau-method=${TAU_METHOD} --use-ema
-#else
-#  python main.py --output-dirpath=./models-fixmatch-baseline/fixmatch-stock-${MODEL_NB}-T${TAU}-TM${TAU_METHOD} --trainer=fixmatch --last-layer=fc --tau=${TAU} --tau-method=${TAU_METHOD}
-#fi
-
-
 
 
 
