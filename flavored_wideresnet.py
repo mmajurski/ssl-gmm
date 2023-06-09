@@ -134,9 +134,12 @@ class WideResNetMajurski(nn.Module):
         self.pre_fc_2 = None
         if self.num_pre_fc == 1:
             self.pre_fc_1 = nn.Linear(channels[3], channels[3])
+            self.bn_fc1 = nn.BatchNorm2d(channels[3], momentum=0.001)
         if self.num_pre_fc == 2:
             self.pre_fc_1 = nn.Linear(channels[3], channels[3])
+            self.bn_fc1 = nn.BatchNorm2d(channels[3], momentum=0.001)
             self.pre_fc_2 = nn.Linear(channels[3], channels[3])
+            self.bn_fc2 = nn.BatchNorm2d(channels[3], momentum=0.001)
 
         # if self.last_layer == 'gmm':
         #     self.fc = nn.Linear(channels[3], embedding_dim)
@@ -178,11 +181,9 @@ class WideResNetMajurski(nn.Module):
         out = out.view(-1, self.channels)
 
         if self.pre_fc_1 is not None:
-            out = self.pre_fc_1(out)
-            out = self.relu(out)
+            out = self.relu(self.pre_fc_1(self.bn_fc1(out)))
         if self.pre_fc_2 is not None:
-            out = self.pre_fc_2(out)
-            out = self.relu(out)
+            out = self.relu(self.pre_fc_2(self.bn_fc2(out)))
 
         embedding = self.fc(out)
 
