@@ -24,10 +24,20 @@ class SupervisedTrainer:
     def get_optimizer(self, model):
         # Setup optimizer
         if self.args.weight_decay is not None:
+            no_decay = ['bias', 'bn']
+            grouped_parameters = [
+                {'params': [p for n, p in model.named_parameters() if not any(
+                    nd in n for nd in no_decay)], 'weight_decay': self.args.weight_decay},
+                {'params': [p for n, p in model.named_parameters() if any(
+                    nd in n for nd in no_decay)], 'weight_decay': 0.0}
+            ]
+
             if self.args.optimizer == 'sgd':
-                optimizer = torch.optim.SGD(model.parameters(), lr=self.args.learning_rate, weight_decay=self.args.weight_decay, momentum=0.9, nesterov=False)
+                # optimizer = torch.optim.SGD(model.parameters(), lr=self.args.learning_rate, weight_decay=self.args.weight_decay, momentum=0.9, nesterov=False)
+                optimizer = torch.optim.SGD(grouped_parameters, lr=self.args.learning_rate, momentum=0.9, nesterov=False)
             elif self.args.optimizer == 'adamw':
-                optimizer = torch.optim.AdamW(model.parameters(), lr=self.args.learning_rate, weight_decay=self.args.weight_decay)
+                # optimizer = torch.optim.AdamW(model.parameters(), lr=self.args.learning_rate, weight_decay=self.args.weight_decay)
+                optimizer = torch.optim.AdamW(grouped_parameters, lr=self.args.learning_rate, weight_decay=self.args.weight_decay)
             else:
                 raise RuntimeError("Invalid optimizer: {}".format(self.args.optimizer))
         else:
@@ -64,13 +74,13 @@ class SupervisedTrainer:
             inputs = tensor_dict[0].cuda()
             labels = tensor_dict[1].cuda()
 
-            # outputs = model(inputs)
-            resp_gmm, resp_cmm, cluster_dist = model(inputs)
-            outputs = resp_gmm
+            outputs = model(inputs)
+            # resp_gmm, resp_cmm, cluster_dist = model(inputs)
+            # outputs = resp_gmm
 
             batch_loss = criterion(outputs, labels)
             batch_loss.backward()
-            torch.nn.utils.clip_grad_value_(model.parameters(), 10)
+            torch.nn.utils.clip_grad_value_(model.parameters(), 50)
             optimizer.step()
             if cyclic_lr_scheduler is not None:
                 cyclic_lr_scheduler.step()
@@ -128,10 +138,9 @@ class SupervisedTrainer:
                 inputs = tensor_dict[0].cuda()
                 labels = tensor_dict[1].cuda()
 
-                # outputs = model(inputs)
+                outputs = model(inputs)
                 # resp_gmm, resp_cmm, cluster_dist = model(inputs)
                 # outputs = resp_gmm
-                outputs = model(inputs)
 
                 batch_loss = criterion(outputs, labels)
                 train_stats.append_accumulate('{}_loss'.format(split_name), batch_loss.item())

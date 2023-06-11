@@ -41,12 +41,21 @@ class Cifar10(torch.utils.data.Dataset):
         torchvision.transforms.ToTensor(),
         torchvision.transforms.Normalize(mean=cifar10_mean, std=cifar10_std)
     ])
-    TRANSFORM_STRONG_TRAIN = torchvision.transforms.Compose([
+    TRANSFORM_STRONG_MC_TRAIN = torchvision.transforms.Compose([
         torchvision.transforms.RandomHorizontalFlip(),
         torchvision.transforms.RandomCrop(size=32,
-                                          padding=int(32*0.125),
+                                          padding=int(32 * 0.125),
                                           padding_mode='reflect'),
         fixmatch_augmentation.RandAugmentMC(n=2, m=10),
+        torchvision.transforms.ToTensor(),
+        torchvision.transforms.Normalize(mean=cifar10_mean, std=cifar10_std)
+    ])
+    TRANSFORM_STRONG_TRAIN = torchvision.transforms.Compose([
+        torchvision.transforms.AugMix(),
+        torchvision.transforms.RandomHorizontalFlip(),
+        torchvision.transforms.RandomCrop(size=32,
+                                          padding=int(32 * 0.125),
+                                          padding_mode='reflect'),
         torchvision.transforms.ToTensor(),
         torchvision.transforms.Normalize(mean=cifar10_mean, std=cifar10_std)
     ])
@@ -57,7 +66,7 @@ class Cifar10(torch.utils.data.Dataset):
 
         self.lcl_fldr = lcl_fldr
         self.transform = transform
-        self.nb_reps = 1
+        self.numel = None
         if empty:
             self.data = list()
             self.targets = list()
@@ -81,12 +90,16 @@ class Cifar10(torch.utils.data.Dataset):
             # cleanup the tmp CIFAR object
             del _dataset
 
-    def set_nb_reps(self, k):
-        self.nb_reps=k
+    def set_epoch_size(self, epoch_size):
+        self.numel = epoch_size
+        if epoch_size < len(self.data):
+            raise RuntimeWarning("Requested dataset length = {} is less than actual data length = {}, some elements will be unused.".format(epoch_size, len(self.data)))
 
     def __len__(self) -> int:
-        # nb_reps modifies the len to cause the model to iterate through the dataset multiple times before the iterator is exhausted
-        return self.nb_reps * len(self.data)
+        if self.numel is not None:
+            return self.numel
+        else:
+            return len(self.data)
 
     def __getitem__(self, index: int) -> Tuple[Any, Any, int]:
         """

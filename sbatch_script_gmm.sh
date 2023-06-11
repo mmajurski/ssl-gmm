@@ -3,7 +3,7 @@
 # MODIFY THESE OPTIONS
 
 #SBATCH --partition=isg
-#SBATCH --exclude=p100,quebec,echo,kilo,lima,mike
+#SBATCH --exclude=p100,quebec,echo,kilo
 #SBATCH --nodes=1
 #SBATCH --oversubscribe
 #SBATCH --cpus-per-task=12
@@ -23,17 +23,17 @@ source /mnt/isgnas/home/mmajursk/miniconda3/etc/profile.d/conda.sh
 conda activate gmm
 
 LAST_LAYER=$1
-EMA_FLAG=$2
-LEARNING_RATE=$3
-EMBD_DIM=$4
-PRE_FC=$5
-MODEL_FP=$6
+LEARNING_RATE=$2
+EMBD_DIM=$3
+PRE_FC=$4
+MODEL_FP=$5
+OPTIM=$6
+INTERLEAVE=$7
 
-
-if [ "$EMA_FLAG" -gt 0 ]; then
-  python main.py --output-dirpath=${MODEL_FP} --trainer=fixmatch-gmm --last-layer=${LAST_LAYER} --optimizer=adamw --learning-rate=${LEARNING_RATE} --use-ema --embedding_dim=${EMBD_DIM} --nprefc=${PRE_FC}
+if [ "$INTERLEAVE" -gt 0 ]; then
+python main.py --output-dirpath=${MODEL_FP} --trainer=fixmatch-gmm --last-layer=${LAST_LAYER} --optimizer=${OPTIM} --learning-rate=${LEARNING_RATE} --embedding_dim=${EMBD_DIM} --nprefc=${PRE_FC} --interleave
 else
-  python main.py --output-dirpath=${MODEL_FP} --trainer=fixmatch-gmm --last-layer=${LAST_LAYER} --optimizer=adamw --learning-rate=${LEARNING_RATE} --embedding_dim=${EMBD_DIM} --nprefc=${PRE_FC}
+python main.py --output-dirpath=${MODEL_FP} --trainer=fixmatch-gmm --last-layer=${LAST_LAYER} --optimizer=${OPTIM} --learning-rate=${LEARNING_RATE} --embedding_dim=${EMBD_DIM} --nprefc=${PRE_FC}
 fi
 
 

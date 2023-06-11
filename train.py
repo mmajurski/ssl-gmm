@@ -20,7 +20,15 @@ import trainer_fixmatch_gmm
 
 def setup(args):
     # model = flavored_wideresnet.WideResNet(num_classes=args.num_classes, last_layer=args.last_layer)
-    model = flavored_wideresnet.WideResNetMajurski(num_classes=args.num_classes, last_layer=args.last_layer, embedding_dim=args.embedding_dim, num_pre_fc=args.nprefc)
+
+    if args.arch == 'wide_resnet':
+        model = flavored_wideresnet.WideResNetMajurski(num_classes=args.num_classes, last_layer=args.last_layer, embedding_dim=args.embedding_dim, num_pre_fc=args.nprefc)
+    elif args.arch == 'resnet18':
+        model = torchvision.models.resnet18(pretrained=False, num_classes=args.num_classes)
+    elif args.arch == 'flavored_wide_resnet':
+        model = flavored_wideresnet.WideResNet(num_classes=args.num_classes)
+    else:
+        raise RuntimeError("invalid model arch type")
 
     # # load stock models from https://pytorch.org/vision/stable/models.html
     # model = None
@@ -78,27 +86,19 @@ def setup(args):
 
     val_dataset = None
     if args.num_labeled_datapoints > 0:
-        if args.num_epochs is None:
-            # split the data class balanced based on a total count.
-            # returns subset, remainder
-            val_dataset, train_dataset = train_dataset.data_split_class_balanced(subset_count=args.num_labeled_datapoints)
-            # set the validation augmentation to just normalize (.dataset since val_dataset is a Subset, not a full dataset)
-            val_dataset.set_transforms(cifar_datasets.Cifar10.TRANSFORM_TEST)
-
         train_dataset_labeled, train_dataset_unlabeled = train_dataset.data_split_class_balanced(subset_count=args.num_labeled_datapoints)
     else:
-        if args.num_epochs is None:
-            val_dataset, train_dataset = train_dataset.data_split_class_balanced(subset_count=int(0.1*len(train_dataset)))
         train_dataset_labeled = train_dataset
         train_dataset_unlabeled = None
 
     test_dataset = cifar_datasets.Cifar10(transform=cifar_datasets.Cifar10.TRANSFORM_TEST, train=False)
 
     # adjust the len of the dataset to implement the nb_reps
-    train_dataset_labeled.set_nb_reps(args.nb_reps)
-    train_dataset_unlabeled.set_nb_reps(args.nb_reps)
+    train_dataset_labeled.set_epoch_size(args.epoch_size * args.batch_size)
+    if train_dataset_unlabeled is not None:
+        train_dataset_unlabeled.set_epoch_size(args.mu * args.epoch_size * args.batch_size)
 
-    return model, train_dataset_labeled, train_dataset_unlabeled, val_dataset, test_dataset
+    return model, train_dataset_labeled, train_dataset_unlabeled, test_dataset
 
 
 def train(args):
@@ -113,7 +113,7 @@ def train(args):
 
     logging.info(args)
 
-    model, train_dataset_labeled, train_dataset_unlabeled, val_dataset, test_dataset = setup(args)
+    model, train_dataset_labeled, train_dataset_unlabeled, test_dataset = setup(args)
 
     # write the args configuration to disk
     logging.info("writing args to config.json")
@@ -174,18 +174,17 @@ def train(args):
         train_stats.plot_all_metrics(output_dirpath=args.output_dirpath)
         model_trainer.train_epoch(model, train_dataset_labeled, optimizer, criterion, epoch, train_stats, unlabeled_dataset=train_dataset_unlabeled, ema_model=ema_model)
 
-        if val_dataset is not None:
-            if args.use_ema:
-                test_model = ema_model.ema
-            else:
-                test_model = model
+        if args.use_ema:
+            test_model = ema_model.ema
+        else:
+            test_model = model
 
-            logging.info("  evaluating against validation data")
-            model_trainer.eval_model(test_model, val_dataset, criterion, train_stats, "val", epoch, args)
+        logging.info("  evaluating against test data")
+        model_trainer.eval_model(test_model, test_dataset, criterion, train_stats, "test", epoch, args)
 
-            val_accuracy = train_stats.get_epoch('val_accuracy', epoch=epoch)
-            plateau_scheduler.step(val_accuracy)
-            train_stats.add_global('val_wall_time', train_stats.get('val_wall_time', aggregator='sum'))
+        test_accuracy = train_stats.get_epoch('test_accuracy', epoch=epoch)
+        plateau_scheduler.step(test_accuracy)
+        train_stats.add_global('test_wall_time', train_stats.get('test_wall_time', aggregator='sum'))
 
         # update global metadata stats
         train_stats.add_global('training_wall_time', train_stats.get('train_wall_time', aggregator='sum'))
@@ -195,27 +194,15 @@ def train(args):
         train_stats.export(args.output_dirpath)
 
         # handle early stopping when loss converges
-        # if plateau_scheduler_sl.num_bad_epochs == 0:  # use if you only want literally the best epoch, instead of taking into account the loss eps
         if args.num_epochs is not None or plateau_scheduler.is_equiv_to_best_epoch:
             logging.info('Updating best model with epoch: {}'.format(epoch))
             if args.use_ema:
                 best_model = copy.deepcopy(ema_model.ema)
             else:
                 best_model = copy.deepcopy(model)
-            best_epoch = epoch
 
             # update the global metrics with the best epoch
             train_stats.update_global(epoch)
-
-
-
-    best_model.cuda()  # move the model back to the GPU (saving moved the best model back to the cpu)
-
-    logging.info('Evaluating model against test dataset')
-    model_trainer.eval_model(best_model, test_dataset, criterion, train_stats, "test", best_epoch, args)
-
-    # update the global metrics with the best epoch, to include test stats
-    train_stats.update_global(best_epoch)
 
     wall_time = time.time() - train_start_time
     train_stats.add_global('wall_time', wall_time)

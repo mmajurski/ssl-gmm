@@ -6,6 +6,7 @@ import os
 
 # folder to read files from
 directory = 'models-optuna'
+directory = 'models-20230609'
 
 # columns to extract from file name
 config_columns = ['method', 'last_layer', 'ema', 'embedding_dim', 'model']

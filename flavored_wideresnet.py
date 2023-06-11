@@ -62,7 +62,7 @@ class NetworkBlock(nn.Module):
 
 
 class WideResNet(nn.Module):
-    def __init__(self, num_classes, last_layer:str='fc', depth=28, width=2):
+    def __init__(self, num_classes, depth=28, width=2):
         assert (depth - 4) % 6 == 0, 'depth should be 6n+4'
 
         super(WideResNet, self).__init__()
@@ -72,7 +72,6 @@ class WideResNet(nn.Module):
         self.depth = depth
         self.width = width
         self.channels = channels[3]
-        self.last_layer = last_layer
 
         # 1st conv before any network block
         self.conv1 = nn.Conv2d(3, channels[0], kernel_size=3, stride=1, padding=1, bias=False)

@@ -32,7 +32,7 @@ class FixMatchTrainer_gmm(trainer.SupervisedTrainer):
         loss_nan_count = 0
         start_time = time.time()
 
-        dataloader = torch.utils.data.DataLoader(pytorch_dataset, batch_size=self.args.batch_size, shuffle=True, num_workers=self.args.num_workers, worker_init_fn=utils.worker_init_fn)
+        dataloader = torch.utils.data.DataLoader(pytorch_dataset, batch_size=self.args.batch_size, shuffle=True, num_workers=self.args.num_workers, worker_init_fn=utils.worker_init_fn, drop_last=True)
 
         batch_count = len(dataloader)
 
@@ -45,7 +45,11 @@ class FixMatchTrainer_gmm(trainer.SupervisedTrainer):
             cyclic_lr_scheduler = torch.optim.lr_scheduler.CyclicLR(optimizer, base_lr=(epoch_init_lr / self.args.cycle_factor), max_lr=(epoch_init_lr * self.args.cycle_factor), step_size_up=int(batch_count / 2), cycle_momentum=False)
 
         unlabeled_dataset.set_transforms(cifar_datasets.Cifar10.TRANSFORM_FIXMATCH)
-        dataloader_ul = torch.utils.data.DataLoader(unlabeled_dataset, batch_size=self.args.mu*self.args.batch_size, shuffle=True, num_workers=self.args.num_workers, worker_init_fn=utils.worker_init_fn)
+        dataloader_ul = torch.utils.data.DataLoader(unlabeled_dataset, batch_size=self.args.mu*self.args.batch_size, shuffle=True, num_workers=self.args.num_workers, worker_init_fn=utils.worker_init_fn, drop_last=True)
+
+        if len(dataloader) != len(dataloader_ul):
+            raise RuntimeError("Mismatch is dataloader lengths")
+
         iter_ul = iter(dataloader_ul)
 
         pl_acc_per_class = list()
@@ -68,12 +72,7 @@ class FixMatchTrainer_gmm(trainer.SupervisedTrainer):
             inputs_l = tensor_dict_l[0]
             targets_l = tensor_dict_l[1]
 
-            try:
-                tensor_dict_ul = next(iter_ul)
-            except:
-                # recreate the iterator
-                iter_ul = iter(dataloader_ul)
-                tensor_dict_ul = next(iter_ul)
+            tensor_dict_ul = next(iter_ul)
 
             inputs_ul = tensor_dict_ul[0]
             targets_ul = tensor_dict_ul[1]
@@ -86,11 +85,18 @@ class FixMatchTrainer_gmm(trainer.SupervisedTrainer):
 
             # TODO test using the EMA model as the PL estimator
             inputs = torch.cat((inputs_l, inputs_ul_weak, inputs_ul_strong))
-
             inputs = inputs.cuda()
+
+            if self.args.interleave:
+                inputs = utils.interleave(inputs, 2 * self.args.mu + 1)
+            embedding, logits = model(inputs)
+            if self.args.interleave:
+                logits = utils.de_interleave(logits, 2 * self.args.mu + 1)
+                embedding = utils.de_interleave(embedding, 2 * self.args.mu + 1)
+
             targets_l = targets_l.cuda()
             targets_ul = targets_ul.cuda()
-            embedding, logits = model(inputs)
+            # embedding, logits = model(inputs)
 
             # split the logits back into labeled and unlabeled
             logits_l = logits[:inputs_l.shape[0]]
