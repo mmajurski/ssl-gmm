@@ -93,7 +93,7 @@ class Cifar10(torch.utils.data.Dataset):
     def set_epoch_size(self, epoch_size):
         self.numel = epoch_size
         if epoch_size < len(self.data):
-            raise RuntimeWarning("Requested dataset length = {} is less than actual data length = {}, some elements will be unused.".format(epoch_size, len(self.data)))
+            logging.warning("Requested dataset length = {} is less than actual data length = {}, some elements will be unused.".format(epoch_size, len(self.data)))
 
     def __len__(self) -> int:
         if self.numel is not None:
