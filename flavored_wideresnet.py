@@ -143,7 +143,10 @@ class WideResNetMajurski(nn.Module):
         # elif self.last_layer == 'cmm':
         #     self.fc = nn.Linear(channels[3], embedding_dim)
         #     self.cmm_layer = lcl_models.axis_aligned_gmm_cmm_layer(embedding_dim, num_classes, return_gmm=False, return_cmm=True, return_cluster_dist=False)
-        if self.last_layer_name == 'aa_gmm':
+        if self.last_layer_name == 'fc':
+            self.fc = nn.Linear(channels[3], num_classes)
+            self.last_layer = lcl_models2.Identity()
+        elif self.last_layer_name == 'aa_gmm':
             self.fc = nn.Linear(channels[3], embedding_dim)
             self.last_layer = lcl_models2.axis_aligned_gmm_cmm_layer(embedding_dim, num_classes, return_gmm=True, return_cmm=False)
         elif self.last_layer_name == 'aa_cmm':

@@ -6,6 +6,7 @@ import torch
 import torchvision
 import json
 import logging
+import shutil
 
 import cifar_datasets
 import metadata
@@ -14,7 +15,6 @@ import flavored_wideresnet
 import utils
 import trainer
 import trainer_fixmatch
-import trainer_fixmatch_gmm
 
 
 
@@ -113,6 +113,13 @@ def train(args):
 
     logging.info(args)
 
+    # copy code files to the output directory
+    src_ofp = os.path.join(args.output_dirpath, 'src')
+    os.makedirs(src_ofp)
+    src_fns = [fn for fn in os.listdir('./') if fn.endswith('.py')]
+    for fn in src_fns:
+        shutil.copyfile(fn, os.path.join(src_ofp, fn))
+
     model, train_dataset_labeled, train_dataset_unlabeled, test_dataset = setup(args)
 
     # write the args configuration to disk
@@ -132,8 +139,6 @@ def train(args):
         model_trainer = trainer.SupervisedTrainer(args)
     elif args.trainer == 'fixmatch':
         model_trainer = trainer_fixmatch.FixMatchTrainer(args)
-    elif args.trainer == 'fixmatch-gmm':
-        model_trainer = trainer_fixmatch_gmm.FixMatchTrainer_gmm(args)
     else:
         raise RuntimeError("Invalid trainer request: {}".format(args.trainer))
     logging.info("trainer setup")
@@ -149,7 +154,7 @@ def train(args):
     model.cuda()
 
     # setup early stopping on convergence using LR reduction on plateau
-    optimizer = model_trainer.get_optimizer(model)
+    optimizer = model_trainer.configure_optimizer(model)
 
     def log_lr_reduction():
         logging.info("Learning rate reduced")

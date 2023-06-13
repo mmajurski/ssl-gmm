@@ -5,6 +5,7 @@ import torch.utils.data
 import time
 import logging
 import psutil
+import inspect
 
 import cifar_datasets
 import utils
@@ -21,33 +22,45 @@ class SupervisedTrainer:
     def __init__(self, args):
         self.args = args
 
-    def get_optimizer(self, model):
-        # Setup optimizer
-        if self.args.weight_decay is not None:
-            no_decay = ['bias', 'bn']
-            grouped_parameters = [
-                {'params': [p for n, p in model.named_parameters() if not any(
-                    nd in n for nd in no_decay)], 'weight_decay': self.args.weight_decay},
-                {'params': [p for n, p in model.named_parameters() if any(
-                    nd in n for nd in no_decay)], 'weight_decay': 0.0}
-            ]
+    # adapted from https://github.com/karpathy/nanoGPT/blob/master/model.py#L270
+    def configure_optimizer(self, model):
 
-            if self.args.optimizer == 'sgd':
-                # optimizer = torch.optim.SGD(model.parameters(), lr=self.args.learning_rate, weight_decay=self.args.weight_decay, momentum=0.9, nesterov=False)
-                optimizer = torch.optim.SGD(grouped_parameters, lr=self.args.learning_rate, momentum=0.9, nesterov=False)
-            elif self.args.optimizer == 'adamw':
-                # optimizer = torch.optim.AdamW(model.parameters(), lr=self.args.learning_rate, weight_decay=self.args.weight_decay)
-                optimizer = torch.optim.AdamW(grouped_parameters, lr=self.args.learning_rate, weight_decay=self.args.weight_decay)
-            else:
-                raise RuntimeError("Invalid optimizer: {}".format(self.args.optimizer))
+        if self.args.weight_decay is None:
+            weight_decay = 0.0
         else:
-            if self.args.optimizer == 'sgd':
-                optimizer = torch.optim.SGD(model.parameters(), lr=self.args.learning_rate, momentum=0.9, nesterov=False)
-            elif self.args.optimizer == 'adamw':
-                optimizer = torch.optim.AdamW(model.parameters(), lr=self.args.learning_rate)
-            else:
-                raise RuntimeError("Invalid optimizer: {}".format(self.args.optimizer))
+            weight_decay = self.args.weight_decay
+
+        # start with all of the candidate parameters
+        param_dict = {pn: p for pn, p in model.named_parameters()}
+        # filter out those that do not require grad
+        param_dict = {pn: p for pn, p in param_dict.items() if p.requires_grad}
+        # create optim groups. Any parameters that is 2D will be weight decayed, otherwise no.
+        # i.e. all weight tensors in matmuls + embeddings decay, all biases and layernorms don't.
+        decay_params = [p for n, p in param_dict.items() if p.dim() >= 2]
+        nodecay_params = [p for n, p in param_dict.items() if p.dim() < 2]
+        optim_groups = [
+            {'params': decay_params, 'weight_decay': weight_decay},
+            {'params': nodecay_params, 'weight_decay': 0.0}
+        ]
+        num_decay_params = sum(p.numel() for p in decay_params)
+        num_nodecay_params = sum(p.numel() for p in nodecay_params)
+        logging.info("num decayed parameter tensors: {}, with {} parameters".format(len(decay_params), num_decay_params))
+        logging.info("num non-decayed parameter tensors: {}, with {} parameters".format(len(nodecay_params), num_nodecay_params))
+
+        if self.args.optimizer == 'sgd':
+            optimizer = torch.optim.SGD(optim_groups, lr=self.args.learning_rate, momentum=0.9, nesterov=False)
+            logging.info("Using SGD")
+
+        elif self.args.optimizer == 'adamw':
+            # Create AdamW optimizer and use the fused version if it is available
+            fused_available = 'fused' in inspect.signature(torch.optim.AdamW).parameters
+            extra_args = dict(fused=True) if fused_available else dict()
+            optimizer = torch.optim.AdamW(optim_groups, lr=self.args.learning_rate, **extra_args)
+            logging.info("Using fused AdamW: {}".format(fused_available))
+        else:
+            raise RuntimeError("Invalid optimizer: {}".format(self.args.optimizer))
         return optimizer
+
 
     def train_epoch(self, model, pytorch_dataset, optimizer, criterion, epoch, train_stats, unlabeled_dataset=None, ema_model=None):
 

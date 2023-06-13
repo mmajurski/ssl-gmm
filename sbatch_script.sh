@@ -3,14 +3,12 @@
 # MODIFY THESE OPTIONS
 
 #SBATCH --partition=isg
-#SBATCH --exclude=p100
-#SBATCH --requeue
+#SBATCH --exclude=p100,quebec,echo,kilo
 #SBATCH --nodes=1
-#SBATCH --nice
 #SBATCH --oversubscribe
 #SBATCH --cpus-per-task=12
 #SBATCH --gres=gpu:1
-#SBATCH --job-name=fm-base
+#SBATCH --job-name=gmm
 #SBATCH -o log-%N.%j.out
 #SBATCH --time=128:0:0
 
@@ -24,19 +22,18 @@
 source /mnt/isgnas/home/mmajursk/miniconda3/etc/profile.d/conda.sh
 conda activate gmm
 
+LAST_LAYER=$1
+LEARNING_RATE=$2
+EMBD_DIM=$3
+PRE_FC=$4
+MODEL_FP=$5
+INTERLEAVE=$6
 
-MODEL_NB=$1
-TAU=$2
-TAU_METHOD=$3
-EMA_FLAG=$4
-
-if [ "$EMA_FLAG" -gt 0 ]; then
-  python main.py --output-dirpath=./models-fixmatch-baseline/fixmatch-ema-${MODEL_NB}-T${TAU}-TM${TAU_METHOD} --trainer=fixmatch --last-layer=fc --tau=${TAU} --tau-method=${TAU_METHOD} --use-ema --num-epochs=1000 --nb-reps=256
+if [ "$INTERLEAVE" -gt 0 ]; then
+python main.py --output-dirpath=${MODEL_FP} --trainer=fixmatch --last-layer=${LAST_LAYER} --optimizer=sgd --learning-rate=${LEARNING_RATE} --embedding_dim=${EMBD_DIM} --nprefc=${PRE_FC} --interleave
 else
-  python main.py --output-dirpath=./models-fixmatch-baseline/fixmatch-stock-${MODEL_NB}-T${TAU}-TM${TAU_METHOD} --trainer=fixmatch --last-layer=fc --tau=${TAU} --tau-method=${TAU_METHOD} --num-epochs=1000 --nb-reps=256
+python main.py --output-dirpath=${MODEL_FP} --trainer=fixmatch --last-layer=${LAST_LAYER} --optimizer=sgd --learning-rate=${LEARNING_RATE} --embedding_dim=${EMBD_DIM} --nprefc=${PRE_FC}
 fi
-
-
 
 
 
