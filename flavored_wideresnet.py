@@ -102,7 +102,7 @@ class WideResNet(nn.Module):
 
 
 class WideResNetMajurski(nn.Module):
-    def __init__(self, num_classes, last_layer:str='gmm', depth=28, width=2, embedding_dim=8, num_pre_fc=0):
+    def __init__(self, num_classes, last_layer:str='gmm', depth=28, width=2, embedding_dim=8, num_pre_fc=0, use_tanh=False):
         assert (depth - 4) % 6 == 0, 'depth should be 6n+4'
 
         super(WideResNetMajurski, self).__init__()
@@ -128,6 +128,9 @@ class WideResNetMajurski(nn.Module):
         self.bn1 = nn.BatchNorm2d(channels[3], momentum=0.001)
         # self.relu = nn.ReLU(inplace=True)  # published wideresnet network
         self.relu = nn.LeakyReLU(negative_slope=0.1, inplace=True)
+
+        self.use_tanh = use_tanh
+        self.tanh = nn.Tanh()
 
         self.pre_fc_1 = None
         self.pre_fc_2 = None
@@ -181,10 +184,16 @@ class WideResNetMajurski(nn.Module):
 
         if self.pre_fc_1 is not None:
             out = self.pre_fc_1(out)
-            out = self.relu(out)
+            if self.use_tanh:
+                out = self.tanh(out)
+            else:
+                out = self.relu(out)
         if self.pre_fc_2 is not None:
             out = self.pre_fc_2(out)
-            out = self.relu(out)
+            if self.use_tanh:
+                out = self.tanh(out)
+            else:
+                out = self.relu(out)
 
         embedding = self.fc(out)
 

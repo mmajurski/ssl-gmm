@@ -22,7 +22,7 @@ def setup(args):
     # model = flavored_wideresnet.WideResNet(num_classes=args.num_classes, last_layer=args.last_layer)
 
     if args.arch == 'wide_resnet':
-        model = flavored_wideresnet.WideResNetMajurski(num_classes=args.num_classes, last_layer=args.last_layer, embedding_dim=args.embedding_dim, num_pre_fc=args.nprefc)
+        model = flavored_wideresnet.WideResNetMajurski(num_classes=args.num_classes, last_layer=args.last_layer, embedding_dim=args.embedding_dim, num_pre_fc=args.nprefc, use_tanh=args.use_tanh)
     elif args.arch == 'resnet18':
         model = torchvision.models.resnet18(pretrained=False, num_classes=args.num_classes)
     elif args.arch == 'flavored_wide_resnet':
