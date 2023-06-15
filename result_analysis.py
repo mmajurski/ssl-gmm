@@ -5,10 +5,10 @@ import json
 import os
 
 # folder to read files from
-directory = 'models-20230612'
+directory = 'models-extrafc'
 
 # columns to extract from file name
-config_columns = ['method', 'last_layer', 'ema', 'embedding_dim', 'model', 'learning_rate', 'interleave']
+config_columns = ['method', 'last_layer', 'ema', 'embedding_dim', 'model', 'learning_rate']
 # columns to extract from result file (stats.json)
 result_columns = ['test_accuracy', 'wall_time', 'epoch']
 # create dataframe for storing results
@@ -32,7 +32,6 @@ for folder_name in os.listdir(directory):
     config_dict['model'] = folder_name
     config_dict['last_layer'] = full_config_dict['last_layer']
     config_dict['learning_rate'] = full_config_dict['learning_rate']
-    config_dict['interleave'] = full_config_dict['interleave']
     config_dict['ema'] = full_config_dict['use_ema']
     if 'embedding_dim' not in full_config_dict.keys():
         full_config_dict['embedding_dim'] = 8
@@ -64,4 +63,4 @@ for folder_name in os.listdir(directory):
     results_df = pd.concat([results_df, row_df])
 
 # exporting to excel file
-results_df.to_csv('results-20230612.csv', index=False)
+results_df.to_csv('results-extrafc.csv', index=False)
