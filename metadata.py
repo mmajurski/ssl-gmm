@@ -1,3 +1,9 @@
+# NIST-developed software is provided by NIST as a public service. You may use, copy and distribute copies of the software in any medium, provided that you keep intact this entire notice. You may improve, modify and create derivative works of the software or any portion of the software, and you may copy and distribute such modifications or works. Modified works should carry a notice stating that you changed the software and should note the date and nature of any such change. Please explicitly acknowledge the National Institute of Standards and Technology as the source of the software.
+
+# NIST-developed software is expressly provided "AS IS." NIST MAKES NO WARRANTY OF ANY KIND, EXPRESS, IMPLIED, IN FACT OR ARISING BY OPERATION OF LAW, INCLUDING, WITHOUT LIMITATION, THE IMPLIED WARRANTY OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE, NON-INFRINGEMENT AND DATA ACCURACY. NIST NEITHER REPRESENTS NOR WARRANTS THAT THE OPERATION OF THE SOFTWARE WILL BE UNINTERRUPTED OR ERROR-FREE, OR THAT ANY DEFECTS WILL BE CORRECTED. NIST DOES NOT WARRANT OR MAKE ANY REPRESENTATIONS REGARDING THE USE OF THE SOFTWARE OR THE RESULTS THEREOF, INCLUDING BUT NOT LIMITED TO THE CORRECTNESS, ACCURACY, RELIABILITY, OR USEFULNESS OF THE SOFTWARE.
+
+# You are solely responsible for determining the appropriateness of using and distributing the software and you assume all risks associated with its use, including but not limited to the risks and costs of program errors, compliance with applicable laws, damage to or loss of data, programs or equipment, and the unavailability or interruption of operation. This software is not intended to be used in any situation where a failure could cause risk of injury or damage to property. The software developed by NIST employees is not subject to copyright protection within the United States.
+
 import os
 import json
 import numpy as np
@@ -29,6 +35,10 @@ class TrainingStats():
             value = float(np.sum(self.accumulator[metric_name]))
         elif method == 'median':
             value = float(np.median(self.accumulator[metric_name]))
+        elif method == 'min':
+            value = float(np.min(self.accumulator[metric_name]))
+        elif method == 'max':
+            value = float(np.max(self.accumulator[metric_name]))
         else:
             raise RuntimeError("Invalid accumulation method: {}".format(method))
 
@@ -94,26 +104,6 @@ class TrainingStats():
             return None  # use this if you want to silently fail
         return self.global_data[metric_name]
 
-    def render_and_save_confusion_matrix(self, y_true: np.ndarray, y_pred: np.ndarray, output_folder: str, metric_name: str, epoch: int = None):
-        from matplotlib import pyplot as plt
-        import sklearn.metrics
-
-        ofldr = os.path.join(output_folder, 'confusion_matrix')
-        if not os.path.exists(ofldr):
-            os.makedirs(ofldr)
-
-        sklearn.metrics.ConfusionMatrixDisplay.from_predictions(y_true, y_pred, colorbar=False)
-        fig = plt.gcf()
-        fig.set_size_inches(10, 10)
-        plt.savefig(os.path.join(ofldr, "epoch{:04d}_".format(epoch) + metric_name + ".png"))
-        plt.close(fig)
-
-        sklearn.metrics.ConfusionMatrixDisplay.from_predictions(y_true, y_pred, values_format='.2g', normalize='true', colorbar=False)
-        fig = plt.gcf()
-        fig.set_size_inches(10, 10)
-        plt.savefig(os.path.join(ofldr, "epoch{:04d}_".format(epoch) + metric_name + "_norm" + ".png"))
-        plt.close(fig)
-
     def plot_all_metrics(self, output_dirpath: str, all_one_figure: bool = False):
         from matplotlib import pyplot as plt
 
@@ -122,10 +112,7 @@ class TrainingStats():
 
         fig = plt.figure(figsize=(8, 4), dpi=200)
 
-        for cm in {'loss', 'accuracy', 'wall_time'}:
-            # core_metrics = ['train_{}'.format(cm),'val_{}'.format(cm),'test_{}'.format(cm)]
-            # core_metrics = [a for a in core_metrics if a in col_list]
-
+        for cm in ['loss', 'accuracy', 'wall_time', 'loss_comp']:
             core_metrics = [a for a in col_list if a.endswith(cm)]
             [col_list.remove(m) for m in core_metrics]
             # plot the loss curves
@@ -179,16 +166,6 @@ class TrainingStats():
         # convert self.epoch_data into pandas dataframe
         df = pd.DataFrame(self.epoch_data)
         df.to_csv(os.path.join(output_folder, 'detailed_stats.csv'), index=False, encoding="ascii")
-
-        # # Code to serialize numpy arrays in a more readable format (instead of using jsonpickle)
-        # class NumpyArrayEncoder(json.JSONEncoder):
-        #     def default(self, obj):
-        #         if isinstance(obj, np.ndarray):
-        #             return obj.tolist()
-        #         return json.JSONEncoder.default(self, obj)
-        #
-        # with open(os.path.join(output_folder, 'stats.json'), 'w') as fh:
-        #     json.dump(self.global_data, fh, ensure_ascii=True, indent=2, cls=NumpyArrayEncoder)
 
         with open(os.path.join(output_folder, 'stats.json'), 'w') as fh:
             json.dump(self.global_data, fh, ensure_ascii=True, indent=2)

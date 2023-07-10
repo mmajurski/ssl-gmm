@@ -57,8 +57,6 @@ def main():
 
     args = parser.parse_args()
 
-
-
     # check if IDE is in debug mode, and set the args debug flag and set num parallel worker to 0
     utils.check_for_ide_debug_mode(args)
 

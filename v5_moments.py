@@ -1,27 +1,28 @@
-from __future__ import print_function
 import argparse
+import os
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import torch.optim as optim
 from torchvision import datasets, transforms
-import torchvision.transforms as T
-from torch.optim.lr_scheduler import StepLR
-import torchvision.models.resnet as resnet
-import sys
-import os
-from PIL import Image
+import copy
+
 import numpy as np
 import scipy.misc
-import cifar10
+import psutil
+import utils
+import cifar_datasets
 import gauss_moments
+import lr_scheduler
+import metadata
+
 
 class Net(nn.Module):
 	def __init__(self, sY=32, sX=32, chan=3, num_classes=10, dim=64):
 		super(Net, self).__init__()
 		
 		self.num_classes = num_classes
-		self.dim    = dim
+		self.dim	= dim
 	
 		#----------
 		# The architecture
@@ -38,7 +39,8 @@ class Net(nn.Module):
 		#centers = np.zeros([num_classes,dim], dtype=np.float32)
 		#centers = np.random.normal(0.0, 1.0, size=[num_classes,dim]).astype(np.float32)
 		centers = np.eye(num_classes,dim).astype(np.float32)
-		self.centers = torch.tensor(centers, requires_grad=True).to(g_device)
+		self.centers = torch.nn.Parameter(torch.tensor(centers), requires_grad=True)
+		# self.centers = torch.tensor(centers, requires_grad=True).to(device)
 		self.km_safe_pool = nn.MaxPool1d(10)
 		
 		#----------
@@ -50,16 +52,28 @@ class Net(nn.Module):
 		moment_4 = gauss_moments.GaussMoments(dim,4)   # kutorsis
 		
 		# moment weights (for moment loss function)
-		self.moment1_weight = torch.tensor(moment_1.moment_weights, requires_grad=False).to(g_device)
-		self.moment2_weight = torch.tensor(moment_2.moment_weights, requires_grad=False).to(g_device)
-		self.moment3_weight = torch.tensor(moment_3.moment_weights, requires_grad=False).to(g_device)
-		self.moment4_weight = torch.tensor(moment_4.moment_weights, requires_grad=False).to(g_device)
+		self.moment1_weight = torch.nn.Parameter(torch.tensor(moment_1.moment_weights), requires_grad=False)
+		self.moment2_weight = torch.nn.Parameter(torch.tensor(moment_1.moment_weights), requires_grad=False)
+		self.moment3_weight = torch.nn.Parameter(torch.tensor(moment_1.moment_weights), requires_grad=False)
+		self.moment4_weight = torch.nn.Parameter(torch.tensor(moment_1.moment_weights), requires_grad=False)
 
 		# gaussian moments
-		self.gauss_moments1 = torch.tensor(moment_1.joint_gauss_moments, requires_grad=False).to(g_device)
-		self.gauss_moments2 = torch.tensor(moment_2.joint_gauss_moments, requires_grad=False).to(g_device)
-		self.gauss_moments3 = torch.tensor(moment_3.joint_gauss_moments, requires_grad=False).to(g_device)
-		self.gauss_moments4 = torch.tensor(moment_4.joint_gauss_moments, requires_grad=False).to(g_device)
+		self.gauss_moments1 = torch.nn.Parameter(torch.tensor(moment_1.joint_gauss_moments), requires_grad=False)
+		self.gauss_moments2 = torch.nn.Parameter(torch.tensor(moment_2.joint_gauss_moments), requires_grad=False)
+		self.gauss_moments3 = torch.nn.Parameter(torch.tensor(moment_3.joint_gauss_moments), requires_grad=False)
+		self.gauss_moments4 = torch.nn.Parameter(torch.tensor(moment_4.joint_gauss_moments), requires_grad=False)
+
+		# # moment weights (for moment loss function)
+		# self.moment1_weight = torch.tensor(moment_1.moment_weights, requires_grad=False).to(device)
+		# self.moment2_weight = torch.tensor(moment_2.moment_weights, requires_grad=False).to(device)
+		# self.moment3_weight = torch.tensor(moment_3.moment_weights, requires_grad=False).to(device)
+		# self.moment4_weight = torch.tensor(moment_4.moment_weights, requires_grad=False).to(device)
+		#
+		# # gaussian moments
+		# self.gauss_moments1 = torch.tensor(moment_1.joint_gauss_moments, requires_grad=False).to(device)
+		# self.gauss_moments2 = torch.tensor(moment_2.joint_gauss_moments, requires_grad=False).to(device)
+		# self.gauss_moments3 = torch.tensor(moment_3.joint_gauss_moments, requires_grad=False).to(device)
+		# self.gauss_moments4 = torch.tensor(moment_4.joint_gauss_moments, requires_grad=False).to(device)
 
 
 	def forward(self, x, y_onehot=None):
@@ -75,9 +89,11 @@ class Net(nn.Module):
 		x = F.max_pool2d(x, 2)
 		x = torch.flatten(x, 1)
 		x = self.fc1(x)
-		x = torch.tanh(x)
+		# x = torch.tanh(x)
+		x = torch.relu(x)
 		x = self.fc2(x)	
-		x = torch.tanh(x)
+		# x = torch.tanh(x)
+		x = torch.relu(x)
 		x = self.fc3(x)	
 		
 		
@@ -85,8 +101,8 @@ class Net(nn.Module):
 		# The k-means layer
 		#-------------------------------------
 		x_size = x.size()
-		batch  = x_size[0]    # batch size
-		dim    = self.dim     # number of internal dimensinos
+		batch  = x_size[0]	# batch size
+		dim	= self.dim	 # number of internal dimensinos
 		num_classes = self.num_classes  # number of classes
 
 		# Upsample the x-data to [batch, num_classes, dim]
@@ -153,8 +169,8 @@ class Net(nn.Module):
 			cluster_assignment_onehot = torch.nn.functional.one_hot(cluster_assignment, dist_sq.shape[1])
 
 
-		cluster_dist_sq_onehot    = cluster_assignment_onehot * dist_sq
-		cluster_dist_sq           = torch.sum(cluster_dist_sq_onehot, dim=-1)
+		cluster_dist_sq_onehot	= cluster_assignment_onehot * dist_sq
+		cluster_dist_sq		   = torch.sum(cluster_dist_sq_onehot, dim=-1)
 
 		# Take square root of dist_sq to get L2 norm
 		cluster_dist = torch.sqrt(cluster_dist_sq)
@@ -171,18 +187,18 @@ class Net(nn.Module):
 
 		diff_onehot = diff * cluster_assignment_onehot_rep
 
-		moment1       = torch.sum(diff_onehot, axis=0)
+		moment1	   = torch.sum(diff_onehot, axis=0)
 		moment1_count = cluster_weight.unsqueeze(1).repeat(1,self.dim)
-		moment1       = moment1 / (moment1_count + 0.0000001)
+		moment1	   = moment1 / (moment1_count + 0.0000001)
 
-		moment2_a     = diff_onehot.unsqueeze(2)
-		moment2_b     = diff_onehot.unsqueeze(3)
+		moment2_a	 = diff_onehot.unsqueeze(2)
+		moment2_b	 = diff_onehot.unsqueeze(3)
 		moment2_a_rep = moment2_a.repeat((1,1,dim,1))		
 		moment2_b_rep = moment2_b.repeat((1,1,1,dim))		
 		moment2 = moment2_a_rep * moment2_b_rep
 		moment2 = torch.sum(moment2, axis=0)
 		moment2_count = moment1_count.unsqueeze(2).repeat((1,1,dim))
-		moment2       = moment2 / (moment2_count + 0.0000001)
+		moment2	   = moment2 / (moment2_count + 0.0000001)
 		
 		moment3_a = moment2_a.unsqueeze(2)
 		moment3_b = moment2_b.unsqueeze(2)
@@ -220,15 +236,15 @@ class Net(nn.Module):
 		#  of x^2 x^3 .... etc
 		#
 		#  N(x) = sign(x)(abs(x) + c)^a - b
-		#     where
+		#	 where
 		#  c = pow(a, 1/(1-a))
 		#  b = pow(a, a/(1-a))
 		#
 		#  precomputed values
-		#    moment 1   no formula required, it's perfectly linear
-		#    moment 2   a = 1/2  c = 0.25           b = 0.5
-		#    moment 3   a = 1/3  c = 0.19245008973  b = 0.57735026919
-		#    moment 4   a = 1/4  c = 0.15749013123  b = 0.62996052494
+		#	moment 1   no formula required, it's perfectly linear
+		#	moment 2   a = 1/2  c = 0.25		   b = 0.5
+		#	moment 3   a = 1/3  c = 0.19245008973  b = 0.57735026919
+		#	moment 4   a = 1/4  c = 0.15749013123  b = 0.62996052494
 		moment2 = torch.sign(torch.sign(moment2)+0.1)*(torch.pow(torch.abs(moment2)+0.25,0.5) - 0.5)
 		moment3 = torch.sign(torch.sign(moment3)+0.1)*(torch.pow(torch.abs(moment3)+0.19245008973,0.3333333333) - 0.57735026919)
 		moment4 = torch.sign(torch.sign(moment4)+0.1)*(torch.pow(torch.abs(moment4)+0.15749013123,0.25) - 0.62996052494)
@@ -271,240 +287,207 @@ class Net(nn.Module):
 		moment_penalty3 = torch.sum( moment3_weight*torch.pow( (moment3 - moment3_target), 2 ) )
 		moment_penalty4 = torch.sum( moment4_weight*torch.pow( (moment4 - moment4_target), 2 ) )
 
-#		print("moment_penalty")
-#		print(moment_penalty1)
-#		print(moment_penalty2)
-#		print(moment_penalty3)
-#		print(moment_penalty4)
 
 		return [resp, moment_penalty1, moment_penalty2, moment_penalty3, moment_penalty4]
 
 
-#-------------------------------------------------
-#-------------------------------------------------
-# Utilities to write out images
-#-------------------------------------------------
-#-------------------------------------------------
+def train(args, model, device, train_loader, optimizer, epoch, train_stats):
+	model.train()
 
-def to_img(A, cmin=-9999, cmax=-9999):
-	cmin=np.amin(A) if cmin==-9999 else cmin
-	cmax=np.amax(A) if cmax==-9999 else cmax
-	#print("to_img cmin", cmin, "cmax", cmax)
-	img=(A-cmin) * (255.0/(cmax-cmin))
-	img[img<0]=0
-	img[img>255]=255
-	img=img.astype(np.uint8)
-	return img
+	# Setup loss criteria
+	criterion = torch.nn.CrossEntropyLoss()
 
-def mkdir(outdir):
-	if not os.path.exists(outdir):
-		os.mkdir(outdir)
-
-#-------------------------------------------------
-#-------------------------------------------------
-# Main
-#-------------------------------------------------
-#-------------------------------------------------
-
-#----------------
-# Pytorch models and data
-#----------------
-g_train_data   = None
-g_test_data    = None
-g_device       = None
-g_model        = None
-g_train_loader = None
-g_test_loader  = None
-g_optimizer    = None
-
-#----------------
-# Read Command Args
-#----------------
-arg_parser = argparse.ArgumentParser(description='PyTorch MNIST Example')
-arg_parser.add_argument('--batch-size', type=int, default=48, metavar='N', help='input batch size for training (default: 64)')
-arg_parser.add_argument('--blocks', type=int, default=8, metavar='N', help='number of blocks to add to the autoencoder (default: 8)')
-arg_parser.add_argument('--epochs', type=int, default=32, metavar='N', help='number of epochs to train (default: 3)')
-arg_parser.add_argument('--lr', type=float, default=1.0, metavar='LR', help='learning rate (default: 1.0)')
-arg_parser.add_argument('--gamma', type=float, default=0.7, metavar='M', help='Learning rate step gamma (default: 0.7)')
-arg_parser.add_argument('--no-cuda', action='store_true', default=False, help='disables CUDA training')
-arg_parser.add_argument('--no-mps', action='store_true', default=False,  help='disables macOS GPU training')
-arg_parser.add_argument('--dry-run', action='store_true', default=False, help='quickly check a single pass')
-arg_parser.add_argument('--seed', type=int, default=1, metavar='S', help='random seed (default: 1)')
-arg_parser.add_argument('--log-interval', type=int, default=10, metavar='N', help='how many batches to wait before logging training status')
-arg_parser.add_argument('--save-model', action='store_true', default=False, help='For Saving the current Model')
-args = arg_parser.parse_args()
-
-# command arguments are of course globally acessible
-arg_batch_size   = args.batch_size
-arg_blocks       = args.blocks
-arg_epochs       = args.epochs
-arg_lr           = args.lr
-arg_gamma        = args.gamma
-arg_use_cuda     = not args.no_cuda and torch.cuda.is_available()
-arg_use_mps      = not args.no_mps and torch.backends.mps.is_available()
-arg_dry_run      = args.dry_run
-arg_seed         = args.seed
-arg_log_interval = args.log_interval
-arg_save_model   = args.save_model
-
-
-#----------------
-# Initialize PyTorch
-#----------------
-torch.manual_seed(arg_seed)
-
-if arg_use_cuda:
-	g_device = torch.device("cuda")
-elif arg_use_mps:
-	g_device = torch.device("mps")
-else:
-	g_device = torch.device("cpu")
-
-
-#----------------
-# Read the dataset
-#----------------
-((g_train_x_numpy,g_train_y_numpy),(g_test_x_numpy,g_test_y_numpy)) = cifar10.readCifar10()
-
-g_num_train = g_train_y_numpy.shape[0]
-g_num_test  = g_test_y_numpy.shape[0]
-g_num_class = 10
-
-g_train_pred_numpy = np.zeros([g_num_train], dtype=np.int32)
-g_test_pred_numpy  = np.zeros([g_num_test], dtype=np.int32)
-
-
-#----------------
-# Send dataset to the device
-#----------------
-g_train_x = torch.tensor(g_train_x_numpy,requires_grad=False).float().to(g_device)
-g_train_y = torch.tensor(g_train_y_numpy,requires_grad=False).long().to(g_device)
-g_test_x  = torch.tensor(g_test_x_numpy,requires_grad=False).float().to(g_device)
-g_test_y  = torch.tensor(g_test_y_numpy,requires_grad=False).long().to(g_device)
-
-# normalize the dataset to 0-1
-g_train_x /= 255.0
-g_test_x  /= 255.0
-
-
-
-#----------------
-# Create the model
-#----------------
-g_model = Net(32,32,3,10,10).to(g_device)
-g_model_params = g_model.parameters()
-
-#----------------
-# Create the optimizer and scheduler
-#----------------
-g_optimizer = optim.Adadelta(g_model_params, lr=arg_lr)
-torch.nn.utils.clip_grad_norm_(g_model_params, max_norm=1.0, norm_type=2.0)
-g_scheduler = StepLR(g_optimizer, step_size=1000, gamma=arg_gamma)
-
-
-#------------------------------------------------------
-# Main training loop
-#------------------------------------------------------
-
-#-------------------------------------
-# For every epoch
-#-------------------------------------
-for epoch in range(1, arg_epochs+1):
-
-	print("+----------------------------------------+")
-	print("| epoch %3d                              |" % epoch)
-	print("+----------------------------------------+")
-
-	epoch_loss = 0.0
-	num_batch = g_num_train // arg_batch_size
-
-	#--------------------------------------
-	# For every minibatch
-	#--------------------------------------
-	for batch_idx in range(num_batch):
-	
-		# Grab the minibatch from the dataset
-		b0 = batch_idx * arg_batch_size
-		b1 = b0 + arg_batch_size
-		real_data  = g_train_x[b0:b1]
-		real_label = g_train_y[b0:b1]			
-
-		#if (batch_idx % 100 == 0):
-		#	print("batch", batch_idx, "of", g_num_train / arg_batch_size)
-
-		# no partial batches
-		batch_size  = real_label.size()[0]
-		if (batch_size != arg_batch_size):
-			break
-
-		# One_hot encode
-		y = F.one_hot(real_label,g_num_class)
-
-		#---------
-		# Train the model
-		#---------
-		model_out = g_model(real_data,y)
+	for batch_idx, (data, target) in enumerate(train_loader):
+		optimizer.zero_grad()
+		data, target = data.to(device), target.to(device)
+		target_onehot = torch.nn.functional.one_hot(target, num_classes=10)
+		# model_out = model(data, target_onehot)
+		model_out = model(data)
 		yhat = model_out[0]
 		mp1 = model_out[1]
 		mp2 = model_out[2]
 		mp3 = model_out[3]
 		mp4 = model_out[4]
-		
-		# Cross entropy loss (by hand)
-		minus_one_over_N = (-1.0 / (batch_size*g_num_class))
-		log_yhat=torch.log(torch.clamp(yhat,min=0.0001))
-		log_one_minus_yhat=torch.log(torch.clamp(1.0-yhat,min=0.0001))
-		presum=(y * log_yhat + (1.0-y)*log_one_minus_yhat) * minus_one_over_N
-		bce_loss = torch.sum(  presum  )
 
+		bce_loss = criterion(yhat, target)
 		# MoM loss
-		mom_loss = 1.0 * (mp1 + 0.5*mp2 + 0.25*mp3 + 0.125*mp4)
-		
-		loss = bce_loss + mom_loss
+		mom_loss = 1.0 * (mp1 + 0.5 * mp2 + 0.25 * mp3 + 0.125 * mp4)
 
-		# gradient descent !
-		loss.backward()
-		g_optimizer.step()			
-		
-		# calculate accuracy
-		ypred = torch.argmax(yhat, dim=1)
-		#print(yhat)
-		#print("yhat")
-		#input("enter")
+		if args.disable_moments:
+			batch_loss = bce_loss
+		else:
+			batch_loss = bce_loss + mom_loss
+			train_stats.append_accumulate('train_ce_loss_comp', bce_loss.item())
+			train_stats.append_accumulate('train_weighted_mom_loss_comp', mom_loss.item())
+			train_stats.append_accumulate('train_1_mom_loss_comp', mp1.item())
+			train_stats.append_accumulate('train_2_mom_loss_comp', mp2.item())
+			train_stats.append_accumulate('train_3_mom_loss_comp', mp3.item())
+			train_stats.append_accumulate('train_4_mom_loss_comp', mp4.item())
 
-		#print(ypred)
-		#print("ypred")
-		#input("enter")
+		if torch.isnan(batch_loss):
+			print("nan loss")
 
-		g_train_pred_numpy[b0:b1] = ypred.detach().cpu().numpy()
-		
-		#------------
-		# Print diagnostics
-		#------------
-		bce_loss = bce_loss.detach().cpu().numpy()
-		mom_loss = mom_loss.detach().cpu().numpy()
-		loss     = loss.detach().cpu().numpy()
-		
-		if (batch_idx % 100 == 0):
-			print("batch", batch_idx, "of", g_num_train / arg_batch_size,
-				"loss", loss, "bce_loss", bce_loss, "mom_loss", mom_loss)		
+		train_stats.append_accumulate('train_loss', batch_loss.item())
+		acc = torch.argmax(yhat, dim=-1) == target
+		train_stats.append_accumulate('train_accuracy', torch.mean(acc, dtype=torch.float32).item())
 
-		epoch_loss += loss
-		
-	#---------------------------
-	# End of epoch, print out the loss
-	#---------------------------
-	
-	n_train = num_batch * arg_batch_size
-	n_train_correct = 0
-	for i in range(n_train):
-		print("true %d pred %d" % (g_train_y_numpy[i], g_train_pred_numpy[i]))
-		if g_train_pred_numpy[i] == g_train_y_numpy[i]:
-			n_train_correct+=1
-	train_accuracy = 100.0 * n_train_correct / n_train
-	
-	epoch_loss /= num_batch
-	print("epoch ", epoch, "loss", epoch_loss, "train_accuracy", train_accuracy)
+		batch_loss.backward()
+		torch.nn.utils.clip_grad_norm_(model.parameters(), 1.0)
+		optimizer.step()
+		optimizer.zero_grad(set_to_none=True)
+
+		if batch_idx % args.log_interval == 0:
+			# log loss and current GPU utilization
+			cpu_mem_percent_used = psutil.virtual_memory().percent
+			gpu_mem_percent_used, memory_total_info = utils.get_gpu_memory()
+			gpu_mem_percent_used = [np.round(100 * x, 1) for x in gpu_mem_percent_used]
+			print('  batch {}/{}  loss: {:8.8g}  lr: {:4.4g}  cpu_mem: {:2.1f}%  gpu_mem: {}% of {}MiB'.format(batch_idx, len(train_loader), batch_loss.item(), optimizer.param_groups[0]['lr'], cpu_mem_percent_used, gpu_mem_percent_used, memory_total_info))
+
+	train_stats.close_accumulate(epoch, 'train_loss', 'avg')
+	if not args.disable_moments:
+		train_stats.close_accumulate(epoch, 'train_ce_loss_comp', 'avg')
+		train_stats.close_accumulate(epoch, 'train_weighted_mom_loss_comp', 'avg')
+		train_stats.close_accumulate(epoch, 'train_1_mom_loss_comp', 'avg')
+		train_stats.close_accumulate(epoch, 'train_2_mom_loss_comp', 'avg')
+		train_stats.close_accumulate(epoch, 'train_3_mom_loss_comp', 'avg')
+		train_stats.close_accumulate(epoch, 'train_4_mom_loss_comp', 'avg')
+	train_stats.close_accumulate(epoch, 'train_accuracy', 'avg')
 
 
-print("Success!")
+def test(model, device, test_loader, epoch, train_stats, args):
+	model.eval()
+	criterion = torch.nn.CrossEntropyLoss()
+
+	with torch.no_grad():
+		for data, target in test_loader:
+			data, target = data.to(device), target.to(device)
+
+			target_onehot = torch.nn.functional.one_hot(target, num_classes=10)
+
+			# model_out = model(data, target_onehot)
+			model_out = model(data)
+			yhat = model_out[0]
+			mp1 = model_out[1]
+			mp2 = model_out[2]
+			mp3 = model_out[3]
+			mp4 = model_out[4]
+
+			bce_loss = criterion(yhat, target)
+			# MoM loss
+			mom_loss = 1.0 * (mp1 + 0.5 * mp2 + 0.25 * mp3 + 0.125 * mp4)
+
+			if args.disable_moments:
+				batch_loss = bce_loss
+			else:
+				batch_loss = bce_loss + mom_loss
+			# train_stats.append_accumulate('test_ce_loss_comp', bce_loss.item())
+			# train_stats.append_accumulate('test_weighted_mom_loss_comp', mom_loss.item())
+			# train_stats.append_accumulate('test_1_mom_loss_comp', mp1.item())
+			# train_stats.append_accumulate('test_2_mom_loss_comp', mp2.item())
+			# train_stats.append_accumulate('test_3_mom_loss_comp', mp3.item())
+			# train_stats.append_accumulate('test_4_mom_loss_comp', mp4.item())
+
+			train_stats.append_accumulate('test_loss', batch_loss.item())
+			acc = torch.argmax(yhat, dim=-1) == target
+			train_stats.append_accumulate('test_accuracy', torch.mean(acc, dtype=torch.float32).item())
+
+	train_stats.close_accumulate(epoch, 'test_loss', 'avg')
+	# train_stats.close_accumulate(epoch, 'test_ce_loss_comp', 'avg')
+	# train_stats.close_accumulate(epoch, 'test_weighted_mom_loss_comp', 'avg')
+	# train_stats.close_accumulate(epoch, 'test_1_mom_loss_comp', 'avg')
+	# train_stats.close_accumulate(epoch, 'test_2_mom_loss_comp', 'avg')
+	# train_stats.close_accumulate(epoch, 'test_3_mom_loss_comp', 'avg')
+	# train_stats.close_accumulate(epoch, 'test_4_mom_loss_comp', 'avg')
+	train_stats.close_accumulate(epoch, 'test_accuracy', 'avg')
+
+	test_loss = train_stats.get_epoch('test_loss', epoch)
+	test_acc = train_stats.get_epoch('test_accuracy', epoch)
+
+	print('Test set: Average loss: {:.4f}, Accuracy: {}'.format(test_loss, test_acc))
+	return test_acc
+
+
+def main():
+	# Training settings
+	parser = argparse.ArgumentParser(description='PyTorch MNIST Example')
+	parser.add_argument('--batch-size', type=int, default=32, metavar='N',
+						help='input batch size for training (default: 64)')
+	parser.add_argument('--learning_rate', type=float, default=0.01, metavar='LR',
+						help='learning rate (default: 1.0)')
+	parser.add_argument('--weight-decay', default=5e-4, type=float)
+	parser.add_argument('--disable-moments', action='store_true', default=False,)
+	parser.add_argument('--log-interval', type=int, default=100, metavar='N',
+						help='how many batches to wait before logging training status')
+	args = parser.parse_args()
+
+	if torch.cuda.is_available():
+		use_cuda = True
+		device = torch.device("cuda")
+	elif torch.backends.mps.is_available():
+		device = torch.device("mps")
+	else:
+		device = torch.device("cpu")
+
+	train_kwargs = {'batch_size': args.batch_size}
+	test_kwargs = {'batch_size': args.batch_size}
+	if use_cuda:
+		cuda_kwargs = {'num_workers': 2,
+					   'pin_memory': True,
+					   'shuffle': True}
+		# check if IDE is in debug mode, and set the args debug flag and set num parallel worker to 0
+		if utils.is_ide_debug():
+			print("setting num_workers to 0")
+			cuda_kwargs['num_workers'] = 0
+
+		train_kwargs.update(cuda_kwargs)
+		test_kwargs.update(cuda_kwargs)
+
+	model = Net(32, 32, 3, 10, 10).to(device)
+	# transform = transforms.Compose([
+	# 	transforms.ToTensor(),
+	# 	transforms.Normalize((0.1307,), (0.3081,))
+	# ])
+	# train_dataset = datasets.MNIST('../data', train=True, download=True, transform=transform)
+	# test_dataset = datasets.MNIST('../data', train=False, transform=transform)
+	train_dataset = cifar_datasets.Cifar10(transform=cifar_datasets.Cifar10.TRANSFORM_WEAK_TRAIN, train=True)
+	test_dataset = cifar_datasets.Cifar10(transform=cifar_datasets.Cifar10.TRANSFORM_TEST, train=False)
+
+	train_loader = torch.utils.data.DataLoader(train_dataset, **train_kwargs)
+	test_loader = torch.utils.data.DataLoader(test_dataset, **test_kwargs)
+
+	optimizer = utils.configure_optimizer(model, args.weight_decay, args.learning_rate, 'sgd')
+	plateau_scheduler = lr_scheduler.ReduceLROnPlateau(optimizer, mode='max', factor=0.2, patience=20, threshold=1e-4, max_num_lr_reductions=2)
+	# output_folder = './models-20230709/custom-net-moments-no-y-relu'
+	output_folder = './models-20230709/tmp'
+	os.makedirs(output_folder, exist_ok=True)
+	train_stats = metadata.TrainingStats()
+	epoch = -1
+
+	while not plateau_scheduler.is_done():
+		epoch += 1
+		train(args, model, device, train_loader, optimizer, epoch, train_stats)
+		torch.cuda.empty_cache()
+		torch.cuda.synchronize()
+		test_acc = test(model, device, test_loader, epoch, train_stats, args)
+		plateau_scheduler.step(test_acc)
+
+		if plateau_scheduler.is_equiv_to_best_epoch:
+			print('Updating best model with epoch: {} accuracy: {}'.format(epoch, test_acc))
+			model.cpu()
+			torch.save(model, os.path.join(output_folder, "model.pt"))
+			model.to(device)
+
+			# update the global metrics with the best epoch
+			train_stats.update_global(epoch)
+
+		train_stats.export(output_folder)  # update metrics data on disk
+		train_stats.plot_all_metrics(output_folder)
+	train_stats.export(output_folder)  # update metrics data on disk
+	train_stats.plot_all_metrics(output_folder)
+
+
+
+
+if __name__ == '__main__':
+	main()
+

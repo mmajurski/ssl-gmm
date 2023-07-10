@@ -5,7 +5,7 @@ import json
 import os
 
 # folder to read files from
-directory = 'models-20230612'
+directory = 'models-extrafc'
 
 # columns to extract from file name
 config_columns = ['method', 'last_layer', 'ema', 'embedding_dim', 'model', 'learning_rate', 'interleave']
@@ -64,4 +64,4 @@ for folder_name in os.listdir(directory):
     results_df = pd.concat([results_df, row_df])
 
 # exporting to excel file
-results_df.to_csv('results-20230612.csv', index=False)
+results_df.to_csv('results-extrafc.csv', index=False)

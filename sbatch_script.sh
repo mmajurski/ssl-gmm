@@ -41,11 +41,6 @@ LEARNING_RATE=$2
 EMBD_DIM=$3
 PRE_FC=$4
 MODEL_FP=$5
-INTERLEAVE=$6
 TANH=$6
 
-if [ "$INTERLEAVE" -gt 0 ]; then
-python main.py --output-dirpath=${MODEL_FP} --trainer=fixmatch --last-layer=${LAST_LAYER} --optimizer=sgd --learning-rate=${LEARNING_RATE} --embedding_dim=${EMBD_DIM} --nprefc=${PRE_FC} --interleave --use_tanh=${TANH}
-else
 python main.py --output-dirpath=${MODEL_FP} --trainer=fixmatch --last-layer=${LAST_LAYER} --optimizer=sgd --learning-rate=${LEARNING_RATE} --embedding_dim=${EMBD_DIM} --nprefc=${PRE_FC} --use_tanh=${TANH}
-fi

@@ -51,7 +51,7 @@ i=$((TRIM_HIGHEST+1))
 
 emb_count=16
 fc_count=0
-for mn in 0 1
+for mn in 0 1 2
 do
     for ll in "kmeans_layer"
     do
@@ -60,24 +60,14 @@ do
         do
             for fc_count in 1 2
             do
-                # no interleave
+                # leakyrelu
                 printf -v src "id-%08d" ${i}
                 sbatch sbatch_script.sh ${ll} ${lr} ${emb_count} ${fc_count} ${MODEL_DIR}/${src} 0
                 i=$((i+1))
 
-                # interleave
+                # tanh
                 printf -v src "id-%08d" ${i}
                 sbatch sbatch_script.sh ${ll} ${lr} ${emb_count} ${fc_count} ${MODEL_DIR}/${src} 1
-                i=$((i+1))
-
-                # no interleave
-                printf -v src "id-%08d" ${i}
-                sbatch sbatch_script.sh ${ll} ${lr} ${emb_count} ${fc_count} ${MODEL_DIR}/${src} 0 0
-                i=$((i+1))
-
-                # interleave
-                printf -v src "id-%08d" ${i}
-                sbatch sbatch_script.sh ${ll} ${lr} ${emb_count} ${fc_count} ${MODEL_DIR}/${src} 1 1
                 i=$((i+1))
             done
         done

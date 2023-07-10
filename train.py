@@ -113,6 +113,20 @@ def train(args):
 
     logging.info(args)
 
+    try:
+        # attempt to get the slurm job id and log it
+        logging.info("Slurm JobId: {}".format(os.environ['SLURM_JOB_ID']))
+    except KeyError:
+        pass
+
+    try:
+        # attempt to get the hostname and log it
+        import socket
+        hn = socket.gethostname()
+        logging.info("Job running on host: {}".format(hn))
+    except RuntimeError:
+        pass
+
     # copy code files to the output directory
     src_ofp = os.path.join(args.output_dirpath, 'src')
     os.makedirs(src_ofp)
