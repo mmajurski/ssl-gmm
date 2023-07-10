@@ -44,7 +44,6 @@ def main():
     parser.add_argument('--num-labeled-datapoints', default=250, type=int, help='number of labeled annotations in the dataset.')
     parser.add_argument('--optimizer', type=str, default='sgd',help='optimizer if nothing is passed AdamW would be used (currently supported sgd,adamw)')
     parser.add_argument('--strong-augmentation', help='enables strong augmentation', action='store_true')
-    parser.add_argument('--interleave', help='enables batch interleaving', action='store_true')
     parser.add_argument('--debug', help='enables debugging mode', action='store_true')
     parser.add_argument('--last-layer', type=str, default='fc', help='last layer to use in the NN')
     parser.add_argument('--nprefc', type=int, default=0, help='number of pre-fc linear layers')

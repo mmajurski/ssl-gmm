@@ -87,12 +87,10 @@ class FixMatchTrainer(trainer.SupervisedTrainer):
             inputs = torch.cat((inputs_l, inputs_ul_weak, inputs_ul_strong))
             inputs = inputs.cuda()
 
-            if self.args.interleave:
-                inputs = utils.interleave(inputs, 2 * self.args.mu + 1)
+            # inputs = utils.interleave(inputs, 2 * self.args.mu + 1)
             embedding, logits = model(inputs)
-            if self.args.interleave:
-                logits = utils.de_interleave(logits, 2 * self.args.mu + 1)
-                embedding = utils.de_interleave(embedding, 2 * self.args.mu + 1)
+            # logits = utils.de_interleave(logits, 2 * self.args.mu + 1)
+            # embedding = utils.de_interleave(embedding, 2 * self.args.mu + 1)
 
             targets_l = targets_l.cuda()
             targets_ul = targets_ul.cuda()
