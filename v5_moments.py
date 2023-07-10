@@ -18,11 +18,12 @@ import metadata
 
 
 class Net(nn.Module):
-	def __init__(self, sY=32, sX=32, chan=3, num_classes=10, dim=64):
+	def __init__(self, sY=32, sX=32, chan=3, num_classes=10, dim=64, use_tanh=False):
 		super(Net, self).__init__()
 		
 		self.num_classes = num_classes
 		self.dim	= dim
+		self.use_tanh = use_tanh
 	
 		#----------
 		# The architecture
@@ -89,11 +90,15 @@ class Net(nn.Module):
 		x = F.max_pool2d(x, 2)
 		x = torch.flatten(x, 1)
 		x = self.fc1(x)
-		# x = torch.tanh(x)
-		x = torch.relu(x)
+		if self.use_tanh:
+			x = torch.tanh(x)
+		else:
+			x = torch.relu(x)
 		x = self.fc2(x)	
-		# x = torch.tanh(x)
-		x = torch.relu(x)
+		if self.use_tanh:
+			x = torch.tanh(x)
+		else:
+			x = torch.relu(x)
 		x = self.fc3(x)	
 		
 		
@@ -414,8 +419,10 @@ def main():
 						help='input batch size for training (default: 64)')
 	parser.add_argument('--learning_rate', type=float, default=0.01, metavar='LR',
 						help='learning rate (default: 1.0)')
+	parser.add_argument('--ofn', type=str)
 	parser.add_argument('--weight-decay', default=5e-4, type=float)
-	parser.add_argument('--disable-moments', action='store_true', default=False,)
+	parser.add_argument('--disable-moments', action='store_true', default=False)
+	parser.add_argument('--tanh', action='store_true', default=False)
 	parser.add_argument('--log-interval', type=int, default=100, metavar='N',
 						help='how many batches to wait before logging training status')
 	args = parser.parse_args()
@@ -442,7 +449,7 @@ def main():
 		train_kwargs.update(cuda_kwargs)
 		test_kwargs.update(cuda_kwargs)
 
-	model = Net(32, 32, 3, 10, 10).to(device)
+	model = Net(32, 32, 3, 10, 10, use_tanh=args.tanh).to(device)
 	# transform = transforms.Compose([
 	# 	transforms.ToTensor(),
 	# 	transforms.Normalize((0.1307,), (0.3081,))
@@ -457,8 +464,7 @@ def main():
 
 	optimizer = utils.configure_optimizer(model, args.weight_decay, args.learning_rate, 'sgd')
 	plateau_scheduler = lr_scheduler.ReduceLROnPlateau(optimizer, mode='max', factor=0.2, patience=20, threshold=1e-4, max_num_lr_reductions=2)
-	# output_folder = './models-20230709/custom-net-moments-no-y-relu'
-	output_folder = './models-20230709/tmp'
+	output_folder = './models-20230709/{}'.format(args.ofn)
 	os.makedirs(output_folder, exist_ok=True)
 	train_stats = metadata.TrainingStats()
 	epoch = -1
