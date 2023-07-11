@@ -1,0 +1,13 @@
+{
+  "test_wall_time": 461.98568964004517,
+  "training_wall_time": 5165.477517127991,
+  "num_epochs_trained": 217,
+  "epoch": 197,
+  "learning_rate": 0.0004,
+  "train_wall_time": 22.846466064453125,
+  "train_loss": 0.0022412969362513024,
+  "train_accuracy": 0.9994354248046875,
+  "test_loss": 1.976994121150606,
+  "test_accuracy": 0.5745421974522293,
+  "wall_time": 5760.4162011146545
+}
