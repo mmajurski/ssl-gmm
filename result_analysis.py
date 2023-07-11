@@ -8,7 +8,7 @@ import os
 directory = 'models-extrafc'
 
 # columns to extract from file name
-config_columns = ['method', 'last_layer', 'ema', 'embedding_dim', 'model', 'learning_rate']
+config_columns = ['method', 'last_layer', 'ema', 'embedding_dim', 'model', 'learning_rate', 'nprefc', 'use_tanh']
 # columns to extract from result file (stats.json)
 result_columns = ['test_accuracy', 'wall_time', 'epoch']
 # create dataframe for storing results
@@ -36,6 +36,13 @@ for folder_name in os.listdir(directory):
     if 'embedding_dim' not in full_config_dict.keys():
         full_config_dict['embedding_dim'] = 8
     config_dict['embedding_dim'] = full_config_dict['embedding_dim']
+    if 'nprefc' not in full_config_dict.keys():
+        full_config_dict['nprefc'] = 0
+    config_dict['nprefc'] = full_config_dict['nprefc']
+    if 'use_tanh' not in full_config_dict.keys():
+        full_config_dict['use_tanh'] = 0
+    config_dict['use_tanh'] = full_config_dict['use_tanh']
+
 
     config_dict = dict((k, config_dict[k]) for k in config_columns)
 

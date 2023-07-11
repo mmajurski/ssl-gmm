@@ -46,7 +46,8 @@ class Cifar10(torch.utils.data.Dataset):
         torchvision.transforms.RandomCrop(size=32,
                                           padding=int(32 * 0.125),
                                           padding_mode='reflect'),
-        fixmatch_augmentation.RandAugmentMC(n=2, m=10),
+        # fixmatch_augmentation.RandAugmentMC(n=2, m=10),
+        torchvision.transforms.RandAugment(num_ops=2, magnitude=10),  # TODO confirm this works as expected
         torchvision.transforms.ToTensor(),
         torchvision.transforms.Normalize(mean=cifar10_mean, std=cifar10_std)
     ])
@@ -236,7 +237,8 @@ class Cifar100(Cifar10):
         torchvision.transforms.RandomCrop(size=32,
                                           padding=int(32 * 0.125),
                                           padding_mode='reflect'),
-        fixmatch_augmentation.RandAugmentMC(n=2, m=10),
+        # fixmatch_augmentation.RandAugmentMC(n=2, m=10),
+        torchvision.transforms.RandAugment(num_ops=2, magnitude=10),  # TODO confirm this works as expected
         torchvision.transforms.ToTensor(),
         torchvision.transforms.Normalize(mean=cifar100_mean, std=cifar100_std)
     ])
