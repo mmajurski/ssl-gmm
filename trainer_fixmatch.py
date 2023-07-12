@@ -61,12 +61,16 @@ class FixMatchTrainer(trainer.SupervisedTrainer):
             pl_gt_count_per_class.append(0)
 
         cluster_criterion = torch.nn.MSELoss()
-        if self.args.last_layer == 'fc':
+        if self.args.embedding_constraint is None:
             emb_constraint = None
-        elif self.args.last_layer == 'kmeans_layer':
-            emb_constraint = embedding_constraints.mean_covar
+        elif self.args.embedding_constraint == 'mean_covar':
+            emb_constraint = embedding_constraints.MeanCovar()
+        elif self.args.embedding_constraint == 'gauss_moment':
+            emb_constraint = embedding_constraints.GaussianMoments(embedding_dim=self.args.embedding_dim, num_classes=self.args.num_classes)
+        elif self.args.embedding_constraint == 'l2':
+            emb_constraint = embedding_constraints.L2ClusterCentroid()
         else:
-            emb_constraint = embedding_constraints.l2_cluster_centroid
+            raise RuntimeError("Invalid embedding constraint type: {}".format(self.args.embedding_constraint))
 
         for batch_idx, tensor_dict_l in enumerate(dataloader):
             inputs_l = tensor_dict_l[0]
@@ -142,9 +146,10 @@ class FixMatchTrainer(trainer.SupervisedTrainer):
 
             loss_l = criterion(logits_l, targets_l)
             if emb_constraint is not None:
-                cluster_dist_l = emb_constraint(embedding_l, model.last_layer.centers, logits_l)
-                cluster_loss = cluster_criterion(cluster_dist_l, torch.zeros_like(cluster_dist_l))
-                loss_l += cluster_loss
+                emb_constraint_l = emb_constraint(embedding_l, model.last_layer.centers, logits_l)
+                emb_constraint_loss_l = cluster_criterion(emb_constraint_l, torch.zeros_like(emb_constraint_l))
+                train_stats.append_accumulate('train_embedding_constraint_loss', emb_constraint_loss_l.item())
+                loss_l += emb_constraint_loss_l
 
             # keep just those labels which are valid PL
             logits_ul_strong = logits_ul_strong[valid_pl]
@@ -158,23 +163,23 @@ class FixMatchTrainer(trainer.SupervisedTrainer):
                 train_stats.append_accumulate('train_pseudo_label_loss', loss_ul.item())
 
                 if emb_constraint is not None:
-                    cluster_dist_ul_strong = emb_constraint(embedding_ul_strong, model.last_layer.centers, logits_ul_weak)
-                    cluster_dist_ul_weak = emb_constraint(embedding_ul_weak, model.last_layer.centers, logits_ul_weak)
+                    emb_constraint_ul_strong = emb_constraint(embedding_ul_strong, model.last_layer.centers, logits_ul_weak)
+                    emb_constraint_ul_weak = emb_constraint(embedding_ul_weak, model.last_layer.centers, logits_ul_weak)
 
-                    cluster_loss_ul_strong = cluster_criterion(cluster_dist_ul_strong, torch.zeros_like(cluster_dist_ul_strong))
-                    cluster_loss_ul_weak = cluster_criterion(cluster_dist_ul_weak, torch.zeros_like(cluster_dist_ul_weak))
-                    cluster_loss_ul = cluster_loss_ul_strong + cluster_loss_ul_weak
-                    train_stats.append_accumulate('train_pseudo_label_cluster_loss', cluster_loss_ul.item())
+                    emb_constraint_loss_ul_strong = cluster_criterion(emb_constraint_ul_strong, torch.zeros_like(emb_constraint_ul_strong))
+                    emb_constraint_loss_ul_weak = cluster_criterion(emb_constraint_ul_weak, torch.zeros_like(emb_constraint_ul_weak))
+                    emb_constraint_loss_ul = emb_constraint_loss_ul_strong + emb_constraint_loss_ul_weak
+                    train_stats.append_accumulate('train_pseudo_label_embedding_constraint_loss', emb_constraint_loss_ul.item())
                 else:
-                    cluster_loss_ul = torch.tensor(torch.nan).to(loss_l.device)
+                    emb_constraint_loss_ul = torch.tensor(torch.nan).to(loss_l.device)
             else:
                 loss_ul = torch.tensor(torch.nan).to(loss_l.device)
-                cluster_loss_ul = torch.tensor(torch.nan).to(loss_l.device)
+                emb_constraint_loss_ul = torch.tensor(torch.nan).to(loss_l.device)
             batch_loss = loss_l
             if not torch.isnan(loss_ul):
                 batch_loss += loss_ul
-            if not torch.isnan(cluster_loss_ul):
-                batch_loss += cluster_loss_ul
+            if not torch.isnan(emb_constraint_loss_ul):
+                batch_loss += emb_constraint_loss_ul
 
             batch_loss.backward()
             torch.nn.utils.clip_grad_norm_(model.parameters(), 1.0)
@@ -214,7 +219,8 @@ class FixMatchTrainer(trainer.SupervisedTrainer):
         train_stats.close_accumulate(epoch, 'train_pseudo_label_accuracy', method='avg', default_value=0.0)  # default value in case no data was collected
         train_stats.close_accumulate(epoch, 'train_pseudo_label_loss', method='avg', default_value=0.0)  # default value in case no data was collected
         if emb_constraint is not None:
-            train_stats.close_accumulate(epoch, 'train_pseudo_label_cluster_loss', method='avg', default_value=0.0)  # default value in case no data was collected
+            train_stats.close_accumulate(epoch, 'train_embedding_constraint_loss', method='avg', default_value=0.0)  # default value in case no data was collected
+            train_stats.close_accumulate(epoch, 'train_pseudo_label_embedding_constraint_loss', method='avg', default_value=0.0)  # default value in case no data was collected
         train_stats.close_accumulate(epoch, 'train_loss', method='avg')
         train_stats.close_accumulate(epoch, 'train_accuracy', method='avg')
 
@@ -234,6 +240,11 @@ class FixMatchTrainer(trainer.SupervisedTrainer):
             # reset any leftover changes to the learning rate
             for param_group in optimizer.param_groups:
                 param_group['lr'] = epoch_init_lr
+        if emb_constraint is not None:
+            # cleanup and data associated with the embedding constraint to avoid GPU memory leaks
+            emb_constraint.cleanup()
+            del emb_constraint
+
 
     def eval_model(self, model, pytorch_dataset, criterion, train_stats, split_name, epoch, args):
         if pytorch_dataset is None or len(pytorch_dataset) == 0:
@@ -246,12 +257,16 @@ class FixMatchTrainer(trainer.SupervisedTrainer):
         start_time = time.time()
 
         cluster_criterion = torch.nn.MSELoss()
-        if self.args.last_layer == 'fc':
+        if self.args.embedding_constraint is None:
             emb_constraint = None
-        elif self.args.last_layer == 'kmeans_layer':
-            emb_constraint = embedding_constraints.mean_covar
+        elif self.args.embedding_constraint == 'mean_covar':
+            emb_constraint = embedding_constraints.MeanCovar()
+        elif self.args.embedding_constraint == 'gauss_moment':
+            emb_constraint = embedding_constraints.GaussianMoments(embedding_dim=self.args.embedding_dim, num_classes=self.args.num_classes)
+        elif self.args.embedding_constraint == 'l2':
+            emb_constraint = embedding_constraints.L2ClusterCentroid()
         else:
-            emb_constraint = embedding_constraints.l2_cluster_centroid
+            raise RuntimeError("Invalid embedding constraint type: {}".format(self.args.embedding_constraint))
 
         with torch.no_grad():
             for batch_idx, tensor_dict in enumerate(dataloader):
@@ -263,10 +278,10 @@ class FixMatchTrainer(trainer.SupervisedTrainer):
                 if emb_constraint is not None:
                     # only include a "logit" loss, when there are other terms
                     train_stats.append_accumulate('{}_logit_loss'.format(split_name), loss.item())
-                    cluster_dist_l = emb_constraint(embedding, model.last_layer.centers, logits)
-                    cluster_loss = cluster_criterion(cluster_dist_l, torch.zeros_like(cluster_dist_l))
-                    train_stats.append_accumulate('{}_cluster_loss'.format(split_name), cluster_loss.item())
-                    loss += cluster_loss
+                    emb_constraint_l = emb_constraint(embedding, model.last_layer.centers, logits)
+                    emb_constraint_loss = cluster_criterion(emb_constraint_l, torch.zeros_like(emb_constraint_l))
+                    train_stats.append_accumulate('{}_emb_constraint_loss'.format(split_name), emb_constraint_loss.item())
+                    loss += emb_constraint_loss
 
                 train_stats.append_accumulate('{}_loss'.format(split_name), loss.item())
 
@@ -283,7 +298,7 @@ class FixMatchTrainer(trainer.SupervisedTrainer):
         train_stats.close_accumulate(epoch, '{}_loss'.format(split_name), method='avg')
         if emb_constraint is not None:
             train_stats.close_accumulate(epoch, '{}_logit_loss'.format(split_name), method='avg')
-            train_stats.close_accumulate(epoch, '{}_cluster_loss'.format(split_name), method='avg')
+            train_stats.close_accumulate(epoch, '{}_emb_constraint_loss'.format(split_name), method='avg')
         train_stats.close_accumulate(epoch, '{}_accuracy'.format(split_name), method='avg')
 
         wall_time = time.time() - start_time

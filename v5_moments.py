@@ -292,6 +292,8 @@ class Net(nn.Module):
 		moment_penalty3 = torch.sum( moment3_weight*torch.pow( (moment3 - moment3_target), 2 ) )
 		moment_penalty4 = torch.sum( moment4_weight*torch.pow( (moment4 - moment4_target), 2 ) )
 
+		resp = torch.clip(resp, min=1e-8)
+		resp = torch.log(resp)
 
 		return [resp, moment_penalty1, moment_penalty2, moment_penalty3, moment_penalty4]
 

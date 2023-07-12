@@ -2,7 +2,8 @@ import torch
 import gauss_moments
 
 class GaussianMoments(torch.nn.Module):
-    def __init(self, embedding_dim: int, num_classes: int):
+    def __init__(self, embedding_dim: int, num_classes: int):
+        super(GaussianMoments, self).__init__()
         self.dim = embedding_dim
         self.num_classes = num_classes
 
@@ -12,21 +13,61 @@ class GaussianMoments(torch.nn.Module):
         moment_4 = gauss_moments.GaussMoments(self.dim, 4)  # kutorsis
 
         # moment weights (for moment loss function)
-        self.moment1_weight = torch.nn.Parameter(torch.tensor(moment_1.moment_weights), requires_grad=False)
-        self.moment2_weight = torch.nn.Parameter(torch.tensor(moment_1.moment_weights), requires_grad=False)
-        self.moment3_weight = torch.nn.Parameter(torch.tensor(moment_1.moment_weights), requires_grad=False)
-        self.moment4_weight = torch.nn.Parameter(torch.tensor(moment_1.moment_weights), requires_grad=False)
+        self.moment1_weight = torch.tensor(moment_1.moment_weights, requires_grad=False)
+        self.moment2_weight = torch.tensor(moment_2.moment_weights, requires_grad=False)
+        self.moment3_weight = torch.tensor(moment_3.moment_weights, requires_grad=False)
+        self.moment4_weight = torch.tensor(moment_4.moment_weights, requires_grad=False)
+
+        # self.moment1_weight = torch.nn.Parameter(torch.tensor(moment_1.moment_weights), requires_grad=False)
+        # self.moment2_weight = torch.nn.Parameter(torch.tensor(moment_2.moment_weights), requires_grad=False)
+        # self.moment3_weight = torch.nn.Parameter(torch.tensor(moment_3.moment_weights), requires_grad=False)
+        # self.moment4_weight = torch.nn.Parameter(torch.tensor(moment_4.moment_weights), requires_grad=False)
 
         # gaussian moments
-        self.gauss_moments1 = torch.nn.Parameter(torch.tensor(moment_1.joint_gauss_moments), requires_grad=False)
-        self.gauss_moments2 = torch.nn.Parameter(torch.tensor(moment_2.joint_gauss_moments), requires_grad=False)
-        self.gauss_moments3 = torch.nn.Parameter(torch.tensor(moment_3.joint_gauss_moments), requires_grad=False)
-        self.gauss_moments4 = torch.nn.Parameter(torch.tensor(moment_4.joint_gauss_moments), requires_grad=False)
+        # self.gauss_moments1 = torch.nn.Parameter(torch.tensor(moment_1.joint_gauss_moments), requires_grad=False)
+        # self.gauss_moments2 = torch.nn.Parameter(torch.tensor(moment_2.joint_gauss_moments), requires_grad=False)
+        # self.gauss_moments3 = torch.nn.Parameter(torch.tensor(moment_3.joint_gauss_moments), requires_grad=False)
+        # self.gauss_moments4 = torch.nn.Parameter(torch.tensor(moment_4.joint_gauss_moments), requires_grad=False)
 
-    def forward(self, embedding):
-        # Obtain cluster assignment from the embedding by argmax across the class dim
-        cluster_assignment = torch.argmin(embedding, dim=-1)
-        cluster_assignment_onehot = torch.nn.functional.one_hot(cluster_assignment, embedding.shape[1])
+        self.gauss_moments1 = torch.tensor(moment_1.joint_gauss_moments, requires_grad=False)
+        self.gauss_moments2 = torch.tensor(moment_2.joint_gauss_moments, requires_grad=False)
+        self.gauss_moments3 = torch.tensor(moment_3.joint_gauss_moments, requires_grad=False)
+        self.gauss_moments4 = torch.tensor(moment_4.joint_gauss_moments, requires_grad=False)
+
+    def forward(self, embedding, centers, logits):
+        if centers is None:
+            return 0.0
+
+        if centers.device != self.gauss_moments1.device:
+            self.gauss_moments1 = self.gauss_moments1.to(centers.device)
+            self.gauss_moments2 = self.gauss_moments2.to(centers.device)
+            self.gauss_moments3 = self.gauss_moments3.to(centers.device)
+            self.gauss_moments4 = self.gauss_moments4.to(centers.device)
+
+            self.moment1_weight = self.moment1_weight.to(centers.device)
+            self.moment2_weight = self.moment2_weight.to(centers.device)
+            self.moment3_weight = self.moment3_weight.to(centers.device)
+            self.moment4_weight = self.moment4_weight.to(centers.device)
+
+        # argmax resp to assign to cluster
+        # optimize CE over resp + L2 loss
+        cluster_assignment = torch.argmax(logits, dim=-1)
+        cluster_assignment_onehot = torch.nn.functional.one_hot(cluster_assignment, logits.shape[1])
+
+
+        # Upsample the x-data to [batch, num_classes, dim]
+        x_rep = embedding.unsqueeze(1).repeat(1, self.num_classes, 1)
+
+        # Upsample the clusters to [batch, 10, 10]
+        batch = logits.shape[0]  # batch size
+        centers_rep = centers.unsqueeze(0).repeat(batch, 1, 1)
+
+        #		print(centers)
+        #		print("centers")
+        #		input("enter")
+
+        # Subtract to get diff of [batch, 10, 10]
+        diff = x_rep - centers_rep
 
         # -------------------------------------
         # The moments penalty
@@ -41,9 +82,7 @@ class GaussianMoments(torch.nn.Module):
         cluster_weight = torch.sum(cluster_assignment_onehot, axis=0)
         cluster_assignment_onehot_rep = cluster_assignment_onehot.unsqueeze(2).repeat(1, 1, self.dim)
 
-        # TODO can I use the embedding directly here? instead of diff
-        # diff_onehot = diff * cluster_assignment_onehot_rep
-        diff_onehot = embedding * cluster_assignment_onehot_rep
+        diff_onehot = diff * cluster_assignment_onehot_rep
 
         moment1 = torch.sum(diff_onehot, dim=0)
         moment1_count = cluster_weight.unsqueeze(1).repeat(1, self.dim)
@@ -144,125 +183,165 @@ class GaussianMoments(torch.nn.Module):
 
         return mom_penalty
 
+    def cleanup(self):
+        self.gauss_moments1 = self.gauss_moments1.to('cpu')
+        self.gauss_moments2 = self.gauss_moments2.to('cpu')
+        self.gauss_moments3 = self.gauss_moments3.to('cpu')
+        self.gauss_moments4 = self.gauss_moments4.to('cpu')
+
+        self.moment1_weight = self.moment1_weight.to('cpu')
+        self.moment2_weight = self.moment2_weight.to('cpu')
+        self.moment3_weight = self.moment3_weight.to('cpu')
+        self.moment4_weight = self.moment4_weight.to('cpu')
+
+        del self.gauss_moments1
+        del self.gauss_moments2
+        del self.gauss_moments3
+        del self.gauss_moments4
+        del self.moment1_weight
+        del self.moment2_weight
+        del self.moment3_weight
+        del self.moment4_weight
 
 
 
-def l2_cluster_centroid(embedding, centers, logits):
-    num_classes = logits.shape[-1]
-    # argmax resp to assign to cluster
-    # optimize CE over resp + L2 loss
-    cluster_assignment = torch.argmax(logits, dim=-1)
 
-    # version of cluster_dist which is based on the centroid distance from self.centers
-    cluster_dist = torch.zeros_like(logits[0, :])
-    for c in range(num_classes):
-        if torch.any(c == cluster_assignment):
-            x_centroid = torch.mean(embedding[c == cluster_assignment, :], dim=0)
-            delta = centers[c, :] - x_centroid
-            delta = torch.sqrt(torch.sum(torch.pow(delta, 2), dim=-1))
-            cluster_dist[c] = delta
+class L2ClusterCentroid(torch.nn.Module):
+    def __init__(self):
+        super(L2ClusterCentroid, self).__init__()
 
-    return cluster_dist
+    def forward(self, embedding, centers, logits):
+        if centers is None:
+            return 0.0
+
+        num_classes = logits.shape[-1]
+        # argmax resp to assign to cluster
+        # optimize CE over resp + L2 loss
+        cluster_assignment = torch.argmax(logits, dim=-1)
+
+        # version of cluster_dist which is based on the centroid distance from self.centers
+        cluster_dist = torch.zeros_like(logits[0, :])
+        for c in range(num_classes):
+            if torch.any(c == cluster_assignment):
+                x_centroid = torch.mean(embedding[c == cluster_assignment, :], dim=0)
+                delta = centers[c, :] - x_centroid
+                delta = torch.sqrt(torch.sum(torch.pow(delta, 2), dim=-1))
+                cluster_dist[c] = delta
+
+        return cluster_dist
+
+    def cleanup(self):
+        pass
 
 
-def mean_covar(embedding, centers, logits):
-    num_classes = logits.shape[-1]
-    dim = embedding.shape[-1]
-    batch = embedding.shape[0]
+class MeanCovar(torch.nn.Module):
+    def __init__(self):
+        super(MeanCovar, self).__init__()
 
-    # Upsample the x-data to [batch, num_classes, dim]
-    embedding_rep = embedding.unsqueeze(1).repeat(1, num_classes, 1)
+    def forward(self, embedding, centers, logits):
+        if centers is None:
+            return 0.0
 
-    # Obtain cluster assignment from dist_sq directly
-    cluster_assignment = torch.argmax(logits, dim=-1)
-    cluster_assignment_onehot = torch.nn.functional.one_hot(cluster_assignment, logits.shape[1])
+        num_classes = logits.shape[-1]
+        dim = embedding.shape[-1]
+        batch = embedding.shape[0]
 
-    # ----------------------------------------
-    # Calculate the empirical cluster mean / covariance
-    #   OUTPUT:  empirical_mean  [classes dim]
-    #                  cluster centers for the current minibatch
-    #   OUTPUT:  empirical_covar [classes dim dim]
-    #                  gaussian covariance matrices for the current minibatch
-    #   OUTPUT:  cluster_weight  [classes]
-    #                  number of samples for each class
-    # ----------------------------------------
-    cluster_weight = torch.sum(cluster_assignment_onehot, dim=0)
-    cluster_assignment_onehot_rep = cluster_assignment_onehot.unsqueeze(2).repeat(1, 1, dim)
-    x_onehot_rep = embedding_rep * cluster_assignment_onehot_rep
+        # Upsample the x-data to [batch, num_classes, dim]
+        embedding_rep = embedding.unsqueeze(1).repeat(1, num_classes, 1)
 
-    #
-    # Calculate the empirical mean
-    #
-    empirical_total = torch.sum(x_onehot_rep, dim=0)
-    empirical_count = cluster_weight.unsqueeze(1).repeat(1, dim)
-    empirical_mean = empirical_total / (empirical_count + 1e-8)
+        # Obtain cluster assignment from dist_sq directly
+        cluster_assignment = torch.argmax(logits, dim=-1)
+        cluster_assignment_onehot = torch.nn.functional.one_hot(cluster_assignment, logits.shape[1])
 
-    #
-    # Calculate the empirical covariance
-    #
-    empirical_mean_rep = empirical_mean.unsqueeze(0).repeat(batch, 1, 1)
-    empirical_mean_rep = empirical_mean_rep * cluster_assignment_onehot_rep
-    x_mu_rep = x_onehot_rep - empirical_mean_rep
+        # ----------------------------------------
+        # Calculate the empirical cluster mean / covariance
+        #   OUTPUT:  empirical_mean  [classes dim]
+        #                  cluster centers for the current minibatch
+        #   OUTPUT:  empirical_covar [classes dim dim]
+        #                  gaussian covariance matrices for the current minibatch
+        #   OUTPUT:  cluster_weight  [classes]
+        #                  number of samples for each class
+        # ----------------------------------------
+        cluster_weight = torch.sum(cluster_assignment_onehot, dim=0)
+        cluster_assignment_onehot_rep = cluster_assignment_onehot.unsqueeze(2).repeat(1, 1, dim)
+        x_onehot_rep = embedding_rep * cluster_assignment_onehot_rep
 
-    # perform batch matrix multiplication
-    x_mu_rep_B = torch.transpose(x_mu_rep, 0, 1)
-    x_mu_rep_A = torch.transpose(x_mu_rep_B, 1, 2)
+        #
+        # Calculate the empirical mean
+        #
+        empirical_total = torch.sum(x_onehot_rep, dim=0)
+        empirical_count = cluster_weight.unsqueeze(1).repeat(1, dim)
+        empirical_mean = empirical_total / (empirical_count + 1e-8)
 
-    empirical_covar_total = torch.bmm(x_mu_rep_A, x_mu_rep_B)
-    empirical_covar_count = empirical_count.unsqueeze(2).repeat(1, 1, dim)
+        #
+        # Calculate the empirical covariance
+        #
+        empirical_mean_rep = empirical_mean.unsqueeze(0).repeat(batch, 1, 1)
+        empirical_mean_rep = empirical_mean_rep * cluster_assignment_onehot_rep
+        x_mu_rep = x_onehot_rep - empirical_mean_rep
 
-    empirical_covar = empirical_covar_total / (empirical_covar_count + 1e-8)
+        # perform batch matrix multiplication
+        x_mu_rep_B = torch.transpose(x_mu_rep, 0, 1)
+        x_mu_rep_A = torch.transpose(x_mu_rep_B, 1, 2)
 
-    # ----------------------------------------
-    # Calculate a loss distance of the empirical measures from ideal
-    # ----------------------------------------
+        empirical_covar_total = torch.bmm(x_mu_rep_A, x_mu_rep_B)
+        empirical_covar_count = empirical_count.unsqueeze(2).repeat(1, 1, dim)
 
-    # ------
-    # calculate empirical_mean_loss
-    #  weighted L2 loss of each empirical mean from the cluster centers
-    # ------
+        empirical_covar = empirical_covar_total / (empirical_covar_count + 1e-8)
 
-    # calculate empirical weighted dist squares (for means)
-    empirical_diff = empirical_mean - centers
-    empirical_diff_sq = empirical_diff * empirical_diff
-    empirical_dist_sq = torch.sum(empirical_diff_sq, dim=1)
-    empirical_wei_dist_sq = cluster_weight * empirical_dist_sq
+        # ----------------------------------------
+        # Calculate a loss distance of the empirical measures from ideal
+        # ----------------------------------------
 
-    # create identity covariance of size [class dim dim]
-    # identity_covar = torch.eye(self.dim).unsqueeze(0).repeat(self.num_classes,1,1)
-    zeros = empirical_covar - empirical_covar
-    zeros = torch.sum(zeros, dim=0)
-    identity_covar = zeros.fill_diagonal_(1.0)
-    identity_covar = identity_covar.unsqueeze(0).repeat(num_classes, 1, 1)
+        # ------
+        # calculate empirical_mean_loss
+        #  weighted L2 loss of each empirical mean from the cluster centers
+        # ------
 
-    # separate diagonal and off diagonal elements for covar loss
-    empirical_covar_diag = empirical_covar * identity_covar
-    empirical_covar_off_diag = empirical_covar * (1.0 - identity_covar)
+        # calculate empirical weighted dist squares (for means)
+        empirical_diff = empirical_mean - centers
+        empirical_diff_sq = empirical_diff * empirical_diff
+        empirical_dist_sq = torch.sum(empirical_diff_sq, dim=1)
+        empirical_wei_dist_sq = cluster_weight * empirical_dist_sq
 
-    # calculate diagonal distance squared
-    empirical_covar_diag_dist_sq = empirical_covar_diag - identity_covar
-    empirical_covar_diag_dist_sq = empirical_covar_diag_dist_sq * empirical_covar_diag_dist_sq
-    empirical_covar_diag_dist_sq = torch.sum(empirical_covar_diag_dist_sq, dim=2)
-    empirical_covar_diag_dist_sq = torch.sum(empirical_covar_diag_dist_sq, dim=1)
+        # create identity covariance of size [class dim dim]
+        # identity_covar = torch.eye(self.dim).unsqueeze(0).repeat(self.num_classes,1,1)
+        zeros = empirical_covar - empirical_covar
+        zeros = torch.sum(zeros, dim=0)
+        identity_covar = zeros.fill_diagonal_(1.0)
+        identity_covar = identity_covar.unsqueeze(0).repeat(num_classes, 1, 1)
 
-    # calculate diagonal weighted distance squared
-    empirical_covar_diag_wei_dist_sq = cluster_weight * empirical_covar_diag_dist_sq / (batch * dim)
+        # separate diagonal and off diagonal elements for covar loss
+        empirical_covar_diag = empirical_covar * identity_covar
+        empirical_covar_off_diag = empirical_covar * (1.0 - identity_covar)
 
-    # calculate off diagonal distance squared
-    empirical_covar_off_diag_dist_sq = empirical_covar_off_diag * empirical_covar_off_diag
-    empirical_covar_off_diag_dist_sq = torch.sum(empirical_covar_off_diag_dist_sq, dim=2)
-    empirical_covar_off_diag_dist_sq = torch.sum(empirical_covar_off_diag_dist_sq, dim=1)
+        # calculate diagonal distance squared
+        empirical_covar_diag_dist_sq = empirical_covar_diag - identity_covar
+        empirical_covar_diag_dist_sq = empirical_covar_diag_dist_sq * empirical_covar_diag_dist_sq
+        empirical_covar_diag_dist_sq = torch.sum(empirical_covar_diag_dist_sq, dim=2)
+        empirical_covar_diag_dist_sq = torch.sum(empirical_covar_diag_dist_sq, dim=1)
 
-    # Calculate off-diagonal weighted distance squared
-    empirical_covar_off_diag_wei_dist_sq = cluster_weight * empirical_covar_off_diag_dist_sq / (batch * dim * (dim - 1.0))
+        # calculate diagonal weighted distance squared
+        empirical_covar_diag_wei_dist_sq = cluster_weight * empirical_covar_diag_dist_sq / (batch * dim)
 
-    # Add together to get covariance loss
-    empirical_covar_dist_sq = empirical_covar_diag_wei_dist_sq + empirical_covar_off_diag_wei_dist_sq
+        # calculate off diagonal distance squared
+        empirical_covar_off_diag_dist_sq = empirical_covar_off_diag * empirical_covar_off_diag
+        empirical_covar_off_diag_dist_sq = torch.sum(empirical_covar_off_diag_dist_sq, dim=2)
+        empirical_covar_off_diag_dist_sq = torch.sum(empirical_covar_off_diag_dist_sq, dim=1)
 
-    # ------------------
-    # return mean and covariance weighted mse loss
-    # ------------------
-    empirical_mean_mse = torch.sum(empirical_wei_dist_sq) / (batch * dim)
-    empirical_covar_mse = torch.sum(empirical_covar_dist_sq)
+        # Calculate off-diagonal weighted distance squared
+        empirical_covar_off_diag_wei_dist_sq = cluster_weight * empirical_covar_off_diag_dist_sq / (batch * dim * (dim - 1.0))
 
-    return empirical_mean_mse + empirical_covar_mse
+        # Add together to get covariance loss
+        empirical_covar_dist_sq = empirical_covar_diag_wei_dist_sq + empirical_covar_off_diag_wei_dist_sq
+
+        # ------------------
+        # return mean and covariance weighted mse loss
+        # ------------------
+        empirical_mean_mse = torch.sum(empirical_wei_dist_sq) / (batch * dim)
+        empirical_covar_mse = torch.sum(empirical_covar_dist_sq)
+
+        return empirical_mean_mse + empirical_covar_mse
+
+    def cleanup(self):
+        pass

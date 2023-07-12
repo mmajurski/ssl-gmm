@@ -50,6 +50,7 @@ def main():
     parser.add_argument('--use_tanh', type=int, default=0, help='whether to use tanh')
     parser.add_argument('--num-epochs', default=None, type=int, help='number of epochs to train. If this is non-None it will suppress the use of a test split, and blindly run the training for N epochs.')
     parser.add_argument('--trainer', type=str, default='fixmatch', help='trainer to use (currently supported supervised, fixmatch)')
+    parser.add_argument('--embedding-constraint', type=str, default=None, help='embedding constraint to enforce (currently supported None, mean_covar, gauss_moment)')
 
 
 
