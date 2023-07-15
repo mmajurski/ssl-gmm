@@ -60,8 +60,8 @@ class FixMatchTrainer(trainer.SupervisedTrainer):
             pl_count_per_class.append(0)
             pl_gt_count_per_class.append(0)
 
-        cluster_criterion = torch.nn.MSELoss()
-        if self.args.embedding_constraint is None:
+        embedding_criterion = torch.nn.MSELoss()
+        if self.args.embedding_constraint is None or self.args.embedding_constraint.lower() == 'none':
             emb_constraint = None
         elif self.args.embedding_constraint == 'mean_covar':
             emb_constraint = embedding_constraints.MeanCovar()
@@ -147,7 +147,7 @@ class FixMatchTrainer(trainer.SupervisedTrainer):
             loss_l = criterion(logits_l, targets_l)
             if emb_constraint is not None:
                 emb_constraint_l = emb_constraint(embedding_l, model.last_layer.centers, logits_l)
-                emb_constraint_loss_l = cluster_criterion(emb_constraint_l, torch.zeros_like(emb_constraint_l))
+                emb_constraint_loss_l = embedding_criterion(emb_constraint_l, torch.zeros_like(emb_constraint_l))
                 train_stats.append_accumulate('train_embedding_constraint_loss', emb_constraint_loss_l.item())
                 loss_l += emb_constraint_loss_l
 
@@ -166,8 +166,8 @@ class FixMatchTrainer(trainer.SupervisedTrainer):
                     emb_constraint_ul_strong = emb_constraint(embedding_ul_strong, model.last_layer.centers, logits_ul_weak)
                     emb_constraint_ul_weak = emb_constraint(embedding_ul_weak, model.last_layer.centers, logits_ul_weak)
 
-                    emb_constraint_loss_ul_strong = cluster_criterion(emb_constraint_ul_strong, torch.zeros_like(emb_constraint_ul_strong))
-                    emb_constraint_loss_ul_weak = cluster_criterion(emb_constraint_ul_weak, torch.zeros_like(emb_constraint_ul_weak))
+                    emb_constraint_loss_ul_strong = embedding_criterion(emb_constraint_ul_strong, torch.zeros_like(emb_constraint_ul_strong))
+                    emb_constraint_loss_ul_weak = embedding_criterion(emb_constraint_ul_weak, torch.zeros_like(emb_constraint_ul_weak))
                     emb_constraint_loss_ul = emb_constraint_loss_ul_strong + emb_constraint_loss_ul_weak
                     train_stats.append_accumulate('train_pseudo_label_embedding_constraint_loss', emb_constraint_loss_ul.item())
                 else:
@@ -257,7 +257,7 @@ class FixMatchTrainer(trainer.SupervisedTrainer):
         start_time = time.time()
 
         cluster_criterion = torch.nn.MSELoss()
-        if self.args.embedding_constraint is None:
+        if self.args.embedding_constraint is None or self.args.embedding_constraint.lower() == 'none':
             emb_constraint = None
         elif self.args.embedding_constraint == 'mean_covar':
             emb_constraint = embedding_constraints.MeanCovar()

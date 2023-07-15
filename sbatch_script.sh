@@ -3,14 +3,14 @@
 # MODIFY THESE OPTIONS
 
 #SBATCH --partition=isg
-#SBATCH --exclude=p100,quebec,echo,kilo
+#SBATCH --exclude=p100,quebec
 #SBATCH --nodes=1
 #SBATCH --oversubscribe
 #SBATCH --cpus-per-task=12
 #SBATCH --gres=gpu:1
 #SBATCH --job-name=gmm
 #SBATCH -o log-%N.%j.out
-#SBATCH --time=128:0:0
+#SBATCH --time=96:0:0
 
 # NIST-developed software is provided by NIST as a public service. You may use, copy and distribute copies of the software in any medium, provided that you keep intact this entire notice. You may improve, modify and create derivative works of the software or any portion of the software, and you may copy and distribute such modifications or works. Modified works should carry a notice stating that you changed the software and should note the date and nature of any such change. Please explicitly acknowledge the National Institute of Standards and Technology as the source of the software.
 
@@ -22,25 +22,40 @@
 source /mnt/isgnas/home/mmajursk/miniconda3/etc/profile.d/conda.sh
 conda activate gmm
 
-#LAST_LAYER=$1
-#LEARNING_RATE=$2
-#EMBD_DIM=$3
-#PRE_FC=$4
-#MODEL_FP=$5
-#INTERLEAVE=$6
-#
-#if [ "$INTERLEAVE" -gt 0 ]; then
-#python main.py --output-dirpath=${MODEL_FP} --trainer=fixmatch --last-layer=${LAST_LAYER} --optimizer=sgd --learning-rate=${LEARNING_RATE} --embedding_dim=${EMBD_DIM} --nprefc=${PRE_FC} --interleave
-#else
-#python main.py --output-dirpath=${MODEL_FP} --trainer=fixmatch --last-layer=${LAST_LAYER} --optimizer=sgd --learning-rate=${LEARNING_RATE} --embedding_dim=${EMBD_DIM} --nprefc=${PRE_FC}
-#fi
-
 
 LAST_LAYER=$1
 LEARNING_RATE=$2
 EMBD_DIM=$3
 PRE_FC=$4
-MODEL_FP=$5
-TANH=$6
+START_RUN=$5
+EMBD_CONSTRAINT=$6
+TRAINER=$7
+NLABELS=$8
+MODELS_PER_JOB=$9
 
-python main.py --output-dirpath=${MODEL_FP} --trainer=fixmatch --last-layer=${LAST_LAYER} --optimizer=sgd --learning-rate=${LEARNING_RATE} --embedding_dim=${EMBD_DIM} --nprefc=${PRE_FC} --use_tanh=${TANH}
+
+echo "Model Number Starting PointCount = $START_RUN"
+echo "Requested Model Count = $MODELS_PER_JOB"
+
+root_output_directory="./models"
+if ! [ -d ${root_output_directory} ]; then
+    mkdir ${root_output_directory}
+fi
+
+# MODEL_FP="${root_output_directory}/id-$(printf "%08d" ${INDEX})"
+# python main.py --output-dirpath=${MODEL_FP} --trainer=${TRAINER} --last-layer=${LAST_LAYER} --optimizer=sgd --learning-rate=${LEARNING_RATE} --embedding_dim=${EMBD_DIM} --nprefc=${PRE_FC} --embedding-constraint=${EMBD_CONSTRAINT} --num-labeled-datapoints=${NLABELS}
+
+
+INDEX=$START_RUN
+for i in $(seq $MODELS_PER_JOB); do
+
+  MODEL_FP="${root_output_directory}/id-$(printf "%08d" ${INDEX})"
+  python main.py --output-dirpath=${MODEL_FP} --trainer=${TRAINER} --last-layer=${LAST_LAYER} --optimizer=sgd --learning-rate=${LEARNING_RATE} --embedding_dim=${EMBD_DIM} --nprefc=${PRE_FC} --embedding-constraint=${EMBD_CONSTRAINT} --num-labeled-datapoints=${NLABELS} &
+  INDEX=$((INDEX+1))
+
+  sleep 4  # separate launches by 1 second minimum
+done
+
+
+# wait for all of the runs to complete before exiting
+wait

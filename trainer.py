@@ -9,6 +9,7 @@ import inspect
 
 import cifar_datasets
 import utils
+import embedding_constraints
 
 
 MAX_EPOCHS = 10000
@@ -80,6 +81,18 @@ class SupervisedTrainer:
         start_time = time.time()
         loss_nan_count = 0
 
+        embedding_criterion = torch.nn.MSELoss()
+        if self.args.embedding_constraint is None or self.args.embedding_constraint.lower() == 'none':
+            emb_constraint = None
+        elif self.args.embedding_constraint == 'mean_covar':
+            emb_constraint = embedding_constraints.MeanCovar()
+        elif self.args.embedding_constraint == 'gauss_moment':
+            emb_constraint = embedding_constraints.GaussianMoments(embedding_dim=self.args.embedding_dim, num_classes=self.args.num_classes)
+        elif self.args.embedding_constraint == 'l2':
+            emb_constraint = embedding_constraints.L2ClusterCentroid()
+        else:
+            raise RuntimeError("Invalid embedding constraint type: {}".format(self.args.embedding_constraint))
+
         for batch_idx, tensor_dict in enumerate(dataloader):
 
             optimizer.zero_grad()
@@ -87,18 +100,24 @@ class SupervisedTrainer:
             inputs = tensor_dict[0].cuda()
             labels = tensor_dict[1].cuda()
 
-            embedding, outputs = model(inputs)
+            embedding, logits = model(inputs)
             # resp_gmm, resp_cmm, cluster_dist = model(inputs)
             # outputs = resp_gmm
 
-            batch_loss = criterion(outputs, labels)
+            batch_loss = criterion(logits, labels)
+            if emb_constraint is not None:
+                emb_constraint_vals = emb_constraint(embedding, model.last_layer.centers, logits)
+                emb_constraint_loss = embedding_criterion(emb_constraint_vals, torch.zeros_like(emb_constraint_vals))
+                train_stats.append_accumulate('train_embedding_constraint_loss', emb_constraint_loss.item())
+                batch_loss += emb_constraint_loss
+
             batch_loss.backward()
             torch.nn.utils.clip_grad_norm_(model.parameters(), 1.0)
             optimizer.step()
             if cyclic_lr_scheduler is not None:
                 cyclic_lr_scheduler.step()
 
-            pred = torch.argmax(outputs, dim=-1)
+            pred = torch.argmax(logits, dim=-1)
             accuracy = torch.sum(pred == labels) / len(pred)
 
             # nan loss values are ignored when using AMP, so ignore them for the average
@@ -126,6 +145,8 @@ class SupervisedTrainer:
         if loss_nan_count > 0:
             logging.info("epoch has {} batches with nan loss.".format(loss_nan_count))
 
+        if emb_constraint is not None:
+            train_stats.close_accumulate(epoch, 'train_embedding_constraint_loss', method='avg', default_value=0.0)  # default value in case no data
         train_stats.add(epoch, 'train_wall_time', wall_time)
         train_stats.close_accumulate(epoch, 'train_loss', method='avg')
         train_stats.close_accumulate(epoch, 'train_accuracy', method='avg')

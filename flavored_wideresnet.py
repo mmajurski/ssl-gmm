@@ -1,4 +1,5 @@
 import logging
+import os
 
 import torch
 import torch.nn as nn
@@ -102,7 +103,7 @@ class WideResNet(nn.Module):
 
 
 class WideResNetMajurski(nn.Module):
-    def __init__(self, num_classes, last_layer:str='gmm', depth=28, width=2, embedding_dim=8, num_pre_fc=0, use_tanh=False):
+    def __init__(self, num_classes, last_layer:str='gmm', depth=28, width=2, embedding_dim=16, num_pre_fc=0, use_tanh=False, output_folder=None):
         assert (depth - 4) % 6 == 0, 'depth should be 6n+4'
 
         super(WideResNetMajurski, self).__init__()
@@ -115,6 +116,7 @@ class WideResNetMajurski(nn.Module):
         self.width = width
         self.channels = channels[3]
         self.last_layer_name = last_layer
+        self.output_folder = output_folder
 
         # 1st conv before any network block
         self.conv1 = nn.Conv2d(3, channels[0], kernel_size=3, stride=1, padding=1, bias=False)
@@ -129,8 +131,7 @@ class WideResNetMajurski(nn.Module):
         # self.relu = nn.ReLU(inplace=True)  # published wideresnet network
         self.relu = nn.LeakyReLU(negative_slope=0.1, inplace=True)
 
-        self.use_tanh = use_tanh
-        self.tanh = nn.Tanh()
+        self.count = 0
 
         self.pre_fc_1 = None
         self.pre_fc_2 = None
@@ -140,36 +141,24 @@ class WideResNetMajurski(nn.Module):
             self.pre_fc_1 = nn.Linear(channels[3], channels[3])
             self.pre_fc_2 = nn.Linear(channels[3], channels[3])
 
-        # if self.last_layer == 'gmm':
-        #     self.fc = nn.Linear(channels[3], embedding_dim)
-        #     self.gmm_layer = lcl_models.axis_aligned_gmm_cmm_layer(embedding_dim, num_classes, return_gmm=True, return_cmm=False, return_cluster_dist=False)
-        # elif self.last_layer == 'cmm':
-        #     self.fc = nn.Linear(channels[3], embedding_dim)
-        #     self.cmm_layer = lcl_models.axis_aligned_gmm_cmm_layer(embedding_dim, num_classes, return_gmm=False, return_cmm=True, return_cluster_dist=False)
+        self.fc = nn.Linear(channels[3], embedding_dim)
+
         if self.last_layer_name == 'fc':
-            self.fc = nn.Linear(channels[3], num_classes)
-            self.last_layer = lcl_models2.Identity()
+            self.last_layer = nn.Linear(embedding_dim, num_classes)
         elif self.last_layer_name == 'aa_gmm':
-            self.fc = nn.Linear(channels[3], embedding_dim)
             self.last_layer = lcl_models2.axis_aligned_gmm_cmm_layer(embedding_dim, num_classes, return_gmm=True, return_cmm=False)
         elif self.last_layer_name == 'aa_cmm':
-            self.fc = nn.Linear(channels[3], embedding_dim)
             self.last_layer = lcl_models2.axis_aligned_gmm_cmm_layer(embedding_dim, num_classes, return_gmm=False, return_cmm=True)
         elif self.last_layer_name == 'aa_gmmcmm':
-            self.fc = nn.Linear(channels[3], embedding_dim)
             self.last_layer = lcl_models2.axis_aligned_gmm_cmm_layer(embedding_dim, num_classes, return_gmm=True, return_cmm=True)
         elif self.last_layer_name == 'aa_gmm_d1':
-            self.fc = nn.Linear(channels[3], embedding_dim)
             self.last_layer = lcl_models2.axis_aligned_gmm_cmm_D1_layer(embedding_dim, num_classes, return_gmm=True, return_cmm=False)
         elif self.last_layer_name == 'aa_cmm_d1':
-            self.fc = nn.Linear(channels[3], embedding_dim)
             self.last_layer = lcl_models2.axis_aligned_gmm_cmm_D1_layer(embedding_dim, num_classes, return_gmm=False, return_cmm=True)
         elif self.last_layer_name == 'aa_gmmcmm_d1':
-            self.fc = nn.Linear(channels[3], embedding_dim)
             self.last_layer = lcl_models2.axis_aligned_gmm_cmm_D1_layer(embedding_dim, num_classes, return_gmm=True, return_cmm=True)
-        elif self.last_layer_name == 'kmeans_layer':
-            self.fc = nn.Linear(channels[3], embedding_dim)
-            self.last_layer = lcl_models2.kmeans_layer(embedding_dim, num_classes)
+        elif self.last_layer_name == 'kmeans':
+            self.last_layer = lcl_models2.kmeans(embedding_dim, num_classes)
         else:
             raise RuntimeError("Invalid last layer type: {}".format(self.last_layer_name))
 
@@ -184,18 +173,38 @@ class WideResNetMajurski(nn.Module):
 
         if self.pre_fc_1 is not None:
             out = self.pre_fc_1(out)
-            if self.use_tanh:
-                out = self.tanh(out)
-            else:
-                out = self.relu(out)
+            out = self.relu(out)
         if self.pre_fc_2 is not None:
             out = self.pre_fc_2(out)
-            if self.use_tanh:
-                out = self.tanh(out)
-            else:
-                out = self.relu(out)
+            out = self.relu(out)
 
         embedding = self.fc(out)
 
         logits = self.last_layer(embedding)
+
+        # if self.output_folder is not None and not self.training and self.embedding_dim == 2:
+        #     from matplotlib import pyplot as plt
+        #     cluster_assignment = torch.argmax(logits, dim=-1)
+        #
+        #     fig = plt.figure(figsize=(4, 4), dpi=400)
+        #     xcoord = embedding[:, 0].detach().cpu().numpy().squeeze()
+        #     ycoord = embedding[:, 1].detach().cpu().numpy().squeeze()
+        #     c_ids = cluster_assignment.detach().cpu().numpy().squeeze()
+        #     cmap = plt.get_cmap('tab10')
+        #     for c in range(self.num_classes):
+        #         idx = c_ids == c
+        #         cs = [cmap(c)]
+        #         xs = xcoord[idx]
+        #         ys = ycoord[idx]
+        #         plt.scatter(xs, ys, c=cs, alpha=0.1, s=8)
+        #     if hasattr(self.last_layer, 'centers'):
+        #         for c in range(self.num_classes):
+        #             cent = self.last_layer.centers[c].detach().cpu().numpy().squeeze()
+        #             cs = [cmap(c)]
+        #             plt.scatter(cent[0], cent[1], c=cs, alpha=1.0, s=16, marker=(5, 1), edgecolors='black', linewidth=0.5)
+        #     plt.title('Epoch {}'.format(self.count))
+        #     plt.savefig(os.path.join(self.output_folder, 'embedding_space_{:04d}.png'.format(self.count)))
+        #     self.count += 1
+        #     plt.close()
+
         return embedding, logits

@@ -22,53 +22,11 @@ def setup(args):
     # model = flavored_wideresnet.WideResNet(num_classes=args.num_classes, last_layer=args.last_layer)
 
     if args.arch == 'wide_resnet':
-        model = flavored_wideresnet.WideResNetMajurski(num_classes=args.num_classes, last_layer=args.last_layer, embedding_dim=args.embedding_dim, num_pre_fc=args.nprefc, use_tanh=args.use_tanh)
+        model = flavored_wideresnet.WideResNetMajurski(num_classes=args.num_classes, last_layer=args.last_layer, embedding_dim=args.embedding_dim, num_pre_fc=args.nprefc)
     elif args.arch == 'resnet18':
         model = torchvision.models.resnet18(pretrained=False, num_classes=args.num_classes)
-    elif args.arch == 'flavored_wide_resnet':
-        model = flavored_wideresnet.WideResNet(num_classes=args.num_classes)
     else:
         raise RuntimeError("invalid model arch type")
-
-    # # load stock models from https://pytorch.org/vision/stable/models.html
-    # model = None
-    #
-    # if args.starting_model is not None:
-    #     # warning, this over rides the args.arch selection
-    #     logging.info("Loading requested starting model from '{}'".format(args.starting_model))
-    #     model = torch.load(args.starting_model)
-    # else:
-    #     if args.last_layer == 'fc':
-    #         if args.arch == 'resnet18':
-    #             model = torchvision.models.resnet18(pretrained=False, num_classes=args.num_classes)
-    #             # model = flavored_resnets.ResNet18(num_classes=args.num_classes)
-    #         if args.arch == 'resnet34':
-    #             model = torchvision.models.resnet34(pretrained=False, num_classes=args.num_classes)
-    #         if args.arch == 'resnext50_32x4d':
-    #             model = torchvision.models.resnext50_32x4d(pretrained=False, num_classes=args.num_classes)
-    #         if args.arch == 'wide_resnet50_2':
-    #             model = torchvision.models.wide_resnet50_2(pretrained=False, num_classes=args.num_classes)
-    #         if args.arch == 'wide_resnet':
-    #             model = flavored_wideresnet.WideResNet(num_classes=args.num_classes, last_layer=args.last_layer)
-    #
-    #     elif args.last_layer == 'gmm':
-    #         if args.arch == 'wide_resnet':
-    #             model = flavored_wideresnet.WideResNet(num_classes=args.num_classes, last_layer=args.last_layer)
-    #     elif args.last_layer == 'cauchy':
-    #         if args.arch == 'wide_resnet':
-    #             model = flavored_wideresnet.WideResNet(num_classes=args.num_classes, last_layer=args.last_layer)
-    #     elif args.last_layer == 'aa_gmm':
-    #         if args.arch == 'wide_resnet':
-    #             model = flavored_wideresnet.WideResNet(num_classes=args.num_classes, last_layer=args.last_layer)
-    #     elif args.last_layer == 'aa_gmm_d1':
-    #         if args.arch == 'wide_resnet':
-    #             model = flavored_wideresnet.WideResNet(num_classes=args.num_classes, last_layer=args.last_layer)
-    #     elif args.last_layer == 'kmeans_cmm':
-    #         if args.arch == 'wide_resnet':
-    #             model = flavored_wideresnet.WideResNet(num_classes=args.num_classes, last_layer=args.last_layer)
-    #     elif args.last_layer == 'kmeans_distribution':
-    #         if args.arch == 'wide_resnet':
-    #             model = flavored_wideresnet.WideResNet(num_classes=args.num_classes, last_layer=args.last_layer)
 
     if model is None:
         raise RuntimeError("Unsupported model architecture selection: {} with last layer: {}.".format(args.arch, args.last_layer))
@@ -86,6 +44,10 @@ def setup(args):
 
     if args.num_labeled_datapoints > 0:
         train_dataset_labeled, train_dataset_unlabeled = train_dataset.data_split_class_balanced(subset_count=args.num_labeled_datapoints)
+        if len(train_dataset_labeled) == 0:
+            raise RuntimeError("Invalid configuration: len(train_dataset_labeled) == 0")
+        if len(train_dataset_unlabeled) == 0:
+            raise RuntimeError("Invalid configuration: len(train_dataset_unlabeled) == 0")
     else:
         train_dataset_labeled = train_dataset
         train_dataset_unlabeled = None

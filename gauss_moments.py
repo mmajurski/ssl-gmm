@@ -30,13 +30,13 @@ class GaussMoments:
 		#  of each type for the skew matrix
 		#--------------------------------------------------
 		n_diags = K*(K-1) // 2
-		print(n_diags)
+		# print(n_diags)
 
 		# The list of dimensions of the tensor
 		dims=[1]*maxK
 		for i in range((maxK-K),maxK):
 		  dims[i] = D
-		print(dims)
+		# print(dims)
 
 		# Create a numpy array with those dimensions
 		count_diags = np.zeros(dims, dtype=np.int32)

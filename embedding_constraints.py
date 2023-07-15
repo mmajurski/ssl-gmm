@@ -18,17 +18,7 @@ class GaussianMoments(torch.nn.Module):
         self.moment3_weight = torch.tensor(moment_3.moment_weights, requires_grad=False)
         self.moment4_weight = torch.tensor(moment_4.moment_weights, requires_grad=False)
 
-        # self.moment1_weight = torch.nn.Parameter(torch.tensor(moment_1.moment_weights), requires_grad=False)
-        # self.moment2_weight = torch.nn.Parameter(torch.tensor(moment_2.moment_weights), requires_grad=False)
-        # self.moment3_weight = torch.nn.Parameter(torch.tensor(moment_3.moment_weights), requires_grad=False)
-        # self.moment4_weight = torch.nn.Parameter(torch.tensor(moment_4.moment_weights), requires_grad=False)
-
         # gaussian moments
-        # self.gauss_moments1 = torch.nn.Parameter(torch.tensor(moment_1.joint_gauss_moments), requires_grad=False)
-        # self.gauss_moments2 = torch.nn.Parameter(torch.tensor(moment_2.joint_gauss_moments), requires_grad=False)
-        # self.gauss_moments3 = torch.nn.Parameter(torch.tensor(moment_3.joint_gauss_moments), requires_grad=False)
-        # self.gauss_moments4 = torch.nn.Parameter(torch.tensor(moment_4.joint_gauss_moments), requires_grad=False)
-
         self.gauss_moments1 = torch.tensor(moment_1.joint_gauss_moments, requires_grad=False)
         self.gauss_moments2 = torch.tensor(moment_2.joint_gauss_moments, requires_grad=False)
         self.gauss_moments3 = torch.tensor(moment_3.joint_gauss_moments, requires_grad=False)

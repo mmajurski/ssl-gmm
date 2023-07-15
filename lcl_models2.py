@@ -8,7 +8,7 @@ import gauss_moments
 
 
 
-class kmeans_layer(torch.nn.Module):
+class kmeans(torch.nn.Module):
     def __init__(self, embeddign_dim: int, num_classes: int):
         super().__init__()
 
