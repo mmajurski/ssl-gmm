@@ -50,12 +50,24 @@ import shutil
 # plt.show()
 
 
-import skimage.io
-import cifar_datasets
+# import skimage.io
+# import cifar_datasets
+#
+# train_dataset = cifar_datasets.Cifar10(transform=cifar_datasets.Cifar10.TRANSFORM_STRONG_TRAIN, train=True, subset=True)
+#
+# os.makedirs('cifar-example-images', exist_ok=True)
+# for i in range(10):
+#     img = train_dataset.data[i]
+#     skimage.io.imsave('cifar-example-images/{:04d}.png'.format(i), img)
 
-train_dataset = cifar_datasets.Cifar10(transform=cifar_datasets.Cifar10.TRANSFORM_STRONG_TRAIN, train=True, subset=True)
 
-os.makedirs('cifar-example-images', exist_ok=True)
-for i in range(10):
-    img = train_dataset.data[i]
-    skimage.io.imsave('cifar-example-images/{:04d}.png'.format(i), img)
+ofp = './models'
+fns = [fn for fn in os.listdir(ofp) if fn.startswith('id-')]
+fns.sort()
+
+for fn in fns:
+    print(fn)
+    src_ofp = os.path.join(ofp, fn, 'src')
+    a = os.path.abspath(src_ofp)
+    shutil.make_archive(base_name=a, format='zip', root_dir=a)
+    shutil.rmtree(src_ofp)
