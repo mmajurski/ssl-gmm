@@ -94,6 +94,9 @@ def train(args):
     src_fns = [fn for fn in os.listdir('./') if fn.endswith('.py')]
     for fn in src_fns:
         shutil.copyfile(fn, os.path.join(src_ofp, fn))
+    ofp = os.path.abspath(args.output_dirpath)
+    shutil.make_archive(base_name=src_ofp, format='zip', root_dir=ofp)
+    shutil.rmtree(src_ofp)
 
     model, train_dataset_labeled, train_dataset_unlabeled, test_dataset = setup(args)
 
