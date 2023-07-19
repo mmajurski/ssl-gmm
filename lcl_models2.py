@@ -57,8 +57,6 @@ class kmeans(torch.nn.Module):
         resp_kmeans = torch.clip(resp_kmeans, min=1e-8)
         resp_kmeans = torch.log(resp_kmeans)
 
-        # TODO build a version of this that is aa_gmm and aa_d1_gmm
-
         return resp_kmeans
 
 

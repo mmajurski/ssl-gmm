@@ -142,9 +142,9 @@ class Cifar10(torch.utils.data.Dataset):
     def set_transforms(self, transforms):
         self.transform = transforms
 
-    def data_split_class_balanced(self, subset_count: int = 400):
+    def data_split_class_balanced(self, subset_count: int = 400, seed: int = 1724865484):
         idx = list(range(len(self.data)))
-        random.shuffle(idx)
+        random.Random(seed).shuffle(idx)
 
         subset_dataset = copy.deepcopy(self)
         remainder_dataset = copy.deepcopy(self)

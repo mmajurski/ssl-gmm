@@ -35,15 +35,12 @@ def setup(args):
 
     # setup and load CIFAR10
     if args.num_classes == 10:
-        if args.strong_augmentation:
-            train_dataset = cifar_datasets.Cifar10(transform=cifar_datasets.Cifar10.TRANSFORM_STRONG_TRAIN, train=True, subset=args.debug)
-        else:
-            train_dataset = cifar_datasets.Cifar10(transform=cifar_datasets.Cifar10.TRANSFORM_WEAK_TRAIN, train=True, subset=args.debug)
+        train_dataset = cifar_datasets.Cifar10(transform=cifar_datasets.Cifar10.TRANSFORM_STRONG_TRAIN, train=True, subset=args.debug)
     else:
         raise RuntimeError("unsupported CIFAR class count: {}".format(args.num_classes))
 
     if args.num_labeled_datapoints > 0:
-        train_dataset_labeled, train_dataset_unlabeled = train_dataset.data_split_class_balanced(subset_count=args.num_labeled_datapoints)
+        train_dataset_labeled, train_dataset_unlabeled = train_dataset.data_split_class_balanced(subset_count=args.num_labeled_datapoints, seed=args.seed)
         if len(train_dataset_labeled) == 0:
             raise RuntimeError("Invalid configuration: len(train_dataset_labeled) == 0")
         if len(train_dataset_unlabeled) == 0:

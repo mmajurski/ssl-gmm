@@ -21,58 +21,34 @@ i=$((TRIM_HIGHEST+1))
 
 
 learning_rate=0.01
-#for mn in 0 1 2
-#do
-#    for emb_dim in 16
-#    do
-#      for label_count in 1 40 250
-#      do
-#          for fc_count in 0 1
-#          do
-#
-#              printf -v src "id-%08d" ${i}
-#              embd_constraint='none'
-#              trainer='supervised'
-#              #sbatch sbatch_script.sh 'fc' ${learning_rate} ${emb_dim} ${fc_count} ${MODEL_DIR}/${src} ${embd_constraint} ${trainer} ${label_count}
-#              i=$((i+1))
-#
-#              for ll in "kmeans" "aa_gmm" "aa_gmm_d1" "aa_cmm" "aa_cmm_d1"
-#              do
-#                  for embd_constraint in 'none' 'mean_covar' 'gauss_moment'
-#                  do
-#                    printf -v src "id-%08d" ${i}
-#                    trainer='fixmatch'
-#                    #sbatch sbatch_script.sh ${ll} ${learning_rate} ${emb_dim} ${fc_count} ${MODEL_DIR}/${src} ${embd_constraint} ${trainer} ${label_count}
-#                    i=$((i+1))
-#                  done
-#              done
-#          done
-#        done
-#    done
-#done
 
-MODELS_PER_JOB=3
+MODELS_PER_JOB=2
 for emb_dim in 16
 do
-  for label_count in 10 40 250  # 1, 4, and 25 per class
+  for label_count in 40 250  # 1, 4, and 25 per class
   do
       for fc_count in 0 1
       do
 
-          embd_constraint='none'
           trainer='supervised'
+          embd_constraint='none'
           sbatch sbatch_script.sh 'fc' ${learning_rate} ${emb_dim} ${fc_count} ${i} ${embd_constraint} ${trainer} ${label_count} ${MODELS_PER_JOB}
           i=$((i+MODELS_PER_JOB))
 
-#          for ll in "kmeans" "aa_gmm" "aa_gmm_d1" "aa_cmm" "aa_cmm_d1"
-#          do
-#              for embd_constraint in 'none' 'mean_covar' 'gauss_moment'
-#              do
-#                trainer='fixmatch'
-#                sbatch sbatch_script.sh ${ll} ${learning_rate} ${emb_dim} ${fc_count} ${i} ${embd_constraint} ${trainer} ${label_count} ${MODELS_PER_JOB}
-#                i=$((i+MODELS_PER_JOB))
-#              done
-#          done
+          trainer='fixmatch'
+          embd_constraint='none'
+          sbatch sbatch_script.sh 'fc' ${learning_rate} ${emb_dim} ${fc_count} ${i} ${embd_constraint} ${trainer} ${label_count} ${MODELS_PER_JOB}
+          i=$((i+MODELS_PER_JOB))
+
+          for ll in "kmeans" "aa_gmm" "aa_gmm_d1"
+          do
+              for embd_constraint in 'none' 'l2' 'mean_covar' 'gauss_moment'
+              do
+                trainer='fixmatch'
+                sbatch sbatch_script.sh ${ll} ${learning_rate} ${emb_dim} ${fc_count} ${i} ${embd_constraint} ${trainer} ${label_count} ${MODELS_PER_JOB}
+                i=$((i+MODELS_PER_JOB))
+              done
+          done
       done
     done
 done

@@ -167,20 +167,40 @@ class SupervisedTrainer:
         model.eval()
         start_time = time.time()
 
+        cluster_criterion = torch.nn.MSELoss()
+        if self.args.embedding_constraint is None or self.args.embedding_constraint.lower() == 'none':
+            emb_constraint = None
+        elif self.args.embedding_constraint == 'mean_covar':
+            emb_constraint = embedding_constraints.MeanCovar()
+        elif self.args.embedding_constraint == 'gauss_moment':
+            emb_constraint = embedding_constraints.GaussianMoments(embedding_dim=self.args.embedding_dim, num_classes=self.args.num_classes)
+        elif self.args.embedding_constraint == 'l2':
+            emb_constraint = embedding_constraints.L2ClusterCentroid()
+        else:
+            raise RuntimeError("Invalid embedding constraint type: {}".format(self.args.embedding_constraint))
+
         with torch.no_grad():
             for batch_idx, tensor_dict in enumerate(dataloader):
                 inputs = tensor_dict[0].cuda()
                 labels = tensor_dict[1].cuda()
 
-                embedding, outputs = model(inputs)
+                embedding, logits = model(inputs)
                 # resp_gmm, resp_cmm, cluster_dist = model(inputs)
                 # outputs = resp_gmm
 
-                batch_loss = criterion(outputs, labels)
+                batch_loss = criterion(logits, labels)
                 train_stats.append_accumulate('{}_loss'.format(split_name), batch_loss.item())
-                pred = torch.argmax(outputs, dim=-1)
+                pred = torch.argmax(logits, dim=-1)
                 accuracy = torch.sum(pred == labels) / len(pred)
                 train_stats.append_accumulate('{}_accuracy'.format(split_name), accuracy.item())
+
+                if emb_constraint is not None:
+                    # only include a "logit" loss, when there are other terms
+                    train_stats.append_accumulate('{}_logit_loss'.format(split_name), batch_loss.item())
+                    emb_constraint_l = emb_constraint(embedding, model.last_layer.centers, logits)
+                    emb_constraint_loss = cluster_criterion(emb_constraint_l, torch.zeros_like(emb_constraint_l))
+                    train_stats.append_accumulate('{}_emb_constraint_loss'.format(split_name), emb_constraint_loss.item())
+                    batch_loss += emb_constraint_loss
 
                 if batch_idx % 100 == 0:
                     # log loss and current GPU utilization
@@ -191,5 +211,8 @@ class SupervisedTrainer:
 
         wall_time = time.time() - start_time
         train_stats.add(epoch, '{}_wall_time'.format(split_name), wall_time)
+        if emb_constraint is not None:
+            train_stats.close_accumulate(epoch, '{}_logit_loss'.format(split_name), method='avg')
+            train_stats.close_accumulate(epoch, '{}_emb_constraint_loss'.format(split_name), method='avg')
         train_stats.close_accumulate(epoch, '{}_loss'.format(split_name), method='avg')
         train_stats.close_accumulate(epoch, '{}_accuracy'.format(split_name), method='avg')

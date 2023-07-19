@@ -46,16 +46,57 @@ fi
 # python main.py --output-dirpath=${MODEL_FP} --trainer=${TRAINER} --last-layer=${LAST_LAYER} --optimizer=sgd --learning-rate=${LEARNING_RATE} --embedding_dim=${EMBD_DIM} --nprefc=${PRE_FC} --embedding-constraint=${EMBD_CONSTRAINT} --num-labeled-datapoints=${NLABELS}
 
 
+
 INDEX=$START_RUN
 for i in $(seq $MODELS_PER_JOB); do
-
   MODEL_FP="${root_output_directory}/id-$(printf "%08d" ${INDEX})"
   python main.py --output-dirpath=${MODEL_FP} --trainer=${TRAINER} --last-layer=${LAST_LAYER} --optimizer=sgd --learning-rate=${LEARNING_RATE} --embedding_dim=${EMBD_DIM} --nprefc=${PRE_FC} --embedding-constraint=${EMBD_CONSTRAINT} --num-labeled-datapoints=${NLABELS} &
   INDEX=$((INDEX+1))
-
   sleep 4  # separate launches by 1 second minimum
 done
 
 
 # wait for all of the runs to complete before exiting
 wait
+
+
+
+#gpustr=$(nvidia-smi --query-gpu=gpu_name --format=csv)
+#echo $gpustr
+#substr1="80GB"
+#substr2="40GB"
+#if [[ $gpustr == *"$substr1"* ]]; then
+#N_PARALLEL=4  # how many parallel trains to run on each job
+#elif [[ $gpustr == *"$substr2"* ]]; then
+#N_PARALLEL=3  # how many parallel trains to run on each job
+#else
+#N_PARALLEL=2  # how many parallel trains to run on each job
+#fi
+#echo "Training $N_PARALLEL models in parallel for this slurm job."
+#
+#
+#INDEX=$START_RUN
+#SUCCESS_COUNT=0
+#sc=1
+#for i in $(seq $MODELS_PER_JOB); do
+#  if [ $i -gt $N_PARALLEL ]; then
+#    wait -n  # wait for the next job to terminate
+#    sc=$? # get status code from main
+#     if [ $sc -eq 0 ]; then
+#       SUCCESS_COUNT=$((SUCCESS_COUNT+1))
+#       echo "Successfully built $SUCCESS_COUNT models"
+#     fi
+#     if [ $SUCCESS_COUNT -ge $MODELS_PER_JOB ]; then
+#       exit 0
+#     fi
+#  fi
+#
+#  MODEL_FP="${root_output_directory}/id-$(printf "%08d" ${INDEX})"
+#  python main.py --output-dirpath=${MODEL_FP} --trainer=${TRAINER} --last-layer=${LAST_LAYER} --optimizer=sgd --learning-rate=${LEARNING_RATE} --embedding_dim=${EMBD_DIM} --nprefc=${PRE_FC} --embedding-constraint=${EMBD_CONSTRAINT} --num-labeled-datapoints=${NLABELS} &
+#  INDEX=$((INDEX+1))
+#  sleep 4  # separate launches by 1 second minimum
+#done
+#
+#
+## wait for all of the runs to complete before exiting
+#wait

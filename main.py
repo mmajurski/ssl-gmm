@@ -43,13 +43,13 @@ def main():
     parser.add_argument('--num-classes', default=10, type=int, help='number of classes in the dataset.')
     parser.add_argument('--num-labeled-datapoints', default=250, type=int, help='number of labeled annotations in the dataset.')
     parser.add_argument('--optimizer', type=str, default='sgd',help='optimizer if nothing is passed AdamW would be used (currently supported sgd,adamw)')
-    parser.add_argument('--strong-augmentation', help='enables strong augmentation', action='store_true')
     parser.add_argument('--debug', help='enables debugging mode', action='store_true')
     parser.add_argument('--last-layer', type=str, default='fc', help='last layer to use in the NN (currently supported fc, kmeans, aa_gmm, aa_cmm, aa_gmmcmm, aa_gmm_d1, aa_cmm_d1, aa_gmmcmm_d1')
     parser.add_argument('--nprefc', type=int, default=0, help='number of pre-fc linear layers')
     parser.add_argument('--num-epochs', default=None, type=int, help='number of epochs to train. If this is non-None it will suppress the use of a test split, and blindly run the training for N epochs.')
     parser.add_argument('--trainer', type=str, default='fixmatch', help='trainer to use (currently supported supervised, fixmatch)')
     parser.add_argument('--embedding-constraint', type=str, default=None, help='embedding constraint to enforce (currently supported None, mean_covar, gauss_moment)')
+    parser.add_argument('--seed', type=int, default=1724865484, help='seed for the random number generator')
 
 
 
