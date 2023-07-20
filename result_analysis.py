@@ -16,6 +16,7 @@ final_columns = config_columns + result_columns
 results_df = pd.DataFrame(columns=final_columns)
 
 
+nb_complete = 0
 nb_non_complete = 0
 # iterating over folders in the given directory
 for folder_name in os.listdir(directory):
@@ -70,10 +71,12 @@ for folder_name in os.listdir(directory):
     if 'wall_time' not in combined_dict.keys():
         nb_non_complete += 1
     else:
+        nb_complete += 1
         # adding the row to final results
         row_df = pd.DataFrame([combined_dict])
         results_df = pd.concat([results_df, row_df])
 
 # exporting to cvs file
 results_df.to_csv('results-current.csv', index=False)
+print("found {} complete results".format(nb_complete))
 print("found {} non complete results".format(nb_non_complete))
