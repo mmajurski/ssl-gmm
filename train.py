@@ -40,7 +40,7 @@ def setup(args):
         raise RuntimeError("unsupported CIFAR class count: {}".format(args.num_classes))
 
     if args.num_labeled_datapoints > 0:
-        train_dataset_labeled, train_dataset_unlabeled = train_dataset.data_split_class_balanced(subset_count=args.num_labeled_datapoints, seed=args.seed)
+        train_dataset_labeled, train_dataset_unlabeled = train_dataset.data_split_class_balanced(subset_count=args.num_labeled_datapoints)
         if len(train_dataset_labeled) == 0:
             raise RuntimeError("Invalid configuration: len(train_dataset_labeled) == 0")
         if len(train_dataset_unlabeled) == 0:

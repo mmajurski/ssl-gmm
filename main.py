@@ -12,6 +12,7 @@ os.environ['NUMEXPR_NUM_THREADS'] = '1'
 os.environ['NUMEXPR_MAX_THREADS'] = '1'
 os.environ['OMP_NUM_THREADS'] = '1'
 
+import torch
 import utils
 import train
 
@@ -55,6 +56,8 @@ def main():
 
 
     args = parser.parse_args()
+
+    torch.manual_seed(args.seed)
 
     # check if IDE is in debug mode, and set the args debug flag and set num parallel worker to 0
     utils.check_for_ide_debug_mode(args)
