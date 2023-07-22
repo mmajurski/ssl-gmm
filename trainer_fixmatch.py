@@ -65,6 +65,8 @@ class FixMatchTrainer(trainer.SupervisedTrainer):
             emb_constraint = None
         elif self.args.embedding_constraint == 'mean_covar':
             emb_constraint = embedding_constraints.MeanCovar()
+        elif self.args.embedding_constraint == 'mean_covar2':
+            emb_constraint = embedding_constraints.MeanCovar2(embedding_dim=self.args.embedding_dim, num_classes=self.args.num_classes)
         elif self.args.embedding_constraint == 'gauss_moment':
             emb_constraint = embedding_constraints.GaussianMoments(embedding_dim=self.args.embedding_dim, num_classes=self.args.num_classes)
         elif self.args.embedding_constraint == 'l2':
@@ -261,13 +263,14 @@ class FixMatchTrainer(trainer.SupervisedTrainer):
             emb_constraint = None
         elif self.args.embedding_constraint == 'mean_covar':
             emb_constraint = embedding_constraints.MeanCovar()
+        elif self.args.embedding_constraint == 'mean_covar2':
+            emb_constraint = embedding_constraints.MeanCovar2(embedding_dim=self.args.embedding_dim, num_classes=self.args.num_classes)
         elif self.args.embedding_constraint == 'gauss_moment':
             emb_constraint = embedding_constraints.GaussianMoments(embedding_dim=self.args.embedding_dim, num_classes=self.args.num_classes)
         elif self.args.embedding_constraint == 'l2':
             emb_constraint = embedding_constraints.L2ClusterCentroid()
         else:
             raise RuntimeError("Invalid embedding constraint type: {}".format(self.args.embedding_constraint))
-
         with torch.no_grad():
             for batch_idx, tensor_dict in enumerate(dataloader):
                 inputs = tensor_dict[0].cuda()

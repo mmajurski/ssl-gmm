@@ -5,21 +5,20 @@ import json
 import os
 
 # folder to read files from
-directory = 'models'
+post_fix = 'fixed-seed'
+directory = 'models-{}'.format(post_fix)
 
 # columns to extract from file name
 config_columns = ['method', 'last_layer', 'ema', 'embedding_dim', 'num_labeled_datapoints', 'embedding_constraint',  'model', 'learning_rate', 'nprefc']
 # columns to extract from result file (stats.json)
 result_columns = ['test_accuracy', 'wall_time', 'epoch', 'num_epochs_trained']
-# create dataframe for storing results
-final_columns = config_columns + result_columns
-results_df = pd.DataFrame(columns=final_columns)
-
+results_df = None
 
 nb_complete = 0
-nb_non_complete = 0
 # iterating over folders in the given directory
-for folder_name in os.listdir(directory):
+folder_names = [fn for fn in os.listdir(directory) if fn.startswith('id-')]
+folder_names.sort()
+for folder_name in folder_names:
 
 
     # getting configuration dictionary
@@ -68,15 +67,23 @@ for folder_name in os.listdir(directory):
     # combining both the dictionaries
     combined_dict = config_dict | result_dict
 
-    if 'wall_time' not in combined_dict.keys():
-        nb_non_complete += 1
+    # with open(os.path.join(directory, folder_name, 'success.txt'), mode='w', encoding='utf-8') as f:
+    #     f.write('success')
+    # continue
+
+    if os.path.exists(os.path.join(directory, folder_name, 'failure.txt')):
+        print("Model failure: {}".format(folder_name))
+    elif not os.path.exists(os.path.join(directory, folder_name, 'success.txt')):
+        print("Model non-success: {}".format(folder_name))
     else:
         nb_complete += 1
         # adding the row to final results
         row_df = pd.DataFrame([combined_dict])
-        results_df = pd.concat([results_df, row_df])
+        if results_df is None:
+            results_df = row_df
+        else:
+            results_df = pd.concat([results_df, row_df])
 
 # exporting to cvs file
-results_df.to_csv('results-current.csv', index=False)
+results_df.to_csv('results-{}.csv'.format(post_fix), index=False)
 print("found {} complete results".format(nb_complete))
-print("found {} non complete results".format(nb_non_complete))

@@ -1,6 +1,142 @@
 import torch
 import gauss_moments
 
+
+class MeanCovar2(torch.nn.Module):
+    def __init__(self, embedding_dim: int, num_classes: int):
+        super(MeanCovar2, self).__init__()
+        self.dim = embedding_dim
+        self.num_classes = num_classes
+
+        moment_1 = gauss_moments.GaussMoments(self.dim, 1)  # position
+        moment_2 = gauss_moments.GaussMoments(self.dim, 2)  # variance
+
+        # moment weights (for moment loss function)
+        self.moment1_weight = torch.tensor(moment_1.moment_weights, requires_grad=False)
+        self.moment2_weight = torch.tensor(moment_2.moment_weights, requires_grad=False)
+
+        # gaussian moments
+        self.gauss_moments1 = torch.tensor(moment_1.joint_gauss_moments, requires_grad=False)
+        self.gauss_moments2 = torch.tensor(moment_2.joint_gauss_moments, requires_grad=False)
+
+    def forward(self, embedding, centers, logits):
+        if centers is None:
+            return 0.0
+
+        if centers.device != self.gauss_moments1.device:
+            self.gauss_moments1 = self.gauss_moments1.to(centers.device)
+            self.gauss_moments2 = self.gauss_moments2.to(centers.device)
+
+            self.moment1_weight = self.moment1_weight.to(centers.device)
+            self.moment2_weight = self.moment2_weight.to(centers.device)
+
+        # argmax resp to assign to cluster
+        # optimize CE over resp + L2 loss
+        cluster_assignment = torch.argmax(logits, dim=-1)
+        cluster_assignment_onehot = torch.nn.functional.one_hot(cluster_assignment, logits.shape[1])
+
+
+        # Upsample the x-data to [batch, num_classes, dim]
+        x_rep = embedding.unsqueeze(1).repeat(1, self.num_classes, 1)
+
+        # Upsample the clusters to [batch, 10, 10]
+        batch = logits.shape[0]  # batch size
+        centers_rep = centers.unsqueeze(0).repeat(batch, 1, 1)
+
+        #		print(centers)
+        #		print("centers")
+        #		input("enter")
+
+        # Subtract to get diff of [batch, 10, 10]
+        diff = x_rep - centers_rep
+
+        # -------------------------------------
+        # The moments penalty
+        # -------------------------------------
+        # ----------------------------------------
+        # Calculate the empirical moments
+        #   OUTPUT:  moment1  [classes dim]
+        #   OUTPUT:  moment2  [classes dim dim]
+        #   OUTPUT:  moment3  [classes dim dim dim]
+        #   OUTPUT:  moment4  [classes dim dim dim dim]
+        # ----------------------------------------
+        cluster_weight = torch.sum(cluster_assignment_onehot, axis=0)
+        cluster_assignment_onehot_rep = cluster_assignment_onehot.unsqueeze(2).repeat(1, 1, self.dim)
+
+        diff_onehot = diff * cluster_assignment_onehot_rep
+
+        moment1 = torch.sum(diff_onehot, dim=0)
+        moment1_count = cluster_weight.unsqueeze(1).repeat(1, self.dim)
+        moment1 = moment1 / (moment1_count + 0.0000001)
+
+        moment2_a = diff_onehot.unsqueeze(2)
+        moment2_b = diff_onehot.unsqueeze(3)
+        moment2_a_rep = moment2_a.repeat((1, 1, self.dim, 1))
+        moment2_b_rep = moment2_b.repeat((1, 1, 1, self.dim))
+        moment2 = moment2_a_rep * moment2_b_rep
+        moment2 = torch.sum(moment2, dim=0)
+        moment2_count = moment1_count.unsqueeze(2).repeat((1, 1, self.dim))
+        moment2 = moment2 / (moment2_count + 0.0000001)
+
+        # ---------------------------------------
+        # calculate the moment loss
+        # ---------------------------------------
+
+        # get the moment targets
+        moment1_target = self.gauss_moments1
+        moment2_target = self.gauss_moments2
+
+        # normalize the moments with the "magic formula"
+        #  that keeps the values from growing at the rate
+        #  of x^2 x^3 .... etc
+        #
+        #  N(x) = sign(x)(abs(x) + c)^a - b
+        #	 where
+        #  c = pow(a, 1/(1-a))
+        #  b = pow(a, a/(1-a))
+        #
+        #  precomputed values
+        #	moment 1   no formula required, it's perfectly linear
+        #	moment 2   a = 1/2  c = 0.25		   b = 0.5
+        #	moment 3   a = 1/3  c = 0.19245008973  b = 0.57735026919
+        #	moment 4   a = 1/4  c = 0.15749013123  b = 0.62996052494
+        moment2 = torch.sign(torch.sign(moment2) + 0.1) * (torch.pow(torch.abs(moment2) + 0.25, 0.5) - 0.5)
+
+        # repeat the moment targets per class
+        moment1_target = moment1_target.unsqueeze(0).repeat(self.num_classes, 1)
+        moment2_target = moment2_target.unsqueeze(0).repeat(self.num_classes, 1, 1)
+
+        # repeat the moment penalty weights perclass
+        cluster_weight_norm = cluster_weight / torch.sum(cluster_weight)
+
+        cluster_weight_rep = cluster_weight_norm.unsqueeze(1).repeat((1, self.dim))
+        moment1_weight = cluster_weight_rep * self.moment1_weight.unsqueeze(0).repeat((self.num_classes, 1))
+
+        cluster_weight_rep = cluster_weight_rep.unsqueeze(2).repeat((1, 1, self.dim))
+        moment2_weight = cluster_weight_rep * self.moment2_weight.unsqueeze(0).repeat((self.num_classes, 1, 1))
+
+        # calculate the penalty loss function
+        moment_penalty1 = torch.sum(moment1_weight * torch.pow((moment1 - moment1_target), 2))
+        moment_penalty2 = torch.sum(moment2_weight * torch.pow((moment2 - moment2_target), 2))
+
+        # MoM loss
+        mom_penalty = 1.0 * moment_penalty1 + \
+                      0.5 * moment_penalty2
+
+        return mom_penalty
+
+    def cleanup(self):
+        self.gauss_moments1 = self.gauss_moments1.to('cpu')
+        self.gauss_moments2 = self.gauss_moments2.to('cpu')
+
+        self.moment1_weight = self.moment1_weight.to('cpu')
+        self.moment2_weight = self.moment2_weight.to('cpu')
+
+        del self.gauss_moments1
+        del self.gauss_moments2
+        del self.moment1_weight
+        del self.moment2_weight
+
 class GaussianMoments(torch.nn.Module):
     def __init__(self, embedding_dim: int, num_classes: int):
         super(GaussianMoments, self).__init__()

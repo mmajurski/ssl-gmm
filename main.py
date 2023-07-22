@@ -50,13 +50,13 @@ def main():
     parser.add_argument('--num-epochs', default=None, type=int, help='number of epochs to train. If this is non-None it will suppress the use of a test split, and blindly run the training for N epochs.')
     parser.add_argument('--trainer', type=str, default='fixmatch', help='trainer to use (currently supported supervised, fixmatch)')
     parser.add_argument('--embedding-constraint', type=str, default=None, help='embedding constraint to enforce (currently supported None, mean_covar, gauss_moment)')
-    parser.add_argument('--seed', type=int, default=1724865484, help='seed for the random number generator')
-
-
+    parser.add_argument('--seed', type=int, default=None, help='seed for the random number generator')
 
 
     args = parser.parse_args()
 
+    if args.seed is None or args.seed <= 0:
+        args.seed = torch.initial_seed()
     torch.manual_seed(args.seed)
 
     # check if IDE is in debug mode, and set the args debug flag and set num parallel worker to 0
@@ -67,9 +67,13 @@ def main():
 
     try:
         train.train(args)
+        with open(os.path.join(args.output_dirpath, 'success.txt'), mode='w', encoding='utf-8') as f:
+            f.write('success')
         logging.shutdown()
         return 0
     except:
+        with open(os.path.join(args.output_dirpath, 'failure.txt'), mode='w', encoding='utf-8') as f:
+            f.write('failure')
         import traceback
         tb = traceback.format_exc()
         logging.info(tb)

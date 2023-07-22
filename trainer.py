@@ -86,6 +86,8 @@ class SupervisedTrainer:
             emb_constraint = None
         elif self.args.embedding_constraint == 'mean_covar':
             emb_constraint = embedding_constraints.MeanCovar()
+        elif self.args.embedding_constraint == 'mean_covar2':
+            emb_constraint = embedding_constraints.MeanCovar2(embedding_dim=self.args.embedding_dim, num_classes=self.args.num_classes)
         elif self.args.embedding_constraint == 'gauss_moment':
             emb_constraint = embedding_constraints.GaussianMoments(embedding_dim=self.args.embedding_dim, num_classes=self.args.num_classes)
         elif self.args.embedding_constraint == 'l2':
@@ -172,6 +174,8 @@ class SupervisedTrainer:
             emb_constraint = None
         elif self.args.embedding_constraint == 'mean_covar':
             emb_constraint = embedding_constraints.MeanCovar()
+        elif self.args.embedding_constraint == 'mean_covar2':
+            emb_constraint = embedding_constraints.MeanCovar2(embedding_dim=self.args.embedding_dim, num_classes=self.args.num_classes)
         elif self.args.embedding_constraint == 'gauss_moment':
             emb_constraint = embedding_constraints.GaussianMoments(embedding_dim=self.args.embedding_dim, num_classes=self.args.num_classes)
         elif self.args.embedding_constraint == 'l2':
