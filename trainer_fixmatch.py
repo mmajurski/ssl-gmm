@@ -32,7 +32,7 @@ class FixMatchTrainer(trainer.SupervisedTrainer):
         loss_nan_count = 0
         start_time = time.time()
 
-        dataloader = torch.utils.data.DataLoader(pytorch_dataset, batch_size=self.args.batch_size, shuffle=True, num_workers=self.args.num_workers, worker_init_fn=utils.worker_init_fn, drop_last=True)
+        dataloader = torch.utils.data.DataLoader(pytorch_dataset, batch_size=self.args.batch_size, shuffle=True, num_workers=self.args.num_workers, drop_last=True)
 
         batch_count = len(dataloader)
 
@@ -45,7 +45,7 @@ class FixMatchTrainer(trainer.SupervisedTrainer):
             cyclic_lr_scheduler = torch.optim.lr_scheduler.CyclicLR(optimizer, base_lr=(epoch_init_lr / self.args.cycle_factor), max_lr=(epoch_init_lr * self.args.cycle_factor), step_size_up=int(batch_count / 2), cycle_momentum=False)
 
         unlabeled_dataset.set_transforms(cifar_datasets.Cifar10.TRANSFORM_FIXMATCH)
-        dataloader_ul = torch.utils.data.DataLoader(unlabeled_dataset, batch_size=self.args.mu*self.args.batch_size, shuffle=True, num_workers=self.args.num_workers, worker_init_fn=utils.worker_init_fn, drop_last=True)
+        dataloader_ul = torch.utils.data.DataLoader(unlabeled_dataset, batch_size=self.args.mu*self.args.batch_size, shuffle=True, num_workers=self.args.num_workers, drop_last=True)
 
         if len(dataloader) != len(dataloader_ul):
             raise RuntimeError("Mismatch is dataloader lengths")
@@ -252,7 +252,7 @@ class FixMatchTrainer(trainer.SupervisedTrainer):
         if pytorch_dataset is None or len(pytorch_dataset) == 0:
             return
 
-        dataloader = torch.utils.data.DataLoader(pytorch_dataset, batch_size=self.args.batch_size, shuffle=False, num_workers=self.args.num_workers, worker_init_fn=utils.worker_init_fn)
+        dataloader = torch.utils.data.DataLoader(pytorch_dataset, batch_size=self.args.batch_size, shuffle=False, num_workers=self.args.num_workers)
 
         batch_count = len(dataloader)
         model.eval()

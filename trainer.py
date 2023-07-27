@@ -67,7 +67,7 @@ class SupervisedTrainer:
 
         model.train()
 
-        dataloader = torch.utils.data.DataLoader(pytorch_dataset, batch_size=self.args.batch_size, shuffle=True, num_workers=self.args.num_workers, worker_init_fn=utils.worker_init_fn)
+        dataloader = torch.utils.data.DataLoader(pytorch_dataset, batch_size=self.args.batch_size, shuffle=True, num_workers=self.args.num_workers)
 
         batch_count = len(dataloader)
 
@@ -163,7 +163,7 @@ class SupervisedTrainer:
         if pytorch_dataset is None or len(pytorch_dataset) == 0:
             return
 
-        dataloader = torch.utils.data.DataLoader(pytorch_dataset, batch_size=self.args.batch_size, shuffle=False, num_workers=self.args.num_workers, worker_init_fn=utils.worker_init_fn)
+        dataloader = torch.utils.data.DataLoader(pytorch_dataset, batch_size=self.args.batch_size, shuffle=False, num_workers=self.args.num_workers)
 
         batch_count = len(dataloader)
         model.eval()
