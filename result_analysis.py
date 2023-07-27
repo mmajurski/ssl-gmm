@@ -6,6 +6,7 @@ import os
 
 # folder to read files from
 post_fix = 'fixed-seed'
+# post_fix = 'fixmatch-seed-search'
 directory = 'models-{}'.format(post_fix)
 
 # columns to extract from file name

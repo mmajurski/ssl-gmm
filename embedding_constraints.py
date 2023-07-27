@@ -23,6 +23,8 @@ class MeanCovar2(torch.nn.Module):
         if centers is None:
             return 0.0
 
+        # TODO figure out if we can use the MeanCovar code to avoid the moment_weights and moment_targets to avoid the GaussMoments class instance
+
         if centers.device != self.gauss_moments1.device:
             self.gauss_moments1 = self.gauss_moments1.to(centers.device)
             self.gauss_moments2 = self.gauss_moments2.to(centers.device)
@@ -402,6 +404,7 @@ class MeanCovar(torch.nn.Module):
         #
         # Calculate the empirical covariance
         #
+        # TODO test swapping empirical_mean_rep with the centers this code migth fix itself
         empirical_mean_rep = empirical_mean.unsqueeze(0).repeat(batch, 1, 1)
         empirical_mean_rep = empirical_mean_rep * cluster_assignment_onehot_rep
         x_mu_rep = x_onehot_rep - empirical_mean_rep

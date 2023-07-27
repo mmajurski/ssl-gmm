@@ -95,8 +95,6 @@ def train(args, model, device, train_loader, optimizer, epoch, train_stats, num_
         emb_constraint = None
     elif embedding_constraint == 'mean_covar':
         emb_constraint = embedding_constraints.MeanCovar()
-    elif self.args.embedding_constraint == 'mean_covar2':
-        emb_constraint = embedding_constraints.MeanCovar2(embedding_dim=self.args.embedding_dim, num_classes=self.args.num_classes)
     elif embedding_constraint == 'gauss_moment':
         emb_constraint = embedding_constraints.GaussianMoments(embedding_dim=embedding_dim, num_classes=num_classes)
     elif embedding_constraint == 'l2':

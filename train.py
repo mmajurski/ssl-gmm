@@ -160,6 +160,8 @@ def train(args):
 
         logging.info("  evaluating against test data")
         model_trainer.eval_model(test_model, test_dataset, criterion, train_stats, "test", epoch, args)
+        optimizer.zero_grad()
+        torch.cuda.empty_cache()
 
         test_accuracy = train_stats.get_epoch('test_accuracy', epoch=epoch)
         plateau_scheduler.step(test_accuracy)
