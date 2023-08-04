@@ -103,15 +103,21 @@ class WideResNet(nn.Module):
 
 
 class WideResNetMajurski(nn.Module):
-    def __init__(self, num_classes, last_layer:str='gmm', depth=28, width=2, embedding_dim=16, num_pre_fc=0, use_tanh=False, output_folder=None):
+    def __init__(self, num_classes, last_layer:str='aa_gmm_d1', depth=28, width=2, embedding_dim=None, output_folder=None):
         assert (depth - 4) % 6 == 0, 'depth should be 6n+4'
 
         super(WideResNetMajurski, self).__init__()
         channels = [16, 16*width, 32*width, 64*width]
         n = (depth - 4) / 6
-        self.num_pre_fc = num_pre_fc
         self.num_classes = num_classes
-        self.embedding_dim = embedding_dim
+
+        self.emb_linear = None
+        if embedding_dim is None or embedding_dim == 0:
+            self.embedding_dim = channels[3]
+        else:
+            self.embedding_dim = embedding_dim
+            # create a layer to conver from channels[3] to embedding_dim
+            self.emb_linear = nn.Linear(channels[3], self.embedding_dim)
         self.depth = depth
         self.width = width
         self.channels = channels[3]
@@ -133,32 +139,22 @@ class WideResNetMajurski(nn.Module):
 
         self.count = 0
 
-        self.pre_fc_1 = None
-        self.pre_fc_2 = None
-        if self.num_pre_fc == 1:
-            self.pre_fc_1 = nn.Linear(channels[3], channels[3])
-        if self.num_pre_fc == 2:
-            self.pre_fc_1 = nn.Linear(channels[3], channels[3])
-            self.pre_fc_2 = nn.Linear(channels[3], channels[3])
-
-        self.fc = nn.Linear(channels[3], embedding_dim)
-
         if self.last_layer_name == 'fc':
-            self.last_layer = nn.Linear(embedding_dim, num_classes)
+            self.last_layer = nn.Linear(self.embedding_dim, self.num_classes)
         elif self.last_layer_name == 'aa_gmm':
-            self.last_layer = lcl_models2.axis_aligned_gmm_cmm_layer(embedding_dim, num_classes, return_gmm=True, return_cmm=False)
+            self.last_layer = lcl_models2.axis_aligned_gmm_cmm_layer(self.embedding_dim, self.num_classes, return_gmm=True, return_cmm=False)
         elif self.last_layer_name == 'aa_cmm':
-            self.last_layer = lcl_models2.axis_aligned_gmm_cmm_layer(embedding_dim, num_classes, return_gmm=False, return_cmm=True)
+            self.last_layer = lcl_models2.axis_aligned_gmm_cmm_layer(self.embedding_dim, self.num_classes, return_gmm=False, return_cmm=True)
         elif self.last_layer_name == 'aa_gmmcmm':
-            self.last_layer = lcl_models2.axis_aligned_gmm_cmm_layer(embedding_dim, num_classes, return_gmm=True, return_cmm=True)
+            self.last_layer = lcl_models2.axis_aligned_gmm_cmm_layer(self.embedding_dim, self.num_classes, return_gmm=True, return_cmm=True)
         elif self.last_layer_name == 'aa_gmm_d1':
-            self.last_layer = lcl_models2.axis_aligned_gmm_cmm_D1_layer(embedding_dim, num_classes, return_gmm=True, return_cmm=False)
+            self.last_layer = lcl_models2.axis_aligned_gmm_cmm_D1_layer(self.embedding_dim, self.num_classes, return_gmm=True, return_cmm=False)
         elif self.last_layer_name == 'aa_cmm_d1':
-            self.last_layer = lcl_models2.axis_aligned_gmm_cmm_D1_layer(embedding_dim, num_classes, return_gmm=False, return_cmm=True)
+            self.last_layer = lcl_models2.axis_aligned_gmm_cmm_D1_layer(self.embedding_dim, self.num_classes, return_gmm=False, return_cmm=True)
         elif self.last_layer_name == 'aa_gmmcmm_d1':
-            self.last_layer = lcl_models2.axis_aligned_gmm_cmm_D1_layer(embedding_dim, num_classes, return_gmm=True, return_cmm=True)
+            self.last_layer = lcl_models2.axis_aligned_gmm_cmm_D1_layer(self.embedding_dim, self.num_classes, return_gmm=True, return_cmm=True)
         elif self.last_layer_name == 'kmeans':
-            self.last_layer = lcl_models2.kmeans(embedding_dim, num_classes)
+            self.last_layer = lcl_models2.kmeans(self.embedding_dim, self.num_classes)
         else:
             raise RuntimeError("Invalid last layer type: {}".format(self.last_layer_name))
 
@@ -169,16 +165,10 @@ class WideResNetMajurski(nn.Module):
         out = self.block3(out)
         out = self.relu(self.bn1(out))
         out = F.adaptive_avg_pool2d(out, 1)
-        out = out.view(-1, self.channels)
+        embedding = out.view(-1, self.channels)
 
-        if self.pre_fc_1 is not None:
-            out = self.pre_fc_1(out)
-            out = self.relu(out)
-        if self.pre_fc_2 is not None:
-            out = self.pre_fc_2(out)
-            out = self.relu(out)
-
-        embedding = self.fc(out)
+        if self.emb_linear is not None:
+            embedding = self.emb_linear(embedding)
 
         logits = self.last_layer(embedding)
 

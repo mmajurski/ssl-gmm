@@ -61,13 +61,14 @@ import shutil
 #     skimage.io.imsave('cifar-example-images/{:04d}.png'.format(i), img)
 
 
-ofp = './models'
-fns = [fn for fn in os.listdir(ofp) if fn.startswith('id-')]
-fns.sort()
+# ofp = './models'
+# fns = [fn for fn in os.listdir(ofp) if fn.startswith('id-')]
+# fns.sort()
+#
+# for fn in fns:
+#     print(fn)
+#     src_ofp = os.path.join(ofp, fn, 'src')
+#     a = os.path.abspath(src_ofp)
+#     shutil.make_archive(base_name=a, format='zip', root_dir=a)
+#     shutil.rmtree(src_ofp)
 
-for fn in fns:
-    print(fn)
-    src_ofp = os.path.join(ofp, fn, 'src')
-    a = os.path.abspath(src_ofp)
-    shutil.make_archive(base_name=a, format='zip', root_dir=a)
-    shutil.rmtree(src_ofp)

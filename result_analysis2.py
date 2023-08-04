@@ -13,7 +13,9 @@ def gen_key(cdict):
     return key
 
 # folder to read files from
-post_fix = 'fixed-seed'
+# post_fix = 'fixed-seed'
+# post_fix = 'noarchmod'
+post_fix = 'fixmatch-noarchmod'
 directory = 'models-{}'.format(post_fix)
 
 # columns to extract from file name
@@ -22,7 +24,6 @@ config_columns = ['trainer', 'last_layer', 'embedding_dim', 'num_labeled_datapoi
 result_columns = ['test_accuracy']
 results_df = None
 
-nb_complete = 0
 # iterating over folders in the given directory
 folder_names = [fn for fn in os.listdir(directory) if fn.startswith('id-')]
 folder_names.sort()
@@ -68,6 +69,8 @@ for config_key in dict_of_df_lists.keys():
     del a['test_accuracy']
     a['mean_test_accuracy'] = float(np.mean(ta))
     a['std_test_accuracy'] = float(np.std(ta))
+    a['max_test_accuracy'] = float(np.max(ta))
+    a['min_test_accuracy'] = float(np.min(ta))
     a['nb_runs'] = len(ta)
     cd = pd.json_normalize(a)
     df_list.append(cd)
@@ -76,4 +79,3 @@ results_df = pd.concat(df_list, axis=0)
 
 # exporting to cvs file
 results_df.to_csv('results-{}.csv'.format(post_fix), index=False)
-print("found {} complete results".format(nb_complete))

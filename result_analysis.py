@@ -5,14 +5,16 @@ import json
 import os
 
 # folder to read files from
-post_fix = 'fixed-seed'
+# post_fix = 'fixed-seed'
+post_fix = 'rng-seed'
 # post_fix = 'fixmatch-seed-search'
+# post_fix = 'noarchmod'
 directory = 'models-{}'.format(post_fix)
 
 # columns to extract from file name
-config_columns = ['method', 'last_layer', 'ema', 'embedding_dim', 'num_labeled_datapoints', 'embedding_constraint',  'model', 'learning_rate', 'nprefc']
+config_columns = ['method', 'last_layer', 'ema', 'embedding_dim', 'num_labeled_datapoints', 'embedding_constraint',  'model', 'learning_rate']
 # columns to extract from result file (stats.json)
-result_columns = ['test_accuracy', 'wall_time', 'epoch', 'num_epochs_trained']
+result_columns = ['test_accuracy', 'wall_time', 'epoch']
 results_df = None
 
 nb_complete = 0

@@ -63,7 +63,7 @@ class SupervisedTrainer:
         return optimizer
 
 
-    def train_epoch(self, model, pytorch_dataset, optimizer, criterion, epoch, train_stats, unlabeled_dataset=None, ema_model=None):
+    def train_epoch(self, model, pytorch_dataset, optimizer, criterion, emb_constraint, epoch, train_stats, unlabeled_dataset=None, ema_model=None):
 
         model.train()
 
@@ -82,18 +82,6 @@ class SupervisedTrainer:
         loss_nan_count = 0
 
         embedding_criterion = torch.nn.MSELoss()
-        if self.args.embedding_constraint is None or self.args.embedding_constraint.lower() == 'none':
-            emb_constraint = None
-        elif self.args.embedding_constraint == 'mean_covar':
-            emb_constraint = embedding_constraints.MeanCovar()
-        elif self.args.embedding_constraint == 'mean_covar2':
-            emb_constraint = embedding_constraints.MeanCovar2(embedding_dim=self.args.embedding_dim, num_classes=self.args.num_classes)
-        elif self.args.embedding_constraint == 'gauss_moment':
-            emb_constraint = embedding_constraints.GaussianMoments(embedding_dim=self.args.embedding_dim, num_classes=self.args.num_classes)
-        elif self.args.embedding_constraint == 'l2':
-            emb_constraint = embedding_constraints.L2ClusterCentroid()
-        else:
-            raise RuntimeError("Invalid embedding constraint type: {}".format(self.args.embedding_constraint))
 
         for batch_idx, tensor_dict in enumerate(dataloader):
 
@@ -101,6 +89,9 @@ class SupervisedTrainer:
 
             inputs = tensor_dict[0].cuda()
             labels = tensor_dict[1].cuda()
+
+            if hasattr(model.last_layer, 'centers'):
+                model.last_layer.centers = model.last_layer.centers.cuda()
 
             embedding, logits = model(inputs)
             # resp_gmm, resp_cmm, cluster_dist = model(inputs)
@@ -159,7 +150,7 @@ class SupervisedTrainer:
                 param_group['lr'] = epoch_init_lr
 
 
-    def eval_model(self, model, pytorch_dataset, criterion, train_stats, split_name, epoch, args):
+    def eval_model(self, model, pytorch_dataset, criterion, train_stats, split_name, emb_constraint, epoch, args):
         if pytorch_dataset is None or len(pytorch_dataset) == 0:
             return
 
@@ -169,19 +160,7 @@ class SupervisedTrainer:
         model.eval()
         start_time = time.time()
 
-        cluster_criterion = torch.nn.MSELoss()
-        if self.args.embedding_constraint is None or self.args.embedding_constraint.lower() == 'none':
-            emb_constraint = None
-        elif self.args.embedding_constraint == 'mean_covar':
-            emb_constraint = embedding_constraints.MeanCovar()
-        elif self.args.embedding_constraint == 'mean_covar2':
-            emb_constraint = embedding_constraints.MeanCovar2(embedding_dim=self.args.embedding_dim, num_classes=self.args.num_classes)
-        elif self.args.embedding_constraint == 'gauss_moment':
-            emb_constraint = embedding_constraints.GaussianMoments(embedding_dim=self.args.embedding_dim, num_classes=self.args.num_classes)
-        elif self.args.embedding_constraint == 'l2':
-            emb_constraint = embedding_constraints.L2ClusterCentroid()
-        else:
-            raise RuntimeError("Invalid embedding constraint type: {}".format(self.args.embedding_constraint))
+        embedding_criterion = torch.nn.MSELoss()
 
         with torch.no_grad():
             for batch_idx, tensor_dict in enumerate(dataloader):
@@ -202,8 +181,8 @@ class SupervisedTrainer:
                     # only include a "logit" loss, when there are other terms
                     train_stats.append_accumulate('{}_logit_loss'.format(split_name), batch_loss.item())
                     emb_constraint_l = emb_constraint(embedding, model.last_layer.centers, logits)
-                    emb_constraint_loss = cluster_criterion(emb_constraint_l, torch.zeros_like(emb_constraint_l))
                     train_stats.append_accumulate('{}_emb_constraint_loss'.format(split_name), emb_constraint_loss.item())
+                    emb_constraint_loss = embedding_criterion(emb_constraint_l, torch.zeros_like(emb_constraint_l))
                     batch_loss += emb_constraint_loss
 
                 if batch_idx % 100 == 0:

@@ -9,6 +9,7 @@ study.db
 study-bck.db
 *.db
 
+*.ods
 *.pyc
 *.png
 *.csv

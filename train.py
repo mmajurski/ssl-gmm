@@ -15,14 +15,16 @@ import flavored_wideresnet
 import utils
 import trainer
 import trainer_fixmatch
-
+import embedding_constraints
 
 
 def setup(args):
     # model = flavored_wideresnet.WideResNet(num_classes=args.num_classes, last_layer=args.last_layer)
 
     if args.arch == 'wide_resnet':
-        model = flavored_wideresnet.WideResNetMajurski(num_classes=args.num_classes, last_layer=args.last_layer, embedding_dim=args.embedding_dim, num_pre_fc=args.nprefc)
+        model = flavored_wideresnet.WideResNetMajurski(num_classes=args.num_classes, last_layer=args.last_layer, embedding_dim=args.embedding_dim)
+        # ensure the args has the right embedding dim (if None or 0 was supplied)
+        args.embedding_dim = model.embedding_dim
     elif args.arch == 'resnet18':
         model = torchvision.models.resnet18(pretrained=False, num_classes=args.num_classes)
     else:
@@ -146,12 +148,23 @@ def train(args):
     if args.num_epochs is not None:
         trainer.MAX_EPOCHS = args.num_epochs
 
+    if args.embedding_constraint is None or args.embedding_constraint.lower() == 'none':
+        emb_constraint = None
+    elif args.embedding_constraint == 'mean_covar':
+        emb_constraint = embedding_constraints.MeanCovar()
+    elif args.embedding_constraint == 'gauss_moment':
+        emb_constraint = embedding_constraints.GaussianMoments(embedding_dim=args.embedding_dim, num_classes=args.num_classes)
+    elif args.embedding_constraint == 'l2':
+        emb_constraint = embedding_constraints.L2ClusterCentroid()
+    else:
+        raise RuntimeError("Invalid embedding constraint type: {}".format(args.embedding_constraint))
+
     while not plateau_scheduler.is_done() and epoch <= trainer.MAX_EPOCHS:
         epoch += 1
         logging.info("Epoch: {}".format(epoch))
 
         train_stats.plot_all_metrics(output_dirpath=args.output_dirpath)
-        model_trainer.train_epoch(model, train_dataset_labeled, optimizer, criterion, epoch, train_stats, unlabeled_dataset=train_dataset_unlabeled, ema_model=ema_model)
+        model_trainer.train_epoch(model, train_dataset_labeled, optimizer, criterion, emb_constraint, epoch, train_stats, unlabeled_dataset=train_dataset_unlabeled, ema_model=ema_model)
 
         if args.use_ema:
             test_model = ema_model.ema
@@ -159,7 +172,7 @@ def train(args):
             test_model = model
 
         logging.info("  evaluating against test data")
-        model_trainer.eval_model(test_model, test_dataset, criterion, train_stats, "test", epoch, args)
+        model_trainer.eval_model(test_model, test_dataset, criterion, train_stats, "test", emb_constraint, epoch, args)
         optimizer.zero_grad()
         torch.cuda.empty_cache()
 

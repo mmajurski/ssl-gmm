@@ -3,7 +3,7 @@
 # MODIFY THESE OPTIONS
 
 #SBATCH --partition=isg
-#SBATCH --nodelist=papa
+#SBATCH --nodelist=oscar
 #SBATCH --nodes=1
 #SBATCH --oversubscribe
 #SBATCH --cpus-per-task=12
@@ -74,7 +74,7 @@ fi
 # else
 # N_PARALLEL=1  # how many parallel trains to run on each job
 # fi
-N_PARALLEL=2
+N_PARALLEL=3
 echo "Training $N_PARALLEL models in parallel for this slurm job."
 
 

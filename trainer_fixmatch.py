@@ -23,7 +23,7 @@ def sharpen_mixmatch(x:torch.Tensor, T:float):
 
 class FixMatchTrainer(trainer.SupervisedTrainer):
 
-    def train_epoch(self, model, pytorch_dataset, optimizer, criterion, epoch, train_stats, unlabeled_dataset=None, ema_model=None):
+    def train_epoch(self, model, pytorch_dataset, optimizer, criterion, emb_constraint, epoch, train_stats, unlabeled_dataset=None, ema_model=None):
 
         if unlabeled_dataset is None:
             raise RuntimeError("Unlabeled dataset missing. Cannot use FixMatch train_epoch function without an unlabeled_dataset.")
@@ -61,18 +61,6 @@ class FixMatchTrainer(trainer.SupervisedTrainer):
             pl_gt_count_per_class.append(0)
 
         embedding_criterion = torch.nn.MSELoss()
-        if self.args.embedding_constraint is None or self.args.embedding_constraint.lower() == 'none':
-            emb_constraint = None
-        elif self.args.embedding_constraint == 'mean_covar':
-            emb_constraint = embedding_constraints.MeanCovar()
-        elif self.args.embedding_constraint == 'mean_covar2':
-            emb_constraint = embedding_constraints.MeanCovar2(embedding_dim=self.args.embedding_dim, num_classes=self.args.num_classes)
-        elif self.args.embedding_constraint == 'gauss_moment':
-            emb_constraint = embedding_constraints.GaussianMoments(embedding_dim=self.args.embedding_dim, num_classes=self.args.num_classes)
-        elif self.args.embedding_constraint == 'l2':
-            emb_constraint = embedding_constraints.L2ClusterCentroid()
-        else:
-            raise RuntimeError("Invalid embedding constraint type: {}".format(self.args.embedding_constraint))
 
         for batch_idx, tensor_dict_l in enumerate(dataloader):
             inputs_l = tensor_dict_l[0]
@@ -92,6 +80,9 @@ class FixMatchTrainer(trainer.SupervisedTrainer):
             # TODO test using the EMA model as the PL estimator
             inputs = torch.cat((inputs_l, inputs_ul_weak, inputs_ul_strong))
             inputs = inputs.cuda()
+
+            if hasattr(model.last_layer, 'centers'):
+                model.last_layer.centers = model.last_layer.centers.cuda()
 
             # inputs = utils.interleave(inputs, 2 * self.args.mu + 1)
             embedding, logits = model(inputs)
@@ -248,7 +239,7 @@ class FixMatchTrainer(trainer.SupervisedTrainer):
             del emb_constraint
 
 
-    def eval_model(self, model, pytorch_dataset, criterion, train_stats, split_name, epoch, args):
+    def eval_model(self, model, pytorch_dataset, criterion, train_stats, split_name, emb_constraint, epoch, args):
         if pytorch_dataset is None or len(pytorch_dataset) == 0:
             return
 
@@ -258,19 +249,8 @@ class FixMatchTrainer(trainer.SupervisedTrainer):
         model.eval()
         start_time = time.time()
 
-        cluster_criterion = torch.nn.MSELoss()
-        if self.args.embedding_constraint is None or self.args.embedding_constraint.lower() == 'none':
-            emb_constraint = None
-        elif self.args.embedding_constraint == 'mean_covar':
-            emb_constraint = embedding_constraints.MeanCovar()
-        elif self.args.embedding_constraint == 'mean_covar2':
-            emb_constraint = embedding_constraints.MeanCovar2(embedding_dim=self.args.embedding_dim, num_classes=self.args.num_classes)
-        elif self.args.embedding_constraint == 'gauss_moment':
-            emb_constraint = embedding_constraints.GaussianMoments(embedding_dim=self.args.embedding_dim, num_classes=self.args.num_classes)
-        elif self.args.embedding_constraint == 'l2':
-            emb_constraint = embedding_constraints.L2ClusterCentroid()
-        else:
-            raise RuntimeError("Invalid embedding constraint type: {}".format(self.args.embedding_constraint))
+        embedding_criterion = torch.nn.MSELoss()
+
         with torch.no_grad():
             for batch_idx, tensor_dict in enumerate(dataloader):
                 inputs = tensor_dict[0].cuda()
@@ -282,7 +262,7 @@ class FixMatchTrainer(trainer.SupervisedTrainer):
                     # only include a "logit" loss, when there are other terms
                     train_stats.append_accumulate('{}_logit_loss'.format(split_name), loss.item())
                     emb_constraint_l = emb_constraint(embedding, model.last_layer.centers, logits)
-                    emb_constraint_loss = cluster_criterion(emb_constraint_l, torch.zeros_like(emb_constraint_l))
+                    emb_constraint_loss = embedding_criterion(emb_constraint_l, torch.zeros_like(emb_constraint_l))
                     train_stats.append_accumulate('{}_emb_constraint_loss'.format(split_name), emb_constraint_loss.item())
                     loss += emb_constraint_loss
 

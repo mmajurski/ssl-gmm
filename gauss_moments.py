@@ -1,6 +1,7 @@
 import numpy as np
 import sys
 
+
 maxK=8
 
 class GaussMoments:
@@ -102,19 +103,16 @@ class GaussMoments:
 		#
 		# Calculate the weights of the moments
 		#
-		moment_weights = np.zeros([D**K], dtype=np.float32)
-		total_weights = 0.0
-		for i in range(D**K):
-			moment_weights[i] = weight_per_diag[count_diags_flat[i]]
-			total_weights += moment_weights[i]
-			
-		moment_weights = moment_weights.reshape([D]*K)
-		#print("moment_weights")
-		#print(moment_weights)
+		idx = np.asarray(list(range(D**K)))
+		moment_weights = np.asarray(weight_per_diag)[count_diags_flat[idx]]
 
-		#print("total_weights")
-		#print(total_weights)
-		#input("press enter")
+		# moment_weights = np.zeros([D ** K], dtype=np.float32)
+		# total_weights = 0.0
+		# for i in range(D**K):
+		# 	moment_weights[i] = weight_per_diag[count_diags_flat[i]]
+		# 	total_weights += moment_weights[i]
+
+		moment_weights = moment_weights.reshape([D]*K)
 
 		#--------------------------------------------------
 		# Calculate the method of moments set values for the
@@ -124,7 +122,6 @@ class GaussMoments:
 		#
 		# Univariate Gaussian Moments
 		#
-
 		uni_gauss_moments = [0]*K
 		double_factorial = 1.0
 		for p in range(K):
