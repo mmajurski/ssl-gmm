@@ -180,28 +180,6 @@ class GaussianMoments(torch.nn.Module):
 
         return mom_penalty
 
-    def cleanup(self):
-        self.gauss_moments1 = self.gauss_moments1.to('cpu')
-        self.gauss_moments2 = self.gauss_moments2.to('cpu')
-        self.gauss_moments3 = self.gauss_moments3.to('cpu')
-        self.gauss_moments4 = self.gauss_moments4.to('cpu')
-
-        self.moment1_weight = self.moment1_weight.to('cpu')
-        self.moment2_weight = self.moment2_weight.to('cpu')
-        self.moment3_weight = self.moment3_weight.to('cpu')
-        self.moment4_weight = self.moment4_weight.to('cpu')
-
-        del self.gauss_moments1
-        del self.gauss_moments2
-        del self.gauss_moments3
-        del self.gauss_moments4
-        del self.moment1_weight
-        del self.moment2_weight
-        del self.moment3_weight
-        del self.moment4_weight
-
-
-
 
 class L2ClusterCentroid(torch.nn.Module):
     def __init__(self):
@@ -226,9 +204,6 @@ class L2ClusterCentroid(torch.nn.Module):
                 cluster_dist[c] = delta
 
         return cluster_dist
-
-    def cleanup(self):
-        pass
 
 
 class MeanCovar(torch.nn.Module):
@@ -332,9 +307,6 @@ class MeanCovar(torch.nn.Module):
                       0.5 * moment_penalty2
 
         return mom_penalty
-
-    def cleanup(self):
-        pass
 
 
 

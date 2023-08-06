@@ -233,10 +233,6 @@ class FixMatchTrainer(trainer.SupervisedTrainer):
             # reset any leftover changes to the learning rate
             for param_group in optimizer.param_groups:
                 param_group['lr'] = epoch_init_lr
-        if emb_constraint is not None:
-            # cleanup and data associated with the embedding constraint to avoid GPU memory leaks
-            emb_constraint.cleanup()
-            del emb_constraint
 
 
     def eval_model(self, model, pytorch_dataset, criterion, train_stats, split_name, emb_constraint, epoch, args):
