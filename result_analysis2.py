@@ -15,7 +15,8 @@ def gen_key(cdict):
 # folder to read files from
 # post_fix = 'fixed-seed'
 # post_fix = 'noarchmod'
-post_fix = 'fixmatch-noarchmod'
+# post_fix = 'fixmatch-noarchmod'
+post_fix = 'rng-seed'
 directory = 'models-{}'.format(post_fix)
 
 # columns to extract from file name

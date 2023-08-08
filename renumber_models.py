@@ -1,6 +1,6 @@
 import os
 
-ifp = './models-fixmatch-seed-search'
+ifp = './models-rng-seed'
 
 fns = [fn for fn in os.listdir(ifp) if fn.startswith('id-')]
 fns.sort()

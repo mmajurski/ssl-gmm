@@ -6,7 +6,8 @@ import os
 
 # folder to read files from
 # post_fix = 'fixed-seed'
-post_fix = 'rng-seed'
+post_fix = 'ingest-rng-seed'
+# post_fix = 'rng-seed'
 # post_fix = 'fixmatch-seed-search'
 # post_fix = 'noarchmod'
 directory = 'models-{}'.format(post_fix)
@@ -21,6 +22,7 @@ nb_complete = 0
 # iterating over folders in the given directory
 folder_names = [fn for fn in os.listdir(directory) if fn.startswith('id-')]
 folder_names.sort()
+success_list = list()
 for folder_name in folder_names:
 
 
@@ -80,6 +82,7 @@ for folder_name in folder_names:
         print("Model non-success: {}".format(folder_name))
     else:
         nb_complete += 1
+        success_list.append(folder_name)
         # adding the row to final results
         row_df = pd.DataFrame([combined_dict])
         if results_df is None:
@@ -90,3 +93,7 @@ for folder_name in folder_names:
 # exporting to cvs file
 results_df.to_csv('results-{}.csv'.format(post_fix), index=False)
 print("found {} complete results".format(nb_complete))
+
+
+for fn in success_list:
+    print('rm -rf {}'.format(fn))
