@@ -30,21 +30,21 @@ class GaussianMoments(torch.nn.Module):
         if centers is None:
             return 0.0
 
-        # if centers.device != self.gauss_moments1.device:
-        #     self.gauss_moments1 = self.gauss_moments1.to(centers.device)
-        #     self.gauss_moments2 = self.gauss_moments2.to(centers.device)
-        #     self.gauss_moments3 = self.gauss_moments3.to(centers.device)
-        #     self.gauss_moments4 = self.gauss_moments4.to(centers.device)
-        #
-        #     self.moment1_weight = self.moment1_weight.to(centers.device)
-        #     self.moment2_weight = self.moment2_weight.to(centers.device)
-        #     self.moment3_weight = self.moment3_weight.to(centers.device)
-        #     self.moment4_weight = self.moment4_weight.to(centers.device)
+        if centers.device != self.gauss_moments1.device:
+            self.gauss_moments1 = self.gauss_moments1.to(centers.device)
+            self.gauss_moments2 = self.gauss_moments2.to(centers.device)
+            self.gauss_moments3 = self.gauss_moments3.to(centers.device)
+            self.gauss_moments4 = self.gauss_moments4.to(centers.device)
 
-        if centers.device != 'cpu':
-            embedding = embedding.cpu()
-            centers = centers.cpu()
-            logits = logits.cpu()
+            self.moment1_weight = self.moment1_weight.to(centers.device)
+            self.moment2_weight = self.moment2_weight.to(centers.device)
+            self.moment3_weight = self.moment3_weight.to(centers.device)
+            self.moment4_weight = self.moment4_weight.to(centers.device)
+
+        # if centers.device != 'cpu':
+        #     embedding = embedding.cpu()
+        #     centers = centers.cpu()
+        #     logits = logits.cpu()
 
         # argmax resp to assign to cluster
         # optimize CE over resp + L2 loss
@@ -141,6 +141,7 @@ class GaussianMoments(torch.nn.Module):
         moment2 = torch.sign(torch.sign(moment2) + 0.1) * (torch.pow(torch.abs(moment2) + 0.25, 0.5) - 0.5)
         moment3 = torch.sign(torch.sign(moment3) + 0.1) * (torch.pow(torch.abs(moment3) + 0.19245008973, 0.3333333333) - 0.57735026919)
         moment4 = torch.sign(torch.sign(moment4) + 0.1) * (torch.pow(torch.abs(moment4) + 0.15749013123, 0.25) - 0.62996052494)
+
         moment2_target = torch.sign(torch.sign(moment2_target) + 0.1) * (torch.pow(torch.abs(moment2_target) + 0.25, 0.5) - 0.5)
         moment3_target = torch.sign(torch.sign(moment3_target) + 0.1) * (torch.pow(torch.abs(moment3_target) + 0.19245008973, 0.3333333333) - 0.57735026919)
         moment4_target = torch.sign(torch.sign(moment4_target) + 0.1) * (torch.pow(torch.abs(moment4_target) + 0.15749013123, 0.25) - 0.62996052494)
