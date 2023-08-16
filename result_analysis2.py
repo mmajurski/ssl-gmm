@@ -78,5 +78,12 @@ for config_key in dict_of_df_lists.keys():
 
 results_df = pd.concat(df_list, axis=0)
 
-# exporting to cvs file
-results_df.to_csv('results-{}.csv'.format(post_fix), index=False)
+# split the pandas dataframe results_df into multiple dataframes based on the column num_labeled_datapoints
+# and save them to csv files
+for num_labeled_datapoints in results_df['num_labeled_datapoints'].unique():
+    df = results_df[results_df['num_labeled_datapoints'] == num_labeled_datapoints]
+    df.to_csv('results-{}-{}labels.csv'.format(post_fix, num_labeled_datapoints), index=False)
+
+
+# # exporting to cvs file
+# results_df.to_csv('results-{}.csv'.format(post_fix), index=False)

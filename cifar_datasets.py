@@ -24,19 +24,15 @@ cifar100_std = (0.2675, 0.2565, 0.2761)
 normal_mean = (0.5, 0.5, 0.5)
 normal_std = (0.5, 0.5, 0.5)
 
-
-
-# TODO setup sumeet style data augmentation to improve the results
-
 class Cifar10(torch.utils.data.Dataset):
-    TRANSFORM_WEAK_TRAIN = torchvision.transforms.Compose([
-        torchvision.transforms.RandomHorizontalFlip(),
-        torchvision.transforms.RandomCrop(size=32,
-                                          padding=int(32*0.125),
-                                          padding_mode='reflect'),
-        torchvision.transforms.ToTensor(),
-        torchvision.transforms.Normalize(mean=cifar10_mean, std=cifar10_std)
-    ])
+    # TRANSFORM_WEAK_TRAIN = torchvision.transforms.Compose([
+    #     torchvision.transforms.RandomHorizontalFlip(),
+    #     torchvision.transforms.RandomCrop(size=32,
+    #                                       padding=int(32*0.125),
+    #                                       padding_mode='reflect'),
+    #     torchvision.transforms.ToTensor(),
+    #     torchvision.transforms.Normalize(mean=cifar10_mean, std=cifar10_std)
+    # ])
     TRANSFORM_TEST = torchvision.transforms.Compose([
         torchvision.transforms.ToTensor(),
         torchvision.transforms.Normalize(mean=cifar10_mean, std=cifar10_std)
@@ -46,17 +42,16 @@ class Cifar10(torch.utils.data.Dataset):
         torchvision.transforms.RandomCrop(size=32,
                                           padding=int(32 * 0.125),
                                           padding_mode='reflect'),
-        # fixmatch_augmentation.RandAugmentMC(n=2, m=10),
-        torchvision.transforms.RandAugment(num_ops=2, magnitude=10),  # TODO confirm this works as expected
+        torchvision.transforms.RandAugment(num_ops=2, magnitude=10),
         torchvision.transforms.ToTensor(),
         torchvision.transforms.Normalize(mean=cifar10_mean, std=cifar10_std)
     ])
     TRANSFORM_STRONG_AUGMIX_TRAIN = torchvision.transforms.Compose([
-        torchvision.transforms.AugMix(),
         torchvision.transforms.RandomHorizontalFlip(),
         torchvision.transforms.RandomCrop(size=32,
                                           padding=int(32 * 0.125),
                                           padding_mode='reflect'),
+        torchvision.transforms.AugMix(),
         torchvision.transforms.ToTensor(),
         torchvision.transforms.Normalize(mean=cifar10_mean, std=cifar10_std)
     ])

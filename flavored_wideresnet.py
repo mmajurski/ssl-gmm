@@ -117,7 +117,7 @@ class WideResNetMajurski(nn.Module):
         else:
             self.embedding_dim = embedding_dim
             # create a layer to conver from channels[3] to embedding_dim
-            self.emb_linear = nn.Linear(channels[3], self.embedding_dim)
+            self.emb_linear = nn.Linear(channels[3], self.embedding_dim)  # TODO test with bias=False
         self.depth = depth
         self.width = width
         self.channels = channels[3]
