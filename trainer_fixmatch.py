@@ -29,7 +29,6 @@ class FixMatchTrainer(trainer.SupervisedTrainer):
             raise RuntimeError("Unlabeled dataset missing. Cannot use FixMatch train_epoch function without an unlabeled_dataset.")
 
         model.train()
-        scaler = torch.cuda.amp.GradScaler(enabled=self.args.amp)
         loss_nan_count = 0
         start_time = time.time()
 
@@ -79,115 +78,101 @@ class FixMatchTrainer(trainer.SupervisedTrainer):
             if hasattr(model.last_layer, 'centers'):
                 model.last_layer.centers = model.last_layer.centers.cuda()
 
-            # with torch.cuda.amp.autocast(enabled=self.args.amp):
-            with torch.autocast(device_type='cuda', dtype=torch.float16, enabled=self.args.amp):
-                # interleave not required for single GPU training
-                # inputs = utils.interleave(inputs, 2 * self.args.mu + 1)
-                embedding, logits = model(inputs)
-                # logits = utils.de_interleave(logits, 2 * self.args.mu + 1)
-                # embedding = utils.de_interleave(embedding, 2 * self.args.mu + 1)
+            # interleave not required for single GPU training
+            # inputs = utils.interleave(inputs, 2 * self.args.mu + 1)
+            embedding, logits = model(inputs)
+            # logits = utils.de_interleave(logits, 2 * self.args.mu + 1)
+            # embedding = utils.de_interleave(embedding, 2 * self.args.mu + 1)
 
-                targets_l = targets_l.cuda()
-                targets_ul = targets_ul.cuda()
-                # embedding, logits = model(inputs)
+            targets_l = targets_l.cuda()
+            targets_ul = targets_ul.cuda()
+            # embedding, logits = model(inputs)
 
-                # split the logits back into labeled and unlabeled
-                logits_l = logits[:inputs_l.shape[0]]
-                logits_ul = logits[inputs_l.shape[0]:]
-                logits_ul_weak = logits_ul[:inputs_ul_weak.shape[0]]
-                logits_ul_strong = logits_ul[inputs_ul_weak.shape[0]:]
+            # split the logits back into labeled and unlabeled
+            logits_l = logits[:inputs_l.shape[0]]
+            logits_ul = logits[inputs_l.shape[0]:]
+            logits_ul_weak = logits_ul[:inputs_ul_weak.shape[0]]
+            logits_ul_strong = logits_ul[inputs_ul_weak.shape[0]:]
 
-                embedding_l = embedding[:inputs_l.shape[0]]
-                embedding_ul = embedding[inputs_l.shape[0]:]
-                embedding_ul_weak = embedding_ul[:inputs_ul_weak.shape[0]]
-                embedding_ul_strong = embedding_ul[inputs_ul_weak.shape[0]:]
+            embedding_l = embedding[:inputs_l.shape[0]]
+            embedding_ul = embedding[inputs_l.shape[0]:]
+            embedding_ul_weak = embedding_ul[:inputs_ul_weak.shape[0]]
+            embedding_ul_strong = embedding_ul[inputs_ul_weak.shape[0]:]
 
-                softmax_ul_weak = torch.nn.functional.softmax(logits_ul_weak, dim=-1)
+            softmax_ul_weak = torch.nn.functional.softmax(logits_ul_weak, dim=-1)
 
-                if self.args.tau < 1.0:
-                    if self.args.tau_method == 'fixmatch':
-                        # sharpen the logits with tau
-                        softmax_ul_weak = softmax_ul_weak / self.args.tau
-                    elif self.args.tau_method == 'mixmatch':
-                        # sharpen the logits with tau, but in a manner which preserves sum to 1
-                        softmax_ul_weak = sharpen_mixmatch(x=softmax_ul_weak, T=self.args.tau)
-                    else:
-                        raise RuntimeError("invalid tau method = {}".format(self.args.tau_method))
-
-                score_weak, pred_weak = torch.max(softmax_ul_weak, dim=-1)
-                targets_weak_ul = pred_weak
-
-                valid_pl = score_weak >= torch.tensor(self.args.pseudo_label_threshold)
-
-                # capture the number of PL for this batch
-                pl_count = torch.sum(valid_pl).item()
-                train_stats.append_accumulate('train_pseudo_label_count', pl_count)
-
-                if pl_count > 0:
-                    # capture the confusion matrix of the PL
-                    preds = pred_weak[valid_pl]
-                    tgts = targets_ul[valid_pl]
-                    acc_vec = preds == tgts
-                    acc = torch.mean(acc_vec.detach().cpu().type(torch.FloatTensor))
-                    train_stats.append_accumulate('train_pseudo_label_accuracy', acc.item())
-                    for c in range(self.args.num_classes):
-                        pl_acc_per_class[c].extend(acc_vec[tgts == c].detach().cpu().tolist())
-                        pl_count_per_class[c] += torch.sum(preds == c).item()
-                        pl_gt_count_per_class[c] += torch.sum(tgts == c).item()
-
-                loss_l = criterion(logits_l, targets_l)
-                if emb_constraint is not None:
-                    emb_constraint_l = emb_constraint(embedding_l, model.last_layer.centers, logits_l)
-                    emb_constraint_loss_l = embedding_criterion(emb_constraint_l, torch.zeros_like(emb_constraint_l))
-                    train_stats.append_accumulate('train_embedding_constraint_loss', emb_constraint_loss_l.item())
-                    loss_l += emb_constraint_loss_l
-
-                # keep just those labels which are valid PL
-                logits_ul_strong = logits_ul_strong[valid_pl]
-                logits_ul_weak = logits_ul_weak[valid_pl]
-                targets_weak_ul = targets_weak_ul[valid_pl]
-                embedding_ul_strong = embedding_ul_strong[valid_pl]
-                embedding_ul_weak = embedding_ul_weak[valid_pl]
-
-                if pl_count > 0:
-                    loss_ul = criterion(logits_ul_strong, targets_weak_ul)
-                    train_stats.append_accumulate('train_pseudo_label_loss', loss_ul.item())
-
-                    if emb_constraint is not None:
-                        emb_constraint_ul_strong = emb_constraint(embedding_ul_strong, model.last_layer.centers, logits_ul_weak)
-                        emb_constraint_ul_weak = emb_constraint(embedding_ul_weak, model.last_layer.centers, logits_ul_weak)
-
-                        emb_constraint_loss_ul_strong = embedding_criterion(emb_constraint_ul_strong, torch.zeros_like(emb_constraint_ul_strong))
-                        emb_constraint_loss_ul_weak = embedding_criterion(emb_constraint_ul_weak, torch.zeros_like(emb_constraint_ul_weak))
-                        emb_constraint_loss_ul = emb_constraint_loss_ul_strong + emb_constraint_loss_ul_weak
-                        train_stats.append_accumulate('train_pseudo_label_embedding_constraint_loss', emb_constraint_loss_ul.item())
-                    else:
-                        emb_constraint_loss_ul = torch.tensor(torch.nan).to(loss_l.device)
+            if self.args.tau < 1.0:
+                if self.args.tau_method == 'fixmatch':
+                    # sharpen the logits with tau
+                    softmax_ul_weak = softmax_ul_weak / self.args.tau
+                elif self.args.tau_method == 'mixmatch':
+                    # sharpen the logits with tau, but in a manner which preserves sum to 1
+                    softmax_ul_weak = sharpen_mixmatch(x=softmax_ul_weak, T=self.args.tau)
                 else:
-                    loss_ul = torch.tensor(torch.nan).to(loss_l.device)
+                    raise RuntimeError("invalid tau method = {}".format(self.args.tau_method))
+
+            score_weak, pred_weak = torch.max(softmax_ul_weak, dim=-1)
+            targets_weak_ul = pred_weak
+
+            valid_pl = score_weak >= torch.tensor(self.args.pseudo_label_threshold)
+
+            # capture the number of PL for this batch
+            pl_count = torch.sum(valid_pl).item()
+            train_stats.append_accumulate('train_pseudo_label_count', pl_count)
+
+            if pl_count > 0:
+                # capture the confusion matrix of the PL
+                preds = pred_weak[valid_pl]
+                tgts = targets_ul[valid_pl]
+                acc_vec = preds == tgts
+                acc = torch.mean(acc_vec.detach().cpu().type(torch.FloatTensor))
+                train_stats.append_accumulate('train_pseudo_label_accuracy', acc.item())
+                for c in range(self.args.num_classes):
+                    pl_acc_per_class[c].extend(acc_vec[tgts == c].detach().cpu().tolist())
+                    pl_count_per_class[c] += torch.sum(preds == c).item()
+                    pl_gt_count_per_class[c] += torch.sum(tgts == c).item()
+
+            loss_l = criterion(logits_l, targets_l)
+            if emb_constraint is not None:
+                emb_constraint_l = emb_constraint(embedding_l, model.last_layer.centers, logits_l)
+                emb_constraint_loss_l = embedding_criterion(emb_constraint_l, torch.zeros_like(emb_constraint_l))
+                train_stats.append_accumulate('train_embedding_constraint_loss', emb_constraint_loss_l.item())
+                loss_l += emb_constraint_loss_l
+
+            # keep just those labels which are valid PL
+            logits_ul_strong = logits_ul_strong[valid_pl]
+            logits_ul_weak = logits_ul_weak[valid_pl]
+            targets_weak_ul = targets_weak_ul[valid_pl]
+            embedding_ul_strong = embedding_ul_strong[valid_pl]
+            embedding_ul_weak = embedding_ul_weak[valid_pl]
+
+            if pl_count > 0:
+                loss_ul = criterion(logits_ul_strong, targets_weak_ul)
+                train_stats.append_accumulate('train_pseudo_label_loss', loss_ul.item())
+
+                if emb_constraint is not None:
+                    emb_constraint_ul_strong = emb_constraint(embedding_ul_strong, model.last_layer.centers, logits_ul_weak)
+                    emb_constraint_ul_weak = emb_constraint(embedding_ul_weak, model.last_layer.centers, logits_ul_weak)
+
+                    emb_constraint_loss_ul_strong = embedding_criterion(emb_constraint_ul_strong, torch.zeros_like(emb_constraint_ul_strong))
+                    emb_constraint_loss_ul_weak = embedding_criterion(emb_constraint_ul_weak, torch.zeros_like(emb_constraint_ul_weak))
+                    emb_constraint_loss_ul = emb_constraint_loss_ul_strong + emb_constraint_loss_ul_weak
+                    train_stats.append_accumulate('train_pseudo_label_embedding_constraint_loss', emb_constraint_loss_ul.item())
+                else:
                     emb_constraint_loss_ul = torch.tensor(torch.nan).to(loss_l.device)
-                batch_loss = loss_l
-                if not torch.isnan(loss_ul):
-                    batch_loss += loss_ul
-                if not torch.isnan(emb_constraint_loss_ul):
-                    batch_loss += emb_constraint_loss_ul
-
-            if self.args.amp:
-                scaler.scale(batch_loss).backward()
-                scaler.unscale_(optimizer)
-                torch.nn.utils.clip_grad_norm_(model.parameters(), 1.0)
-
-                # scaler.step() first unscales the gradients of the optimizer's assigned params.
-                # If these gradients do not contain infs or NaNs, optimizer.step() is then called,
-                # otherwise, optimizer.step() is skipped.
-                scaler.step(optimizer)
-                # Updates the scale for next iteration.
-                scaler.update()
             else:
-                batch_loss.backward()
-                torch.nn.utils.clip_grad_norm_(model.parameters(), 1.0)
-                # torch.nn.utils.clip_grad_value_(model.parameters(), 1.0)
-                optimizer.step()
+                loss_ul = torch.tensor(torch.nan).to(loss_l.device)
+                emb_constraint_loss_ul = torch.tensor(torch.nan).to(loss_l.device)
+            batch_loss = loss_l
+            if not torch.isnan(loss_ul):
+                batch_loss += loss_ul
+            if not torch.isnan(emb_constraint_loss_ul):
+                batch_loss += emb_constraint_loss_ul
+
+            batch_loss.backward()
+            torch.nn.utils.clip_grad_norm_(model.parameters(), 1.0)
+            # torch.nn.utils.clip_grad_value_(model.parameters(), 1.0)
+            optimizer.step()
 
             optimizer.zero_grad(set_to_none=True)
             if cyclic_lr_scheduler is not None:

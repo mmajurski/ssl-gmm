@@ -50,7 +50,6 @@ def main():
     parser.add_argument('--trainer', type=str, default='fixmatch', help='trainer to use (currently supported supervised, fixmatch)')
     parser.add_argument('--embedding-constraint', type=str, default=None, help='embedding constraint to enforce (currently supported None, mean_covar, gauss_moment)')
     parser.add_argument('--seed', type=int, default=None, help='seed for the random number generator')
-    parser.add_argument('--amp', action='store_true')
 
 
     args = parser.parse_args()

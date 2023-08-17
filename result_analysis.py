@@ -10,6 +10,7 @@ post_fix = 'ingest-rng-seed'
 # post_fix = 'rng-seed'
 # post_fix = 'fixmatch-seed-search'
 # post_fix = 'noarchmod'
+post_fix = 'bias'
 directory = 'models-{}'.format(post_fix)
 
 # columns to extract from file name
@@ -80,6 +81,12 @@ for folder_name in folder_names:
         print("Model failure: {}".format(folder_name))
     elif not os.path.exists(os.path.join(directory, folder_name, 'success.txt')):
         print("Model non-success: {}".format(folder_name))
+        # # adding the row to final results
+        # row_df = pd.DataFrame([combined_dict])
+        # if results_df is None:
+        #     results_df = row_df
+        # else:
+        #     results_df = pd.concat([results_df, row_df])
     else:
         nb_complete += 1
         success_list.append(folder_name)
