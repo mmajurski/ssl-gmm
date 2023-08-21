@@ -10,7 +10,7 @@ post_fix = 'ingest-rng-seed'
 # post_fix = 'rng-seed'
 # post_fix = 'fixmatch-seed-search'
 # post_fix = 'noarchmod'
-post_fix = 'bias'
+post_fix = 'no-bias'
 directory = 'models-{}'.format(post_fix)
 
 # columns to extract from file name

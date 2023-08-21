@@ -25,36 +25,36 @@ normal_mean = (0.5, 0.5, 0.5)
 normal_std = (0.5, 0.5, 0.5)
 
 class Cifar10(torch.utils.data.Dataset):
-    # TRANSFORM_WEAK_TRAIN = torchvision.transforms.Compose([
-    #     torchvision.transforms.RandomHorizontalFlip(),
-    #     torchvision.transforms.RandomCrop(size=32,
-    #                                       padding=int(32*0.125),
-    #                                       padding_mode='reflect'),
-    #     torchvision.transforms.ToTensor(),
-    #     torchvision.transforms.Normalize(mean=cifar10_mean, std=cifar10_std)
-    # ])
+    TRANSFORM_TRAIN = torchvision.transforms.Compose([
+        torchvision.transforms.RandomHorizontalFlip(),
+        torchvision.transforms.RandomCrop(size=32,
+                                          padding=int(32*0.125),
+                                          padding_mode='reflect'),
+        torchvision.transforms.ToTensor(),
+        torchvision.transforms.Normalize(mean=cifar10_mean, std=cifar10_std)
+    ])
     TRANSFORM_TEST = torchvision.transforms.Compose([
         torchvision.transforms.ToTensor(),
         torchvision.transforms.Normalize(mean=cifar10_mean, std=cifar10_std)
     ])
-    TRANSFORM_STRONG_TRAIN = torchvision.transforms.Compose([
-        torchvision.transforms.RandomHorizontalFlip(),
-        torchvision.transforms.RandomCrop(size=32,
-                                          padding=int(32 * 0.125),
-                                          padding_mode='reflect'),
-        torchvision.transforms.RandAugment(num_ops=2, magnitude=10),
-        torchvision.transforms.ToTensor(),
-        torchvision.transforms.Normalize(mean=cifar10_mean, std=cifar10_std)
-    ])
-    TRANSFORM_STRONG_AUGMIX_TRAIN = torchvision.transforms.Compose([
-        torchvision.transforms.RandomHorizontalFlip(),
-        torchvision.transforms.RandomCrop(size=32,
-                                          padding=int(32 * 0.125),
-                                          padding_mode='reflect'),
-        torchvision.transforms.AugMix(),
-        torchvision.transforms.ToTensor(),
-        torchvision.transforms.Normalize(mean=cifar10_mean, std=cifar10_std)
-    ])
+    # TRANSFORM_STRONG_TRAIN = torchvision.transforms.Compose([
+    #     torchvision.transforms.RandomHorizontalFlip(),
+    #     torchvision.transforms.RandomCrop(size=32,
+    #                                       padding=int(32 * 0.125),
+    #                                       padding_mode='reflect'),
+    #     torchvision.transforms.RandAugment(num_ops=2, magnitude=10),
+    #     torchvision.transforms.ToTensor(),
+    #     torchvision.transforms.Normalize(mean=cifar10_mean, std=cifar10_std)
+    # ])
+    # TRANSFORM_STRONG_AUGMIX_TRAIN = torchvision.transforms.Compose([
+    #     torchvision.transforms.RandomHorizontalFlip(),
+    #     torchvision.transforms.RandomCrop(size=32,
+    #                                       padding=int(32 * 0.125),
+    #                                       padding_mode='reflect'),
+    #     torchvision.transforms.AugMix(),
+    #     torchvision.transforms.ToTensor(),
+    #     torchvision.transforms.Normalize(mean=cifar10_mean, std=cifar10_std)
+    # ])
 
     TRANSFORM_FIXMATCH = fixmatch_augmentation.TransformFixMatch(mean=cifar10_mean, std=cifar10_std)
 
@@ -215,7 +215,7 @@ class Cifar10(torch.utils.data.Dataset):
 
 class Cifar100(Cifar10):
 
-    TRANSFORM_WEAK_TRAIN = torchvision.transforms.Compose([
+    TRANSFORM_TRAIN = torchvision.transforms.Compose([
         torchvision.transforms.RandomHorizontalFlip(),
         torchvision.transforms.RandomCrop(size=32,
                                           padding=int(32 * 0.125),
@@ -259,3 +259,35 @@ class Cifar100(Cifar10):
 
         # cleanup the tmp CIFAR object
         del _dataset
+
+
+class Cifar10plus100(Cifar10):
+
+    def __init__(self, transform=None, train:bool=True, subset=False, lcl_fldr:str='./data'):
+        super(Cifar10plus100, self).__init__(transform, train, subset, lcl_fldr)
+
+    def add_cifar100_ood_data(self, p=0.1):
+        # get some classes from the cifar100 training dataset
+        # this will only be used to contaminate the unlabeled data
+        _dataset = torchvision.datasets.CIFAR100(self.lcl_fldr, train=True, download=True)
+
+        # break the data up into a list instead of a single numpy block to allow deleting and addition
+        self.ood_targets = list()
+        self.ood_data = list()
+        data_len = _dataset.data.shape[0]
+        idx = list(range(data_len))
+        random.shuffle(idx)
+        idx = idx[0:int(p * len(self.data))]
+        for i in idx:
+            self.ood_data.append(_dataset.data[i, :, :, :])
+            self.ood_targets.append(_dataset.targets[i] + 100)  # offset by 100 to indicate its coming from cifar100
+        # cleanup the tmp CIFAR object
+        del _dataset
+
+        for i in range(len(self.ood_data)):
+            data = self.ood_data[i]
+            target = self.ood_targets[i]
+
+            self.data.append(data)
+            self.targets.append(target)
+

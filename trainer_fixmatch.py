@@ -119,6 +119,9 @@ class FixMatchTrainer(trainer.SupervisedTrainer):
             # capture the number of PL for this batch
             pl_count = torch.sum(valid_pl).item()
             train_stats.append_accumulate('train_pseudo_label_count', pl_count)
+            targets_ul_valid = targets_ul[valid_pl]
+            ood_pl_count = torch.sum(targets_ul_valid > 100).item()
+            train_stats.append_accumulate('train_pseudo_label_ood_count', ood_pl_count)
 
             if pl_count > 0:
                 # capture the confusion matrix of the PL
@@ -205,6 +208,7 @@ class FixMatchTrainer(trainer.SupervisedTrainer):
         train_stats.add(epoch, 'train_wall_time', time.time() - start_time)
 
         train_stats.close_accumulate(epoch, 'train_pseudo_label_count', method='sum', default_value=0.0)  # default value in case no data was collected
+        train_stats.close_accumulate(epoch, 'train_pseudo_label_ood_count', method='sum', default_value=0.0)  # default value in case no data was collected
         train_stats.close_accumulate(epoch, 'train_pseudo_label_accuracy', method='avg', default_value=0.0)  # default value in case no data was collected
         train_stats.close_accumulate(epoch, 'train_pseudo_label_loss', method='avg', default_value=0.0)  # default value in case no data was collected
         if emb_constraint is not None:

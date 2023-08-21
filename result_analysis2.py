@@ -66,6 +66,19 @@ for config_key in dict_of_df_lists.keys():
     for d in dict_of_df_lists[config_key]:
         ta.append(d['test_accuracy'])
 
+
+    mv = float(np.mean(ta))
+    q1 = float(np.quantile(ta, 0.25))
+    q3 = float(np.quantile(ta, 0.75))
+    iqr = 1.5 * (q3 - q1)
+    exclude_both = False
+    if exclude_both:
+        removed_ta = [v for v in ta if v < (q1 - iqr) or v > (q3 + iqr)]
+        ta = [v for v in ta if v >= (q1 - iqr) and v <= (q3 + iqr)]
+    else:
+        removed_ta = [v for v in ta if v < (q1 - iqr)]
+        ta = [v for v in ta if v >= (q1 - iqr)]
+
     a = dict_of_df_lists[config_key][0]
     del a['test_accuracy']
     a['mean_test_accuracy'] = float(np.mean(ta))
@@ -73,6 +86,12 @@ for config_key in dict_of_df_lists.keys():
     a['max_test_accuracy'] = float(np.max(ta))
     a['min_test_accuracy'] = float(np.min(ta))
     a['nb_runs'] = len(ta)
+
+    ta = [round(1000.0 * v) / 1000.0 for v in ta]
+    removed_ta = [round(1000.0*v)/1000.0 for v in removed_ta]
+
+    a['test_accuracies'] = ta
+    a['outlier_test_accuracies'] = removed_ta
     cd = pd.json_normalize(a)
     df_list.append(cd)
 
