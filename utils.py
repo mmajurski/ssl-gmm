@@ -8,7 +8,7 @@ import inspect
 
 
 # adapted from https://github.com/karpathy/nanoGPT/blob/master/model.py#L270
-def configure_optimizer(model, weight_decay, learning_rate, method='adamw'):
+def configure_optimizer(model, weight_decay, learning_rate, method='sgd', nesterov=True):
     if weight_decay is None:
         weight_decay = 0.0
 
@@ -30,7 +30,7 @@ def configure_optimizer(model, weight_decay, learning_rate, method='adamw'):
     logging.info("num non-decayed parameter tensors: {}, with {} parameters".format(len(nodecay_params), num_nodecay_params))
 
     if method == 'sgd':
-        optimizer = torch.optim.SGD(optim_groups, lr=learning_rate, momentum=0.9, nesterov=True)
+        optimizer = torch.optim.SGD(optim_groups, lr=learning_rate, momentum=0.9, nesterov=nesterov)
         logging.info("Using SGD")
     elif method == 'adamw':
         # Create AdamW optimizer and use the fused version if it is available

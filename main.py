@@ -45,6 +45,8 @@ def main():
     parser.add_argument('--num-classes', default=10, type=int, help='number of classes in the dataset.')
     parser.add_argument('--num-labeled-datapoints', default=250, type=int, help='number of labeled annotations in the dataset.')
     parser.add_argument('--optimizer', type=str, default='sgd',help='optimizer if nothing is passed AdamW would be used (currently supported sgd,adamw)')
+    parser.add_argument('--nesterov', action='store_true', default=True,
+                        help='use nesterov momentum')
     parser.add_argument('--debug', help='enables debugging mode', action='store_true')
     parser.add_argument('--last-layer', type=str, default='fc', help='last layer to use in the NN (currently supported fc, kmeans, aa_gmm, aa_cmm, aa_gmmcmm, aa_gmm_d1, aa_cmm_d1, aa_gmmcmm_d1')
     parser.add_argument('--num-epochs', default=None, type=int, help='number of epochs to train. If this is non-None it will suppress the use of a test split, and blindly run the training for N epochs.')
