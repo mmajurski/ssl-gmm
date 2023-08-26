@@ -36,10 +36,9 @@ class FixMatchTrainer(trainer.SupervisedTrainer):
 
         batch_count = len(dataloader)
 
+        cyclic_lr_scheduler = None
         # cyclic learning rate with one up/down cycle per epoch.
-        if self.args.cycle_factor is None or self.args.cycle_factor == 0:
-            cyclic_lr_scheduler = None
-        else:
+        if self.args.cycle_factor is not None and self.args.cycle_factor > 0:
             epoch_init_lr = optimizer.param_groups[0]['lr']
             train_stats.add(epoch, 'learning_rate', epoch_init_lr)
             cyclic_lr_scheduler = torch.optim.lr_scheduler.CyclicLR(optimizer, base_lr=(epoch_init_lr / self.args.cycle_factor), max_lr=(epoch_init_lr * self.args.cycle_factor), step_size_up=int(batch_count / 2), cycle_momentum=False)
@@ -119,6 +118,7 @@ class FixMatchTrainer(trainer.SupervisedTrainer):
             # capture the number of PL for this batch
             pl_count = torch.sum(valid_pl).item()
             train_stats.append_accumulate('train_pseudo_label_count', pl_count)
+            train_stats.append_accumulate('train_pseudo_label_mask_rate', (pl_count / (self.args.batch_size * self.args.mu)) )
             targets_ul_valid = targets_ul[valid_pl]
             ood_pl_count = torch.sum(targets_ul_valid > 100).item()
             train_stats.append_accumulate('train_pseudo_label_ood_count', ood_pl_count)
@@ -130,6 +130,8 @@ class FixMatchTrainer(trainer.SupervisedTrainer):
                 acc_vec = preds == tgts
                 acc = torch.mean(acc_vec.detach().cpu().type(torch.FloatTensor))
                 train_stats.append_accumulate('train_pseudo_label_accuracy', acc.item())
+                train_stats.append_accumulate('train_pseudo_label_impurity', (1.0 - acc.item()))
+
                 for c in range(self.args.num_classes):
                     pl_acc_per_class[c].extend(acc_vec[tgts == c].detach().cpu().tolist())
                     pl_count_per_class[c] += torch.sum(preds == c).item()
@@ -173,7 +175,8 @@ class FixMatchTrainer(trainer.SupervisedTrainer):
                 batch_loss += emb_constraint_loss_ul
 
             batch_loss.backward()
-            torch.nn.utils.clip_grad_norm_(model.parameters(), 1.0)
+            if self.args.clip_grad:
+                torch.nn.utils.clip_grad_norm_(model.parameters(), 1.0)
             # torch.nn.utils.clip_grad_value_(model.parameters(), 1.0)
             optimizer.step()
 
@@ -208,8 +211,11 @@ class FixMatchTrainer(trainer.SupervisedTrainer):
         train_stats.add(epoch, 'train_wall_time', time.time() - start_time)
 
         train_stats.close_accumulate(epoch, 'train_pseudo_label_count', method='sum', default_value=0.0)  # default value in case no data was collected
+        train_stats.close_accumulate(epoch, 'train_pseudo_label_mask_rate', method='sum', default_value=0.0)
         train_stats.close_accumulate(epoch, 'train_pseudo_label_ood_count', method='sum', default_value=0.0)  # default value in case no data was collected
         train_stats.close_accumulate(epoch, 'train_pseudo_label_accuracy', method='avg', default_value=0.0)  # default value in case no data was collected
+        train_stats.close_accumulate(epoch, 'train_pseudo_label_impurity', method='avg', default_value=0.0)
+
         train_stats.close_accumulate(epoch, 'train_pseudo_label_loss', method='avg', default_value=0.0)  # default value in case no data was collected
         if emb_constraint is not None:
             train_stats.close_accumulate(epoch, 'train_embedding_constraint_loss', method='avg', default_value=0.0)  # default value in case no data was collected

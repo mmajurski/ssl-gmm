@@ -23,46 +23,6 @@ class SupervisedTrainer:
     def __init__(self, args):
         self.args = args
 
-    # adapted from https://github.com/karpathy/nanoGPT/blob/master/model.py#L270
-    def configure_optimizer(self, model):
-
-        if self.args.weight_decay is None:
-            weight_decay = 0.0
-        else:
-            weight_decay = self.args.weight_decay
-
-        # start with all of the candidate parameters
-        param_dict = {pn: p for pn, p in model.named_parameters()}
-        # filter out those that do not require grad
-        param_dict = {pn: p for pn, p in param_dict.items() if p.requires_grad}
-        # create optim groups. Any parameters that is 2D will be weight decayed, otherwise no.
-        # i.e. all weight tensors in matmuls + embeddings decay, all biases and layernorms don't.
-        decay_params = [p for n, p in param_dict.items() if p.dim() >= 2]
-        nodecay_params = [p for n, p in param_dict.items() if p.dim() < 2]
-        optim_groups = [
-            {'params': decay_params, 'weight_decay': weight_decay},
-            {'params': nodecay_params, 'weight_decay': 0.0}
-        ]
-        num_decay_params = sum(p.numel() for p in decay_params)
-        num_nodecay_params = sum(p.numel() for p in nodecay_params)
-        logging.info("num decayed parameter tensors: {}, with {} parameters".format(len(decay_params), num_decay_params))
-        logging.info("num non-decayed parameter tensors: {}, with {} parameters".format(len(nodecay_params), num_nodecay_params))
-
-        if self.args.optimizer == 'sgd':
-            optimizer = torch.optim.SGD(optim_groups, lr=self.args.learning_rate, momentum=0.9, nesterov=False)
-            logging.info("Using SGD")
-
-        elif self.args.optimizer == 'adamw':
-            # Create AdamW optimizer and use the fused version if it is available
-            fused_available = 'fused' in inspect.signature(torch.optim.AdamW).parameters
-            extra_args = dict(fused=True) if fused_available else dict()
-            optimizer = torch.optim.AdamW(optim_groups, lr=self.args.learning_rate, **extra_args)
-            logging.info("Using fused AdamW: {}".format(fused_available))
-        else:
-            raise RuntimeError("Invalid optimizer: {}".format(self.args.optimizer))
-        return optimizer
-
-
     def train_epoch(self, model, pytorch_dataset, optimizer, criterion, emb_constraint, epoch, train_stats, unlabeled_dataset=None, ema_model=None):
 
         model.train()
@@ -71,9 +31,9 @@ class SupervisedTrainer:
 
         batch_count = len(dataloader)
 
-        if self.args.cycle_factor is None or self.args.cycle_factor == 0:
-            cyclic_lr_scheduler = None
-        else:
+        cyclic_lr_scheduler = None
+        # cyclic learning rate with one up/down cycle per epoch.
+        if self.args.cycle_factor is not None and self.args.cycle_factor > 0:
             epoch_init_lr = optimizer.param_groups[0]['lr']
             train_stats.add(epoch, 'learning_rate', epoch_init_lr)
             cyclic_lr_scheduler = torch.optim.lr_scheduler.CyclicLR(optimizer, base_lr=(epoch_init_lr / self.args.cycle_factor), max_lr=(epoch_init_lr * self.args.cycle_factor), step_size_up=int(batch_count / 2), cycle_momentum=False)
@@ -105,8 +65,10 @@ class SupervisedTrainer:
                 batch_loss += emb_constraint_loss
 
             batch_loss.backward()
-            torch.nn.utils.clip_grad_norm_(model.parameters(), 1.0)
+            if self.args.clip_grad:
+                torch.nn.utils.clip_grad_norm_(model.parameters(), 1.0)
             optimizer.step()
+
             if cyclic_lr_scheduler is not None:
                 cyclic_lr_scheduler.step()
 

@@ -200,8 +200,8 @@ class TransformFixMatch(object):
             torchvision.transforms.RandomCrop(size=32,
                                   padding=int(32*0.125),
                                   padding_mode='reflect'),
-            torchvision.transforms.RandAugment(num_ops=2, magnitude=10)])
-            # RandAugmentMC(n=2, m=10)])
+            # torchvision.transforms.RandAugment(num_ops=2, magnitude=10)])
+            RandAugmentMC(n=2, m=10)])
     def __init__(self, mean, std):
         self.weak = self.WEAK
         self.strong = self.STRONG

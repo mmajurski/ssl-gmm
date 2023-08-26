@@ -30,7 +30,7 @@ def configure_optimizer(model, weight_decay, learning_rate, method='adamw'):
     logging.info("num non-decayed parameter tensors: {}, with {} parameters".format(len(nodecay_params), num_nodecay_params))
 
     if method == 'sgd':
-        optimizer = torch.optim.SGD(optim_groups, lr=learning_rate, momentum=0.9, nesterov=False)
+        optimizer = torch.optim.SGD(optim_groups, lr=learning_rate, momentum=0.9, nesterov=True)
         logging.info("Using SGD")
     elif method == 'adamw':
         # Create AdamW optimizer and use the fused version if it is available

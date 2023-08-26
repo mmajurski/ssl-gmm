@@ -72,3 +72,14 @@ import shutil
 #     shutil.make_archive(base_name=a, format='zip', root_dir=a)
 #     shutil.rmtree(src_ofp)
 
+
+import torch
+
+ifp = '/home/mmajursk/data/rl-randomized-lavaworld-aug2023/test-dataset'
+fns = [fn for fn in os.listdir(ifp) if fn.startswith('id-')]
+fns.sort()
+
+for fn in fns:
+    print(fn)
+    model = torch.load(os.path.join(ifp, fn, 'model.pt'))
+    torch.save(model.state_dict(), os.path.join(ifp, fn, "model-state-dict.pt"))

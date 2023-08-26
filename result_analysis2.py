@@ -20,7 +20,7 @@ post_fix = 'rng-seed'
 directory = 'models-{}'.format(post_fix)
 
 # columns to extract from file name
-config_columns = ['trainer', 'last_layer', 'embedding_dim', 'num_labeled_datapoints', 'embedding_constraint']
+config_columns = ['trainer', 'last_layer', 'use_ema', 'embedding_dim', 'num_labeled_datapoints', 'embedding_constraint']
 # columns to extract from result file (stats.json)
 result_columns = ['test_accuracy']
 results_df = None
@@ -32,39 +32,44 @@ dict_of_df_lists = dict()
 
 for folder_name in folder_names:
 
-    json_file_path = os.path.join(directory, folder_name, 'config.json')
-    with open(json_file_path) as json_file:
-        config_dict = json.load(json_file)
-
-    config_dict = dict((k, config_dict[k]) for k in config_columns)
-
-    # creating dictionary from stats.json file
-    json_file_path = os.path.join(directory, folder_name, 'stats.json')
-    result_dict = dict()
-    if os.path.exists(json_file_path):
+    if os.path.exists(os.path.join(directory, folder_name, 'failure.txt')):
+        print("Model failure: {}".format(folder_name))
+    elif not os.path.exists(os.path.join(directory, folder_name, 'success.txt')):
+        print("Model non-success: {}".format(folder_name))
+    else:
+        json_file_path = os.path.join(directory, folder_name, 'config.json')
         with open(json_file_path) as json_file:
-            result_dict = json.load(json_file)
+            config_dict = json.load(json_file)
 
-        # only keeping the desired columns
-        result_columns_lcl = copy.deepcopy(result_columns)
-        for c in result_columns:
-            if c not in result_dict.keys():
-                result_columns_lcl.remove(c)
-        result_dict = dict((k, result_dict[k]) for k in result_columns_lcl)
-    # combining both the dictionaries
-    combined_dict = config_dict | result_dict
+        config_dict = dict((k, config_dict[k]) for k in config_columns)
 
-    key = gen_key(config_dict)
-    if key not in dict_of_df_lists.keys():
-        dict_of_df_lists[key] = list()
-    dict_of_df_lists[key].append(combined_dict)
+        # creating dictionary from stats.json file
+        json_file_path = os.path.join(directory, folder_name, 'stats.json')
+        result_dict = dict()
+        if os.path.exists(json_file_path):
+            with open(json_file_path) as json_file:
+                result_dict = json.load(json_file)
+
+            # only keeping the desired columns
+            result_columns_lcl = copy.deepcopy(result_columns)
+            for c in result_columns:
+                if c not in result_dict.keys():
+                    result_columns_lcl.remove(c)
+            result_dict = dict((k, result_dict[k]) for k in result_columns_lcl)
+        # combining both the dictionaries
+        combined_dict = config_dict | result_dict
+
+        key = gen_key(config_dict)
+        if key not in dict_of_df_lists.keys():
+            dict_of_df_lists[key] = list()
+        dict_of_df_lists[key].append(combined_dict)
 
 df_list = list()
 for config_key in dict_of_df_lists.keys():
     # compute the average test_accuracy for all json dicts in this list
     ta = list()
     for d in dict_of_df_lists[config_key]:
-        ta.append(d['test_accuracy'])
+        ta.append(100 * d['test_accuracy'])
 
 
     mv = float(np.mean(ta))
@@ -87,8 +92,10 @@ for config_key in dict_of_df_lists.keys():
     a['min_test_accuracy'] = float(np.min(ta))
     a['nb_runs'] = len(ta)
 
-    ta = [round(1000.0 * v) / 1000.0 for v in ta]
-    removed_ta = [round(1000.0*v)/1000.0 for v in removed_ta]
+    # ta = [round(1000.0 * v) / 1000.0 for v in ta]
+    # removed_ta = [round(1000.0*v)/1000.0 for v in removed_ta]
+    ta = [round(10.0 * v) / 10.0 for v in ta]
+    removed_ta = [round(10.0 * v) / 10.0 for v in removed_ta]
 
     a['test_accuracies'] = ta
     a['outlier_test_accuracies'] = removed_ta
