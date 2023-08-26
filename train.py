@@ -136,7 +136,7 @@ def train(args):
     model.cuda()
 
     # setup early stopping on convergence using LR reduction on plateau
-    optimizer = model_trainer.configure_optimizer(model)
+    optimizer = utils.configure_optimizer(model, args.weight_decay, args.learning_rate, method='sgd')
 
     def log_lr_reduction():
         logging.info("Learning rate reduced")
