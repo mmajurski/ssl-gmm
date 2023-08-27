@@ -211,7 +211,7 @@ class FixMatchTrainer(trainer.SupervisedTrainer):
         train_stats.add(epoch, 'train_wall_time', time.time() - start_time)
 
         train_stats.close_accumulate(epoch, 'train_pseudo_label_count', method='sum', default_value=0.0)  # default value in case no data was collected
-        train_stats.close_accumulate(epoch, 'train_pseudo_label_mask_rate', method='sum', default_value=0.0)
+        train_stats.close_accumulate(epoch, 'train_pseudo_label_mask_rate', method='avg', default_value=0.0)
         train_stats.close_accumulate(epoch, 'train_pseudo_label_ood_count', method='sum', default_value=0.0)  # default value in case no data was collected
         train_stats.close_accumulate(epoch, 'train_pseudo_label_accuracy', method='avg', default_value=0.0)  # default value in case no data was collected
         train_stats.close_accumulate(epoch, 'train_pseudo_label_impurity', method='avg', default_value=0.0)

@@ -1,14 +1,17 @@
 import os
 
-ifp = './models-rng-seed'
+ifp = './models-all'
 
 fns = [fn for fn in os.listdir(ifp) if fn.startswith('id-')]
 fns.sort()
 
 idx = 0
 while True:
-    dst = os.path.join(ifp, 'id-{:08d}'.format(idx))
+    fn = 'id-{:08d}'.format(idx)
+    dst = os.path.join(ifp, fn)
     if os.path.exists(dst):
+        a = fns.index(fn)
+        del fns[a]
         idx += 1
         continue
 

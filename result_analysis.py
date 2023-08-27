@@ -5,15 +5,12 @@ import json
 import os
 
 # folder to read files from
-# post_fix = 'fixed-seed'
-post_fix = 'ingest-rng-seed'
-post_fix = 'rng-seed'
-# post_fix = 'fixmatch-seed-search'
-# post_fix = 'noarchmod'
+post_fix = 'ingest'
+post_fix = 'all'
 directory = 'models-{}'.format(post_fix)
 
 # columns to extract from file name
-config_columns = ['method', 'last_layer', 'ema', 'embedding_dim', 'num_labeled_datapoints', 'embedding_constraint',  'model', 'learning_rate']
+config_columns = ['trainer', 'last_layer', 'use_ema', 'embedding_dim', 'num_labeled_datapoints', 'embedding_constraint', 'clip_grad', 'patience', 'nesterov']
 # columns to extract from result file (stats.json)
 result_columns = ['test_accuracy', 'wall_time', 'epoch']
 results_df = None
@@ -31,25 +28,28 @@ for folder_name in folder_names:
 
     json_file_path = os.path.join(directory, folder_name, 'config.json')
     with open(json_file_path) as json_file:
-        full_config_dict = json.load(json_file)
-
-    config_dict = dict()
-    config_dict['method'] = full_config_dict['trainer']
-    config_dict['model'] = folder_name
-    config_dict['num_labeled_datapoints'] = full_config_dict['num_labeled_datapoints']
-    config_dict['embedding_constraint'] = full_config_dict['embedding_constraint']
-    config_dict['last_layer'] = full_config_dict['last_layer']
-    config_dict['learning_rate'] = full_config_dict['learning_rate']
-    config_dict['ema'] = full_config_dict['use_ema']
-    if 'embedding_dim' not in full_config_dict.keys():
-        full_config_dict['embedding_dim'] = 8
-    config_dict['embedding_dim'] = full_config_dict['embedding_dim']
-    if 'nprefc' not in full_config_dict.keys():
-        full_config_dict['nprefc'] = 0
-    config_dict['nprefc'] = full_config_dict['nprefc']
-
+        config_dict = json.load(json_file)
 
     config_dict = dict((k, config_dict[k]) for k in config_columns)
+    config_dict['model'] = folder_name
+
+    # config_dict = dict()
+    # config_dict['method'] = full_config_dict['trainer']
+    # config_dict['model'] = folder_name
+    # config_dict['num_labeled_datapoints'] = full_config_dict['num_labeled_datapoints']
+    # config_dict['embedding_constraint'] = full_config_dict['embedding_constraint']
+    # config_dict['last_layer'] = full_config_dict['last_layer']
+    # config_dict['learning_rate'] = full_config_dict['learning_rate']
+    # config_dict['ema'] = full_config_dict['use_ema']
+    # if 'embedding_dim' not in full_config_dict.keys():
+    #     full_config_dict['embedding_dim'] = 8
+    # config_dict['embedding_dim'] = full_config_dict['embedding_dim']
+    # if 'nprefc' not in full_config_dict.keys():
+    #     full_config_dict['nprefc'] = 0
+    # config_dict['nprefc'] = full_config_dict['nprefc']
+
+
+    # config_dict = dict((k, config_dict[k]) for k in config_columns)
 
     # creating dictionary from stats.json file
     json_file_path = os.path.join(directory, folder_name, 'stats.json')

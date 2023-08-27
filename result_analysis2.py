@@ -13,14 +13,11 @@ def gen_key(cdict):
     return key
 
 # folder to read files from
-# post_fix = 'fixed-seed'
-# post_fix = 'noarchmod'
-# post_fix = 'fixmatch-noarchmod'
-post_fix = 'rng-seed'
+post_fix = 'all'
 directory = 'models-{}'.format(post_fix)
 
 # columns to extract from file name
-config_columns = ['trainer', 'last_layer', 'use_ema', 'embedding_dim', 'num_labeled_datapoints', 'embedding_constraint']
+config_columns = ['trainer', 'last_layer', 'use_ema', 'embedding_dim', 'num_labeled_datapoints', 'embedding_constraint', 'clip_grad', 'patience', 'nesterov']
 # columns to extract from result file (stats.json)
 result_columns = ['test_accuracy']
 results_df = None

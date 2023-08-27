@@ -110,7 +110,8 @@ class TrainingStats():
         df = pd.DataFrame(self.epoch_data)
         col_list = list(df.columns)
 
-        fig = plt.figure(figsize=(8, 4), dpi=200)
+        # fig = plt.figure(figsize=(8, 4), dpi=200)
+        fig = plt.figure(figsize=(16, 8))
 
         for cm in ['loss', 'accuracy', 'wall_time', 'loss_comp']:
             core_metrics = [a for a in col_list if a.endswith(cm)]
@@ -121,10 +122,12 @@ class TrainingStats():
                 if not all_one_figure:
                     plt.clf()
                 ax = plt.gca()
+                all_y = list()
                 for col in core_metrics:
                     x = df['epoch'].to_list()
                     y = df[col].to_list()
-                    ax.plot(x, y, '-')
+                    all_y.extend(y)
+                    ax.plot(x, y, '-', linewidth=2.0)
                 ax.legend(core_metrics)
 
                 # plot the best indicator after the legend, so that it does not show up in the legend
@@ -132,13 +135,17 @@ class TrainingStats():
                     for col in core_metrics:
                         y = df[col].to_list()
                         y1_best = y[self.best_epoch]
-                        plt.plot(self.best_epoch, y1_best, marker='*', c='k')
+                        plt.plot(self.best_epoch, y1_best, marker='*', markersize=6.0, c='k')
 
                 ax.set_xlabel('Epoch')
                 ax.set_ylabel('{}'.format(cm))
                 plt.tight_layout()
+                p01, p99 = np.nanpercentile(all_y, [0.5, 99.5])
+                p01 -= (0.05 * p01)
+                p99 += (0.05 * p99)
+                plt.ylim(p01, p99)
                 if not all_one_figure:
-                    plt.savefig(os.path.join(output_dirpath, '{}.png'.format(cm)))
+                    plt.savefig(os.path.join(output_dirpath, '{}.svg'.format(cm)))
 
         # plot all metrics if its useful (its usually not)
         for col in col_list:
@@ -149,12 +156,16 @@ class TrainingStats():
             ax = plt.gca()
             x = df['epoch'].to_list()
             y = df[col].to_list()
-            ax.plot(x, y, 'o-', markersize=5, linewidth=1)
+            ax.plot(x, y, '-', linewidth=2.0)
             ax.set_xlabel('Epoch')
             ax.set_ylabel(col)
             plt.tight_layout()
+            p01, p99 = np.nanpercentile(y, [0.5, 99.5])
+            p01 -= (0.05 * p01)
+            p99 += (0.05 * p99)
+            plt.ylim(p01, p99)
             if not all_one_figure:
-                plt.savefig(os.path.join(output_dirpath, '{}.png'.format(col)))
+                plt.savefig(os.path.join(output_dirpath, '{}.svg'.format(col)))
         if all_one_figure:
             plt.savefig(os.path.join(output_dirpath, 'all-plots.png'))
         plt.close(fig)
