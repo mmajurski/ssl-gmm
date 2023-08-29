@@ -40,7 +40,7 @@ def main():
     parser.add_argument('--lr-reduction-factor', default=0.2, type=float)
     parser.add_argument('--use-ema', action='store_true', default=True)
     parser.add_argument('--ema-decay', default=0.999, type=float)
-    parser.add_argument('--clip-grad', action='store_true', default=False)
+    parser.add_argument('--clip-grad', action='store_true', default=True)
     parser.add_argument('--pseudo-label-threshold', default=0.95, type=float, help='Threshold when filtering pseudo-labeling.')
     parser.add_argument('--num-classes', default=10, type=int, help='number of classes in the dataset.')
     parser.add_argument('--num-labeled-datapoints', default=250, type=int, help='number of labeled annotations in the dataset.')

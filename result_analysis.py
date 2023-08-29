@@ -5,8 +5,8 @@ import json
 import os
 
 # folder to read files from
-post_fix = 'ingest'
 post_fix = 'all'
+post_fix = 'ingest'
 directory = 'models-{}'.format(post_fix)
 
 # columns to extract from file name
@@ -21,35 +21,12 @@ folder_names = [fn for fn in os.listdir(directory) if fn.startswith('id-')]
 folder_names.sort()
 success_list = list()
 for folder_name in folder_names:
-
-
-    # getting configuration dictionary
-    # config_dict = process_folder_name(folder_name)
-
     json_file_path = os.path.join(directory, folder_name, 'config.json')
     with open(json_file_path) as json_file:
         config_dict = json.load(json_file)
 
     config_dict = dict((k, config_dict[k]) for k in config_columns)
     config_dict['model'] = folder_name
-
-    # config_dict = dict()
-    # config_dict['method'] = full_config_dict['trainer']
-    # config_dict['model'] = folder_name
-    # config_dict['num_labeled_datapoints'] = full_config_dict['num_labeled_datapoints']
-    # config_dict['embedding_constraint'] = full_config_dict['embedding_constraint']
-    # config_dict['last_layer'] = full_config_dict['last_layer']
-    # config_dict['learning_rate'] = full_config_dict['learning_rate']
-    # config_dict['ema'] = full_config_dict['use_ema']
-    # if 'embedding_dim' not in full_config_dict.keys():
-    #     full_config_dict['embedding_dim'] = 8
-    # config_dict['embedding_dim'] = full_config_dict['embedding_dim']
-    # if 'nprefc' not in full_config_dict.keys():
-    #     full_config_dict['nprefc'] = 0
-    # config_dict['nprefc'] = full_config_dict['nprefc']
-
-
-    # config_dict = dict((k, config_dict[k]) for k in config_columns)
 
     # creating dictionary from stats.json file
     json_file_path = os.path.join(directory, folder_name, 'stats.json')

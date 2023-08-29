@@ -795,7 +795,8 @@ def torch_randaug_run_ops(imgs, ops, v, max_v, bias, rand_rand=None, rand_x=None
 	
 	end_time = time.time()
 	exe_time = end_time - start_time
-	print(f"Execution time for Our_Equalize: {exe_time:.16f} seconds")
+	# print(f"Execution time for Our_Equalize: {exe_time:.16f} seconds")
+
 	#------------------------
 	# AutoContrast
 	#------------------------
@@ -870,6 +871,20 @@ my_augment_pool = (                    \
 
 '''
 my_augment_pool = ((TRAUG_EQUALIZE, -9999.0, -9999.0),)
+
+fixmatch_aug_pool = [(TRAUG_AUTO_CONTRAST, 0, 0),
+            (TRAUG_BRIGHTNESS, 0.9, 0.05),
+            (TRAUG_COLOR, 0.9, 0.05),
+            (TRAUG_CONTRAST, 0.9, 0.05),
+            (TRAUG_EQUALIZE, 0, 0),
+            (TRAUG_POSTERIZE, 4, 4),
+            (TRAUG_ROTATE, 30, 0),
+            (TRAUG_SHARPNESS, 0.9, 0.05),
+            (TRAUG_SHEAR_X, 0.3, 0),
+            (TRAUG_SHEAR_Y, 0.3, 0),
+            (TRAUG_SOLARIZE, 256, 0),
+            (TRAUG_TRANSLATE_X, 0.3, 0),
+            (TRAUG_TRANSLATE_Y, 0.3, 0)]
 
 #-----------------------------------------------------------------
 #-----------------------------------------------------------------
@@ -1003,7 +1018,7 @@ class TorchRandAugment(object):
 			end_op_time = time.time()
 			op_time =  end_op_time - start_op_time
 			
-			print(f"Operation execution time: {op_time:.16f} seconds")
+			#print(f"Operation execution time: {op_time:.16f} seconds")
 			
 			
 

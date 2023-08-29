@@ -140,10 +140,11 @@ class TrainingStats():
                 ax.set_xlabel('Epoch')
                 ax.set_ylabel('{}'.format(cm))
                 plt.tight_layout()
-                p01, p99 = np.nanpercentile(all_y, [0.5, 99.5])
-                p01 -= (0.05 * p01)
-                p99 += (0.05 * p99)
-                plt.ylim(p01, p99)
+                if np.all(np.isfinite(all_y)):
+                    p01, p99 = np.nanpercentile(all_y, [0.5, 99.5])
+                    p01 -= (0.05 * p01)
+                    p99 += (0.05 * p99)
+                    plt.ylim(p01, p99)
                 if not all_one_figure:
                     plt.savefig(os.path.join(output_dirpath, '{}.svg'.format(cm)))
 
@@ -160,10 +161,11 @@ class TrainingStats():
             ax.set_xlabel('Epoch')
             ax.set_ylabel(col)
             plt.tight_layout()
-            p01, p99 = np.nanpercentile(y, [0.5, 99.5])
-            p01 -= (0.05 * p01)
-            p99 += (0.05 * p99)
-            plt.ylim(p01, p99)
+            if np.all(np.isfinite(y)):
+                p01, p99 = np.nanpercentile(y, [0.5, 99.5])
+                p01 -= (0.05 * p01)
+                p99 += (0.05 * p99)
+                plt.ylim(p01, p99)
             if not all_one_figure:
                 plt.savefig(os.path.join(output_dirpath, '{}.svg'.format(col)))
         if all_one_figure:

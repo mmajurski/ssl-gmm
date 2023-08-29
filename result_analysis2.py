@@ -14,6 +14,7 @@ def gen_key(cdict):
 
 # folder to read files from
 post_fix = 'all'
+# post_fix = 'ingest'
 directory = 'models-{}'.format(post_fix)
 
 # columns to extract from file name
