@@ -6,13 +6,13 @@ import os
 
 # folder to read files from
 post_fix = 'all'
-post_fix = 'ingest'
+# post_fix = 'ingest'
 directory = 'models-{}'.format(post_fix)
 
 # columns to extract from file name
 config_columns = ['trainer', 'last_layer', 'use_ema', 'embedding_dim', 'num_labeled_datapoints', 'embedding_constraint', 'clip_grad', 'patience', 'nesterov']
 # columns to extract from result file (stats.json)
-result_columns = ['test_accuracy', 'wall_time', 'epoch']
+result_columns = ['test_accuracy', 'epoch']
 results_df = None
 
 nb_complete = 0

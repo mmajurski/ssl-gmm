@@ -18,9 +18,10 @@ post_fix = 'all'
 directory = 'models-{}'.format(post_fix)
 
 # columns to extract from file name
-config_columns = ['trainer', 'last_layer', 'use_ema', 'embedding_dim', 'num_labeled_datapoints', 'embedding_constraint', 'clip_grad', 'patience', 'nesterov']
+# config_columns = ['trainer', 'last_layer', 'use_ema', 'embedding_dim', 'num_labeled_datapoints', 'embedding_constraint', 'clip_grad', 'patience', 'nesterov']
+config_columns = ['trainer', 'last_layer', 'embedding_dim', 'num_labeled_datapoints', 'embedding_constraint']
 # columns to extract from result file (stats.json)
-result_columns = ['test_accuracy']
+result_columns = ['test_accuracy', 'epoch']
 results_df = None
 
 # iterating over folders in the given directory
@@ -29,7 +30,6 @@ folder_names.sort()
 dict_of_df_lists = dict()
 
 for folder_name in folder_names:
-
     if os.path.exists(os.path.join(directory, folder_name, 'failure.txt')):
         print("Model failure: {}".format(folder_name))
     elif not os.path.exists(os.path.join(directory, folder_name, 'success.txt')):
@@ -39,6 +39,10 @@ for folder_name in folder_names:
         with open(json_file_path) as json_file:
             config_dict = json.load(json_file)
 
+        if config_dict['patience'] == 20:
+            continue
+        if config_dict['clip_grad'] == False:
+            continue
         config_dict = dict((k, config_dict[k]) for k in config_columns)
 
         # creating dictionary from stats.json file
@@ -66,14 +70,17 @@ df_list = list()
 for config_key in dict_of_df_lists.keys():
     # compute the average test_accuracy for all json dicts in this list
     ta = list()
+    ep = list()
     for d in dict_of_df_lists[config_key]:
         ta.append(100 * d['test_accuracy'])
+        ep.append(d['epoch'])
 
 
     mv = float(np.mean(ta))
     q1 = float(np.quantile(ta, 0.25))
     q3 = float(np.quantile(ta, 0.75))
     iqr = 1.5 * (q3 - q1)
+    iqr = np.max(ta) - np.median(ta)
     exclude_both = False
     if exclude_both:
         removed_ta = [v for v in ta if v < (q1 - iqr) or v > (q3 + iqr)]
@@ -97,6 +104,7 @@ for config_key in dict_of_df_lists.keys():
 
     a['test_accuracies'] = ta
     a['outlier_test_accuracies'] = removed_ta
+    a['epoch_counts'] = ep
     cd = pd.json_normalize(a)
     df_list.append(cd)
 

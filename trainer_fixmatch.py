@@ -253,6 +253,10 @@ class FixMatchTrainer(trainer.SupervisedTrainer):
 
         embedding_criterion = torch.nn.MSELoss()
 
+        acc_per_class = list()
+        for i in range(self.args.num_classes):
+            acc_per_class.append(list())
+
         with torch.no_grad():
             for batch_idx, tensor_dict in enumerate(dataloader):
                 inputs = tensor_dict[0].cuda()
@@ -273,6 +277,9 @@ class FixMatchTrainer(trainer.SupervisedTrainer):
                 acc = torch.argmax(logits, dim=-1) == labels
                 train_stats.append_accumulate('{}_accuracy'.format(split_name), torch.mean(acc, dtype=torch.float32).item())
 
+                for c in range(self.args.num_classes):
+                    acc_per_class[c].extend(acc[labels == c].detach().cpu().tolist())
+
                 if batch_idx % 100 == 0:
                     # log loss and current GPU utilization
                     cpu_mem_percent_used = psutil.virtual_memory().percent
@@ -285,6 +292,11 @@ class FixMatchTrainer(trainer.SupervisedTrainer):
             train_stats.close_accumulate(epoch, '{}_logit_loss'.format(split_name), method='avg')
             train_stats.close_accumulate(epoch, '{}_emb_constraint_loss'.format(split_name), method='avg')
         train_stats.close_accumulate(epoch, '{}_accuracy'.format(split_name), method='avg')
+
+        for c in range(len(acc_per_class)):
+            acc_per_class[c] = float(np.mean(acc_per_class[c]))
+
+        train_stats.add(epoch, '{}_accuracy_per_class'.format(split_name), acc_per_class)
 
         wall_time = time.time() - start_time
         train_stats.add(epoch, '{}_wall_time'.format(split_name), wall_time)
