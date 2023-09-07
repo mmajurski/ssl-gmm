@@ -267,6 +267,7 @@ class Cifar10plus100(Cifar10):
         super(Cifar10plus100, self).__init__(transform, train, subset, lcl_fldr)
 
     def add_cifar100_ood_data(self, p=0.1):
+        assert p >= 0 and p <= 1.0
         # get some classes from the cifar100 training dataset
         # this will only be used to contaminate the unlabeled data
         _dataset = torchvision.datasets.CIFAR100(self.lcl_fldr, train=True, download=True)
@@ -283,6 +284,9 @@ class Cifar10plus100(Cifar10):
             self.ood_targets.append(_dataset.targets[i] + 100)  # offset by 100 to indicate its coming from cifar100
         # cleanup the tmp CIFAR object
         del _dataset
+
+        p = float(len(self.ood_data)) / float(len(self.data))
+        logging.info("adding {} ({}%)unlabeled ood examples".format(len(self.ood_data), p))
 
         for i in range(len(self.ood_data)):
             data = self.ood_data[i]

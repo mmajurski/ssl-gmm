@@ -55,6 +55,7 @@ def setup(args):
         train_dataset_unlabeled = None
 
     if args.ood_p > 0:
+        logging.info("adding in CIFAR100 OOD data")
         train_dataset_unlabeled.add_cifar100_ood_data(p=args.ood_p)
 
     test_dataset = cifar_datasets.Cifar10(transform=cifar_datasets.Cifar10.TRANSFORM_TEST, train=False)
@@ -158,10 +159,12 @@ def train(args):
         emb_constraint = None
     elif args.embedding_constraint == 'mean_covar':
         emb_constraint = embedding_constraints.MeanCovar()
+    elif args.embedding_constraint == 'l2':
+        emb_constraint = embedding_constraints.Mean()
     elif args.embedding_constraint == 'gauss_moment':
         emb_constraint = embedding_constraints.GaussianMoments(embedding_dim=args.embedding_dim, num_classes=args.num_classes)
-    elif args.embedding_constraint == 'l2':
-        emb_constraint = embedding_constraints.L2ClusterCentroid()
+    # elif args.embedding_constraint == 'l2':
+    #     emb_constraint = embedding_constraints.L2ClusterCentroid()
     else:
         raise RuntimeError("Invalid embedding constraint type: {}".format(args.embedding_constraint))
 

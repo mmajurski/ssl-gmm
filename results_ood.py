@@ -9,18 +9,18 @@ import os
 def gen_key(cdict):
     key = ""
     for col in cdict.keys():
+        if col == 'ood_p':
+            continue
         key += str(col)[0:4] + ':' + str(cdict[col]) + '-'
     return key
 
 # folder to read files from
-post_fix = 'all'
-# post_fix = 'ingest'
-# post_fix = 'ood'
+post_fix = 'ood'
 directory = 'models-{}'.format(post_fix)
 
 # columns to extract from file name
 # config_columns = ['trainer', 'last_layer', 'use_ema', 'embedding_dim', 'num_labeled_datapoints', 'embedding_constraint', 'clip_grad', 'patience', 'nesterov']
-config_columns = ['trainer', 'last_layer', 'embedding_dim', 'num_labeled_datapoints', 'embedding_constraint']
+config_columns = ['trainer', 'last_layer', 'embedding_dim', 'num_labeled_datapoints', 'embedding_constraint', 'ood_p']
 # columns to extract from result file (stats.json)
 result_columns = ['test_accuracy', 'epoch', 'test_accuracy_per_class']
 results_df = None
@@ -29,6 +29,8 @@ results_df = None
 folder_names = [fn for fn in os.listdir(directory) if fn.startswith('id-')]
 folder_names.sort()
 dict_of_df_lists = dict()
+unique_ood_p_vals = set()
+
 
 for folder_name in folder_names:
     # print(folder_name)
@@ -44,6 +46,10 @@ for folder_name in folder_names:
         if config_dict['patience'] == 20:
             continue
         if config_dict['clip_grad'] == False:
+            continue
+        if config_dict['embedding_dim'] != 128:
+            continue
+        if config_dict['num_labeled_datapoints'] != 250:
             continue
 
         config_dict = dict((k, config_dict[k]) for k in config_columns)
@@ -67,61 +73,101 @@ for folder_name in folder_names:
 
         # combining both the dictionaries
         combined_dict = config_dict | result_dict
+        unique_ood_p_vals.add(combined_dict['ood_p'])
 
         key = gen_key(config_dict)
         if key not in dict_of_df_lists.keys():
             dict_of_df_lists[key] = list()
         dict_of_df_lists[key].append(combined_dict)
 
+post_fix = 'all'
+directory = 'models-{}'.format(post_fix)
+folder_names = [fn for fn in os.listdir(directory) if fn.startswith('id-')]
+folder_names.sort()
+
+post_fix = 'ood'
+
+for folder_name in folder_names:
+    # print(folder_name)
+    if os.path.exists(os.path.join(directory, folder_name, 'failure.txt')):
+        print("Model failure: {}".format(folder_name))
+    elif not os.path.exists(os.path.join(directory, folder_name, 'success.txt')):
+        print("Model non-success: {}".format(folder_name))
+    else:
+        json_file_path = os.path.join(directory, folder_name, 'config.json')
+        with open(json_file_path) as json_file:
+            config_dict = json.load(json_file)
+
+        if config_dict['patience'] == 20:
+            continue
+        if config_dict['clip_grad'] == False:
+            continue
+        if config_dict['num_labeled_datapoints'] != 250:
+            continue
+        if config_dict['embedding_dim'] != 128:
+            continue
+
+        config_dict = dict((k, config_dict[k]) for k in config_columns)
+
+        # creating dictionary from stats.json file
+        json_file_path = os.path.join(directory, folder_name, 'stats.json')
+        result_dict = dict()
+        if os.path.exists(json_file_path):
+            with open(json_file_path) as json_file:
+                result_dict = json.load(json_file)
+
+            # only keeping the desired columns
+            result_columns_lcl = copy.deepcopy(result_columns)
+            for c in result_columns:
+                if c not in result_dict.keys():
+                    result_columns_lcl.remove(c)
+            result_dict = dict((k, result_dict[k]) for k in result_columns_lcl)
+
+            ta = result_dict['test_accuracy_per_class']
+            result_dict['min_test_accuracy_per_class'] = np.min(ta)
+
+        # combining both the dictionaries
+        combined_dict = config_dict | result_dict
+        unique_ood_p_vals.add(combined_dict['ood_p'])
+
+        key = gen_key(config_dict)
+        if key not in dict_of_df_lists.keys():
+            dict_of_df_lists[key] = list()
+        dict_of_df_lists[key].append(combined_dict)
+
+
 df_list = list()
+unique_ood_p_vals = list(unique_ood_p_vals)
+unique_ood_p_vals.sort()
+
 for config_key in dict_of_df_lists.keys():
     # compute the average test_accuracy for all json dicts in this list
     ta = list()
-    ep = list()
-    mta = list()
+    ood_p = list()
     for d in dict_of_df_lists[config_key]:
         ta.append(100 * d['test_accuracy'])
-        ep.append(d['epoch'])
-        mta.append(100 * d['min_test_accuracy_per_class'])
-
-
-    mv = float(np.mean(ta))
-    q1 = float(np.quantile(ta, 0.25))
-    q3 = float(np.quantile(ta, 0.75))
-    iqr = 1.5 * (q3 - q1)
-    # iqr = 1.0 * (q3 - q1)
-    exclude_both = False
-    if exclude_both:
-        idx = np.logical_or(ta < np.asarray(q1 - iqr), ta > np.asarray(q3 + iqr))
-    else:
-        idx = ta < np.asarray(q1 - iqr)
-    removed_ta = np.asarray(ta)[idx].tolist()
-    ta = np.asarray(ta)[np.logical_not(idx)].tolist()
-    removed_mta = np.asarray(mta)[idx].tolist()
-    mta = np.asarray(mta)[np.logical_not(idx)].tolist()
+        ood_p.append(d['ood_p'])
 
     a = dict_of_df_lists[config_key][0]
     del a['test_accuracy']
     del a['epoch']
+    del a['ood_p']
     del a['test_accuracy_per_class']
     del a['min_test_accuracy_per_class']
-    a['mean_test_accuracy'] = float(np.mean(ta))
-    a['median_test_accuracy'] = float(np.median(ta))
-    a['std_test_accuracy'] = float(np.std(ta))
-    a['max_test_accuracy'] = float(np.max(ta))
-    a['min_test_accuracy'] = float(np.min(ta))
-    a['nb_runs'] = len(ta)
 
-    ta = [round(10.0 * v) / 10.0 for v in ta]
-    removed_ta = [round(10.0 * v) / 10.0 for v in removed_ta]
-    mta = [round(10.0 * v) / 10.0 for v in mta]
-    removed_mta = [round(10.0 * v) / 10.0 for v in removed_mta]
+    vals = np.unique(ood_p)
+    for val in unique_ood_p_vals:
+        if val in vals:
+            if val == 0.0:
+                o = np.mean(ta)
+            else:
+                idx = np.where(vals == val)[0][0]
+                o = ta[idx]
+        else:
+            o = None
 
-    a['test_accuracies'] = ta
-    a['outliers_test_accuracies'] = removed_ta
-    a['epoch_counts'] = ep
-    a['min_single_class_test_accuracy'] = mta
-    a['outliers_min_single_class_test_accuracy'] = removed_mta
+        a['oop={}'.format(val)] = o
+
     cd = pd.json_normalize(a)
     df_list.append(cd)
 

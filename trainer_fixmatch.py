@@ -52,14 +52,19 @@ class FixMatchTrainer(trainer.SupervisedTrainer):
         iter_ul = iter(dataloader_ul)
 
         pl_acc_per_class = list()
+        l_acc_per_class = list()
         pl_count_per_class = list()
         pl_gt_count_per_class = list()
         for i in range(self.args.num_classes):
             pl_acc_per_class.append(list())
+            l_acc_per_class.append(list())
             pl_count_per_class.append(0)
             pl_gt_count_per_class.append(0)
 
         embedding_criterion = torch.nn.MSELoss()
+
+        if hasattr(model.last_layer, 'centers'):
+            model.last_layer.centers = model.last_layer.centers.cuda()
 
         for batch_idx, tensor_dict_l in enumerate(dataloader):
             inputs_l = tensor_dict_l[0]
@@ -73,9 +78,6 @@ class FixMatchTrainer(trainer.SupervisedTrainer):
 
             inputs = torch.cat((inputs_l, inputs_ul_weak, inputs_ul_strong))
             inputs = inputs.cuda()
-
-            if hasattr(model.last_layer, 'centers'):
-                model.last_layer.centers = model.last_layer.centers.cuda()
 
             # interleave not required for single GPU training
             # inputs = utils.interleave(inputs, 2 * self.args.mu + 1)
@@ -113,7 +115,15 @@ class FixMatchTrainer(trainer.SupervisedTrainer):
             score_weak, pred_weak = torch.max(softmax_ul_weak, dim=-1)
             targets_weak_ul = pred_weak
 
+            a = embedding_l.repeat(embedding_ul_weak.shape[0], 1, 1).permute(1, 0, 2)
+            b = embedding_ul_weak.unsqueeze(0)
+            cosine_sim_weak = torch.nn.functional.cosine_similarity(a, b, dim=-1)
+            cosine_sim_weak_min, _ = torch.min(cosine_sim_weak, dim=0)
+
             valid_pl = score_weak >= torch.tensor(self.args.pseudo_label_threshold)
+            if self.args.cosine_sim_pl_threshold > 0:
+                valid_pl2 = cosine_sim_weak_min >= torch.tensor(self.args.cosine_sim_pl_threshold)
+                valid_pl = torch.logical_and(valid_pl, valid_pl2)
 
             # capture the number of PL for this batch
             pl_count = torch.sum(valid_pl).item()
@@ -122,6 +132,7 @@ class FixMatchTrainer(trainer.SupervisedTrainer):
             targets_ul_valid = targets_ul[valid_pl]
             ood_pl_count = torch.sum(targets_ul_valid > 100).item()
             train_stats.append_accumulate('train_pseudo_label_ood_count', ood_pl_count)
+            train_stats.append_accumulate('train_pseudo_label_ood_mask_rate', (ood_pl_count / (self.args.batch_size * self.args.mu)))
 
             if pl_count > 0:
                 # capture the confusion matrix of the PL
@@ -138,6 +149,11 @@ class FixMatchTrainer(trainer.SupervisedTrainer):
                     pl_gt_count_per_class[c] += torch.sum(tgts == c).item()
 
             loss_l = criterion(logits_l, targets_l)
+            score_l, pred_l = torch.max(logits_l, dim=-1)
+            acc_vec = pred_l == targets_l
+            for c in range(self.args.num_classes):
+                l_acc_per_class[c].extend(acc_vec[targets_l == c].detach().cpu().tolist())
+
             if emb_constraint is not None:
                 emb_constraint_l = emb_constraint(embedding_l, model.last_layer.centers, logits_l)
                 emb_constraint_loss_l = embedding_criterion(emb_constraint_l, torch.zeros_like(emb_constraint_l))
@@ -177,10 +193,10 @@ class FixMatchTrainer(trainer.SupervisedTrainer):
             batch_loss.backward()
             if self.args.clip_grad:
                 torch.nn.utils.clip_grad_norm_(model.parameters(), 1.0)
-            # torch.nn.utils.clip_grad_value_(model.parameters(), 1.0)
+                # torch.nn.utils.clip_grad_value_(model.parameters(), 1.0)
             optimizer.step()
 
-            optimizer.zero_grad(set_to_none=True)
+            optimizer.zero_grad()  # set_to_none=True)
             if cyclic_lr_scheduler is not None:
                 cyclic_lr_scheduler.step()
 
@@ -212,6 +228,7 @@ class FixMatchTrainer(trainer.SupervisedTrainer):
 
         train_stats.close_accumulate(epoch, 'train_pseudo_label_count', method='sum', default_value=0.0)  # default value in case no data was collected
         train_stats.close_accumulate(epoch, 'train_pseudo_label_mask_rate', method='avg', default_value=0.0)
+        train_stats.close_accumulate(epoch, 'train_pseudo_label_ood_mask_rate', method='avg', default_value=0.0)
         train_stats.close_accumulate(epoch, 'train_pseudo_label_ood_count', method='sum', default_value=0.0)  # default value in case no data was collected
         train_stats.close_accumulate(epoch, 'train_pseudo_label_accuracy', method='avg', default_value=0.0)  # default value in case no data was collected
         train_stats.close_accumulate(epoch, 'train_pseudo_label_impurity', method='avg', default_value=0.0)
@@ -225,12 +242,15 @@ class FixMatchTrainer(trainer.SupervisedTrainer):
 
         for c in range(len(pl_acc_per_class)):
             pl_acc_per_class[c] = float(np.mean(pl_acc_per_class[c]))
+            l_acc_per_class[c] = float(np.mean(l_acc_per_class[c]))
             pl_count_per_class[c] = int(np.sum(pl_count_per_class[c]))
             pl_gt_count_per_class[c] = int(np.sum(pl_gt_count_per_class[c]))
 
         # get the average accuracy of the pseudo-labels (this data is not available in real SSL applications, since the unlabeled population would truly be unlabeled
         train_stats.add(epoch, 'pseudo_label_counts_per_class', pl_count_per_class)
         train_stats.add(epoch, 'pseudo_label_gt_counts_per_class', pl_gt_count_per_class)
+        train_stats.add(epoch, 'train_accuracy_per_class', l_acc_per_class)
+
 
         # update the training metadata
         train_stats.add(epoch, 'pseudo_label_accuracy_per_class', pl_acc_per_class)

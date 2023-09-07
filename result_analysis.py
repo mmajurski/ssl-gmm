@@ -6,7 +6,9 @@ import os
 
 # folder to read files from
 post_fix = 'all'
-# post_fix = 'ingest'
+post_fix = 'ingest'
+post_fix = 'ingest-ood'
+# post_fix = 'ood'
 directory = 'models-{}'.format(post_fix)
 
 # columns to extract from file name
@@ -27,6 +29,9 @@ for folder_name in folder_names:
 
     config_dict = dict((k, config_dict[k]) for k in config_columns)
     config_dict['model'] = folder_name
+
+    # if config_dict['num_labeled_datapoints'] != 40:
+    #     continue
 
     # creating dictionary from stats.json file
     json_file_path = os.path.join(directory, folder_name, 'stats.json')
