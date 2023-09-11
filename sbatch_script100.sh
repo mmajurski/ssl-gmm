@@ -8,7 +8,7 @@
 #SBATCH --oversubscribe
 #SBATCH --cpus-per-task=10
 #SBATCH --gres=gpu:1
-#SBATCH --job-name=g40-ood
+#SBATCH --job-name=g400
 #SBATCH -o log-%N.%j.out
 #SBATCH --time=96:0:0
 
@@ -40,51 +40,33 @@ OOD_PERC=$9
 echo "Model Number Starting PointCount = $START_RUN"
 echo "Requested Model Count = $MODELS_PER_JOB"
 
-root_output_directory="./models-ood"
+root_output_directory="./models-cf100"
 if ! [ -d ${root_output_directory} ]; then
     mkdir ${root_output_directory}
 fi
 
 
 
-
-# gpustr=$(nvidia-smi --query-gpu=gpu_name --format=csv)
-# echo $gpustr
-# substr1="80GB"
-# substr2="40GB"
-# if [[ $gpustr == *"$substr1"* ]]; then
-# N_PARALLEL=3  # how many parallel trains to run on each job
-# elif [[ $gpustr == *"$substr2"* ]]; then
-# N_PARALLEL=2  # how many parallel trains to run on each job
-# else
-# N_PARALLEL=1  # how many parallel trains to run on each job
-# fi
-N_PARALLEL=1
-echo "Training $N_PARALLEL models in parallel for this slurm job."
-
-
-
 INDEX=$START_RUN
 SUCCESS_COUNT=0
 for i in $(seq $MODELS_PER_JOB); do
-  if [ $i -gt $N_PARALLEL ]; then
-    wait -n  # wait for the next job to terminate
-    sc=$? # get status code from main
-     if [ $sc -eq 0 ]; then
-       SUCCESS_COUNT=$((SUCCESS_COUNT+1))
-       echo "Successfully built $SUCCESS_COUNT models"
-     fi
-     if [ $SUCCESS_COUNT -ge $MODELS_PER_JOB ]; then
-       exit 0
-     fi
-  fi
 
   MODEL_FP="${root_output_directory}/id-$(printf "%08d" ${INDEX})"
-  python main.py --output-dirpath=${MODEL_FP} --trainer=${TRAINER} --last-layer=${LAST_LAYER} --optimizer=sgd --learning-rate=${LEARNING_RATE} --embedding_dim=${EMBD_DIM} --embedding-constraint=${EMBD_CONSTRAINT} --num-labeled-datapoints=${NLABELS} --ood_p=${OOD_PERC} --seed=13896472417317220829 &
+  python main.py --arch=wide_resnet28-8 --num-classes=100 --output-dirpath=${MODEL_FP} --trainer=${TRAINER} --last-layer=${LAST_LAYER} --optimizer=sgd --learning-rate=${LEARNING_RATE} --embedding_dim=${EMBD_DIM} --embedding-constraint=${EMBD_CONSTRAINT} --num-labeled-datapoints=${NLABELS}
+  sc=$? # get status code from main
+
+  if [ $sc -eq 0 ]; then
+     SUCCESS_COUNT=$((SUCCESS_COUNT+1))
+     echo "Successfully built $SUCCESS_COUNT models"
+   fi
+   if [ $SUCCESS_COUNT -ge $MODELS_PER_JOB ]; then
+     exit 0
+   fi
+
   INDEX=$((INDEX+1))
-  sleep 1  # separate launches by 1 second minimum
+
+  # safety
+  if [ $INDEX -ge 10 ]; then
+   exit 0
+ fi
 done
-
-
-# wait for all of the runs to complete before exiting
-wait

@@ -49,8 +49,8 @@ for folder_name in folder_names:
             continue
         if config_dict['embedding_dim'] != 128:
             continue
-        if config_dict['num_labeled_datapoints'] != 250:
-            continue
+        # if config_dict['num_labeled_datapoints'] != 250:
+        #     continue
 
         config_dict = dict((k, config_dict[k]) for k in config_columns)
 

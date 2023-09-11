@@ -15,12 +15,11 @@ def gen_key(cdict):
 # folder to read files from
 post_fix = 'all'
 # post_fix = 'ingest'
-# post_fix = 'ood'
 directory = 'models-{}'.format(post_fix)
 
 # columns to extract from file name
 # config_columns = ['trainer', 'last_layer', 'use_ema', 'embedding_dim', 'num_labeled_datapoints', 'embedding_constraint', 'clip_grad', 'patience', 'nesterov']
-config_columns = ['trainer', 'last_layer', 'embedding_dim', 'num_labeled_datapoints', 'embedding_constraint']
+config_columns = ['trainer', 'last_layer', 'embedding_dim', 'num_labeled_datapoints', 'embedding_constraint', 'clip_grad']
 # columns to extract from result file (stats.json)
 result_columns = ['test_accuracy', 'epoch', 'test_accuracy_per_class']
 results_df = None
@@ -43,7 +42,11 @@ for folder_name in folder_names:
 
         if config_dict['patience'] == 20:
             continue
-        if config_dict['clip_grad'] == False:
+        # if config_dict['clip_grad'] == False:
+        #     continue
+        if config_dict['embedding_dim'] == 8:
+            continue
+        if config_dict['embedding_constraint'] == 'mean_covar':
             continue
 
         config_dict = dict((k, config_dict[k]) for k in config_columns)
@@ -88,7 +91,8 @@ for config_key in dict_of_df_lists.keys():
     mv = float(np.mean(ta))
     q1 = float(np.quantile(ta, 0.25))
     q3 = float(np.quantile(ta, 0.75))
-    iqr = 1.5 * (q3 - q1)
+    iqr = np.inf
+    # iqr = 1.5 * (q3 - q1)
     # iqr = 1.0 * (q3 - q1)
     exclude_both = False
     if exclude_both:

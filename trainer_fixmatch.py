@@ -115,14 +115,15 @@ class FixMatchTrainer(trainer.SupervisedTrainer):
             score_weak, pred_weak = torch.max(softmax_ul_weak, dim=-1)
             targets_weak_ul = pred_weak
 
-            a = embedding_l.repeat(embedding_ul_weak.shape[0], 1, 1).permute(1, 0, 2)
-            b = embedding_ul_weak.unsqueeze(0)
-            cosine_sim_weak = torch.nn.functional.cosine_similarity(a, b, dim=-1)
-            cosine_sim_weak_min, _ = torch.min(cosine_sim_weak, dim=0)
-
             valid_pl = score_weak >= torch.tensor(self.args.pseudo_label_threshold)
             if self.args.cosine_sim_pl_threshold > 0:
-                valid_pl2 = cosine_sim_weak_min >= torch.tensor(self.args.cosine_sim_pl_threshold)
+                a = embedding_l.repeat(embedding_ul_weak.shape[0], 1, 1).permute(1, 0, 2)
+                b = embedding_ul_weak.unsqueeze(0)
+                cosine_sim_weak = torch.nn.functional.cosine_similarity(a, b, dim=-1)
+                cosine_sim_weak, _ = torch.topk(cosine_sim_weak, k=self.args.cosine_sim_topk, dim=0)
+                cosine_sim_weak, _ = torch.min(cosine_sim_weak, dim=0)
+
+                valid_pl2 = cosine_sim_weak >= torch.tensor(self.args.cosine_sim_pl_threshold)
                 valid_pl = torch.logical_and(valid_pl, valid_pl2)
 
             # capture the number of PL for this batch

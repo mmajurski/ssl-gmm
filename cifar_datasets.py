@@ -58,33 +58,36 @@ class Cifar10(torch.utils.data.Dataset):
 
     TRANSFORM_FIXMATCH = fixmatch_augmentation.TransformFixMatch(mean=cifar10_mean, std=cifar10_std)
 
-    def __init__(self, transform=None, train:bool=True, subset=False, lcl_fldr:str='./data', empty=False):
+    def __init__(self, transform=None, train:bool=True, subset=False, lcl_fldr:str='./data'):
 
         self.lcl_fldr = lcl_fldr
         self.transform = transform
         self.numel = None
-        if empty:
-            self.data = list()
-            self.targets = list()
+
+        self.data = list()
+        self.targets = list()
+        self.train = train
+        self.subset = subset
+
+    def load_data(self):
+        if self.train:
+            _dataset = torchvision.datasets.CIFAR10(self.lcl_fldr, train=True, download=True)
         else:
-            if train:
-                _dataset = torchvision.datasets.CIFAR10(self.lcl_fldr, train=True, download=True)
-            else:
-                _dataset = torchvision.datasets.CIFAR10(self.lcl_fldr, train=False, download=True)
+            _dataset = torchvision.datasets.CIFAR10(self.lcl_fldr, train=False, download=True)
 
-            self.targets = _dataset.targets
-            # break the data up into a list instead of a single numpy block to allow deleting and addition
-            self.data = list()
-            data_len = _dataset.data.shape[0]
-            if subset:
-                # for debugging, keep just 10% of the data to accelerate things
-                data_len = int(0.1 * data_len)
+        self.targets = _dataset.targets
+        # break the data up into a list instead of a single numpy block to allow deleting and addition
+        self.data = list()
+        data_len = _dataset.data.shape[0]
+        if self.subset:
+            # for debugging, keep just 10% of the data to accelerate things
+            data_len = int(0.1 * data_len)
 
-            for i in range(data_len):
-                self.data.append(_dataset.data[i, :, :, :])
+        for i in range(data_len):
+            self.data.append(_dataset.data[i, :, :, :])
 
-            # cleanup the tmp CIFAR object
-            del _dataset
+        # cleanup the tmp CIFAR object
+        del _dataset
 
     def set_epoch_size(self, epoch_size):
         self.numel = epoch_size
@@ -223,25 +226,19 @@ class Cifar100(Cifar10):
         torchvision.transforms.ToTensor(),
         torchvision.transforms.Normalize(mean=cifar100_mean, std=cifar100_std)
     ])
+
     TRANSFORM_TEST = torchvision.transforms.Compose([
         torchvision.transforms.ToTensor(),
         torchvision.transforms.Normalize(mean=cifar100_mean, std=cifar100_std)
     ])
-    TRANSFORM_STRONG_TRAIN = torchvision.transforms.Compose([
-        torchvision.transforms.RandomHorizontalFlip(),
-        torchvision.transforms.RandomCrop(size=32,
-                                          padding=int(32 * 0.125),
-                                          padding_mode='reflect'),
-        # fixmatch_augmentation.RandAugmentMC(n=2, m=10),
-        torchvision.transforms.RandAugment(num_ops=2, magnitude=10),  # TODO confirm this works as expected
-        torchvision.transforms.ToTensor(),
-        torchvision.transforms.Normalize(mean=cifar100_mean, std=cifar100_std)
-    ])
+
+    TRANSFORM_FIXMATCH = fixmatch_augmentation.TransformFixMatch(mean=cifar100_mean, std=cifar100_std)
 
     def __init__(self, transform=None, train:bool=True, subset=False, lcl_fldr:str='./data'):
-        self.lcl_fldr = lcl_fldr
-        self.transform = transform
-        if train:
+        super(Cifar100, self).__init__(transform, train, subset, lcl_fldr)
+
+    def load_data(self):
+        if self.train:
             _dataset = torchvision.datasets.CIFAR100(self.lcl_fldr, train=True, download=True)
         else:
             _dataset = torchvision.datasets.CIFAR100(self.lcl_fldr, train=False, download=True)
@@ -250,7 +247,7 @@ class Cifar100(Cifar10):
         # break the data up into a list instead of a single numpy block to allow deleting and addition
         self.data = list()
         data_len = _dataset.data.shape[0]
-        if subset:
+        if self.subset:
             # for debugging, keep just 10% of the data to accelerate things
             data_len = int(0.1 * data_len)
 
@@ -286,7 +283,7 @@ class Cifar10plus100(Cifar10):
         del _dataset
 
         p = float(len(self.ood_data)) / float(len(self.data))
-        logging.info("adding {} ({}%)unlabeled ood examples".format(len(self.ood_data), p))
+        logging.info("adding {} ({}%)unlabeled ood examples".format(len(self.ood_data), 100*p))
 
         for i in range(len(self.ood_data)):
             data = self.ood_data[i]

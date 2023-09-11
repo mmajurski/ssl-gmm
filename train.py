@@ -25,6 +25,11 @@ def setup(args):
         model = flavored_wideresnet.WideResNetMajurski(num_classes=args.num_classes, last_layer=args.last_layer, embedding_dim=args.embedding_dim)
         # ensure the args has the right embedding dim (if None or 0 was supplied)
         args.embedding_dim = model.embedding_dim
+    elif args.arch == 'wide_resnet28-8':
+        model = flavored_wideresnet.WideResNetMajurski(num_classes=args.num_classes, last_layer=args.last_layer, embedding_dim=args.embedding_dim, depth=28, width=8)
+        # ensure the args has the right embedding dim (if None or 0 was supplied)
+        args.embedding_dim = model.embedding_dim
+
     elif args.arch == 'resnet18':
         model = torchvision.models.resnet18(pretrained=False, num_classes=args.num_classes)
     else:
@@ -41,8 +46,12 @@ def setup(args):
             train_dataset = cifar_datasets.Cifar10plus100(transform=cifar_datasets.Cifar10.TRANSFORM_TRAIN, train=True, subset=args.debug)
         else:
             train_dataset = cifar_datasets.Cifar10(transform=cifar_datasets.Cifar10.TRANSFORM_TRAIN, train=True, subset=args.debug)
+    elif args.num_classes == 100:
+        train_dataset = cifar_datasets.Cifar100(transform=cifar_datasets.Cifar100.TRANSFORM_TRAIN, train=True, subset=args.debug)
     else:
         raise RuntimeError("unsupported CIFAR class count: {}".format(args.num_classes))
+
+    train_dataset.load_data()
 
     if args.num_labeled_datapoints > 0:
         train_dataset_labeled, train_dataset_unlabeled = train_dataset.data_split_class_balanced(subset_count=args.num_labeled_datapoints)
@@ -58,7 +67,14 @@ def setup(args):
         logging.info("adding in CIFAR100 OOD data")
         train_dataset_unlabeled.add_cifar100_ood_data(p=args.ood_p)
 
-    test_dataset = cifar_datasets.Cifar10(transform=cifar_datasets.Cifar10.TRANSFORM_TEST, train=False)
+    if args.num_classes == 10:
+        test_dataset = cifar_datasets.Cifar10(transform=cifar_datasets.Cifar10.TRANSFORM_TEST, train=False)
+    elif args.num_classes == 100:
+        test_dataset = cifar_datasets.Cifar100(transform=cifar_datasets.Cifar100.TRANSFORM_TEST, train=False)
+    else:
+        raise RuntimeError("unsupported CIFAR class count: {}".format(args.num_classes))
+
+    test_dataset.load_data()
 
     # adjust the len of the dataset to implement the nb_reps
     train_dataset_labeled.set_epoch_size(args.epoch_size * args.batch_size)
@@ -163,8 +179,6 @@ def train(args):
         emb_constraint = embedding_constraints.Mean()
     elif args.embedding_constraint == 'gauss_moment':
         emb_constraint = embedding_constraints.GaussianMoments(embedding_dim=args.embedding_dim, num_classes=args.num_classes)
-    # elif args.embedding_constraint == 'l2':
-    #     emb_constraint = embedding_constraints.L2ClusterCentroid()
     else:
         raise RuntimeError("Invalid embedding constraint type: {}".format(args.embedding_constraint))
 

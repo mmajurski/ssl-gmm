@@ -83,15 +83,7 @@ for fn in fns:
     json_file_path = os.path.join(ifp, fn, 'config.json')
     with open(json_file_path) as json_file:
         config_dict = json.load(json_file)
-    mod = False
-    if 'clip_grad' not in config_dict.keys():
-        config_dict['clip_grad'] = True
-        mod = True
-    if 'nesterov' not in config_dict.keys():
-        config_dict['nesterov'] = False
-        mod = True
-    if mod:
-        print(fn)
-        with open(json_file_path, 'w') as fh:
-            json.dump(config_dict, fh, ensure_ascii=True, indent=2)
+
+    if config_dict['num_labeled_datapoints'] == 10:
+        print("rm -rf {}".format(fn))
 
