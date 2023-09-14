@@ -23,6 +23,11 @@ class TrainingStats():
             self.accumulator[metric_name] = list()
         self.accumulator[metric_name].append(value)
 
+    def close_all_accumulate(self, epoch, method: str = 'mean', default_value=np.nan):
+        metric_names = list(self.accumulator.keys())
+        for metric_name in metric_names:
+            self.close_accumulate(epoch, metric_name, method, default_value=default_value)
+
     def close_accumulate(self, epoch, metric_name: str, method: str = 'mean', default_value=np.nan):
         if metric_name not in self.accumulator.keys():
             # metric is missing, add the default value

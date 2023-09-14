@@ -45,6 +45,7 @@ def main():
     parser.add_argument('--pseudo-label-threshold', default=0.95, type=float, help='Threshold logits when filtering pseudo-labeling.')
     parser.add_argument('--cosine-sim-pl-threshold', default=0.0, type=float, help='Threshold when filtering pseudo-labeling using cosine similarity. Only PL with a min CosineSim to the labeled embedding > x are used. Set to 0 to disable.')
     parser.add_argument('--cosine-sim-topk', default=6, type=float, help='Nearest N neighbors to consider when using cosine similarity to select psudo-labels.')
+
     parser.add_argument('--num-classes', default=10, type=int, help='number of classes in the dataset.')
     parser.add_argument('--num-labeled-datapoints', default=250, type=int, help='number of labeled annotations in the dataset.')
     parser.add_argument('--optimizer', type=str, default='sgd',help='optimizer if nothing is passed AdamW would be used (currently supported sgd,adamw)')
@@ -55,6 +56,9 @@ def main():
     parser.add_argument('--num-epochs', default=None, type=int, help='number of epochs to train. If this is non-None it will suppress the use of a test split, and blindly run the training for N epochs.')
     parser.add_argument('--trainer', type=str, default='fixmatch', help='trainer to use (currently supported supervised, fixmatch)')
     parser.add_argument('--embedding-constraint', type=str, default=None, help='embedding constraint to enforce (currently supported None, mean_covar, gauss_moment)')
+    parser.add_argument('--constrain-weak-pl-embedding', action='store_true', default=False)
+    parser.add_argument('--constrain-strong-pl-embedding', action='store_true', default=False)
+
     parser.add_argument('--seed', type=int, default=None, help='seed for the random number generator')
     parser.add_argument('--ood_p', type=float, default='0.0', help='percentage of unlabeled data drawn from cifar100 which is ood for cifar10')
 
@@ -62,7 +66,7 @@ def main():
     args = parser.parse_args()
 
     if args.seed is None or args.seed <= 0:
-        args.seed = np.random.randint(0, 2^32 - 1)
+        args.seed = np.random.randint(0, pow(2,32) - 1)
     np.random.seed(args.seed)
     torch.manual_seed(args.seed)
     if torch.cuda.is_available():

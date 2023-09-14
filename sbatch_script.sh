@@ -3,12 +3,12 @@
 # MODIFY THESE OPTIONS
 
 #SBATCH --partition=isg
-#SBATCH --exclude=p100
+#SBATCH --exclude=p100,quebec
 #SBATCH --nodes=1
 #SBATCH --oversubscribe
 #SBATCH --cpus-per-task=10
 #SBATCH --gres=gpu:1
-#SBATCH --job-name=g40-ood
+#SBATCH --job-name=g40-ec
 #SBATCH -o log-%N.%j.out
 #SBATCH --time=96:0:0
 
@@ -27,42 +27,48 @@ conda activate gmm
 
 
 LAST_LAYER=$1
-LEARNING_RATE=$2
-EMBD_DIM=$3
-START_RUN=$4
-EMBD_CONSTRAINT=$5
-TRAINER=$6
-NLABELS=$7
-MODELS_PER_JOB=$8
-OOD_PERC=$9
+EMBD_DIM=$2
+START_RUN=$3
+EMBD_CONSTRAINT=$4
+NLABELS=$5
+MODELS_PER_JOB=$6
+OOD_PERC=$7
+STRONG_PL_EMB_CONSTRAINT=$8
+WEAK_PL_EMB_CONSTRAINT=$9
 
+
+
+
+LEARNING_RATE=0.01
+TRAINER='fixmatch'
 
 echo "Model Number Starting PointCount = $START_RUN"
 echo "Requested Model Count = $MODELS_PER_JOB"
 
-root_output_directory="./models-ood"
+root_output_directory="./models-emb-const"
 if ! [ -d ${root_output_directory} ]; then
     mkdir ${root_output_directory}
 fi
 
 
 
-
-# gpustr=$(nvidia-smi --query-gpu=gpu_name --format=csv)
-# echo $gpustr
-# substr1="80GB"
-# substr2="40GB"
-# if [[ $gpustr == *"$substr1"* ]]; then
-# N_PARALLEL=3  # how many parallel trains to run on each job
-# elif [[ $gpustr == *"$substr2"* ]]; then
-# N_PARALLEL=2  # how many parallel trains to run on each job
-# else
-# N_PARALLEL=1  # how many parallel trains to run on each job
-# fi
 N_PARALLEL=1
+gpustr=$(nvidia-smi --query-gpu=gpu_name --format=csv)
+echo $gpustr
+substr1="80GB"
+substr2="40GB"
+substr3="H100"
+if [[ $gpustr == *"$substr1"* ]]; then
+N_PARALLEL=2  # how many parallel trains to run on each job
+elif [[ $gpustr == *"$substr2"* ]]; then
+N_PARALLEL=2  # how many parallel trains to run on each job
+elif [[ $gpustr == *"$substr3"* ]]; then
+N_PARALLEL=2  # how many parallel trains to run on each job
+else
+N_PARALLEL=1  # how many parallel trains to run on each job
+fi
+
 echo "Training $N_PARALLEL models in parallel for this slurm job."
-
-
 
 INDEX=$START_RUN
 SUCCESS_COUNT=0
@@ -80,9 +86,26 @@ for i in $(seq $MODELS_PER_JOB); do
   fi
 
   MODEL_FP="${root_output_directory}/id-$(printf "%08d" ${INDEX})"
-  python main.py --output-dirpath=${MODEL_FP} --trainer=${TRAINER} --last-layer=${LAST_LAYER} --optimizer=sgd --learning-rate=${LEARNING_RATE} --embedding_dim=${EMBD_DIM} --embedding-constraint=${EMBD_CONSTRAINT} --num-labeled-datapoints=${NLABELS} --ood_p=${OOD_PERC} --seed=13896472417317220829 &
+
+  # if [ $STRONG_PL_EMB_CONSTRAINT -gt 0 ] && [ $WEAK_PL_EMB_CONSTRAINT -gt 0 ]; then
+  #   python main.py --output-dirpath=${MODEL_FP} --trainer=${TRAINER} --last-layer=${LAST_LAYER} --optimizer=sgd --learning-rate=${LEARNING_RATE} --embedding_dim=${EMBD_DIM} --embedding-constraint=${EMBD_CONSTRAINT} --num-labeled-datapoints=${NLABELS} --constrain-weak-pl-embedding --constrain-strong-pl-embedding --seed=4294967295 &
+
+  # elif [ $STRONG_PL_EMB_CONSTRAINT -gt 0 ]; then
+  #   python main.py --output-dirpath=${MODEL_FP} --trainer=${TRAINER} --last-layer=${LAST_LAYER} --optimizer=sgd --learning-rate=${LEARNING_RATE} --embedding_dim=${EMBD_DIM} --embedding-constraint=${EMBD_CONSTRAINT} --num-labeled-datapoints=${NLABELS} --constrain-strong-pl-embedding --seed=4294967295 &
+
+  # elif [ $WEAK_PL_EMB_CONSTRAINT -gt 0 ]; then
+  #   python main.py --output-dirpath=${MODEL_FP} --trainer=${TRAINER} --last-layer=${LAST_LAYER} --optimizer=sgd --learning-rate=${LEARNING_RATE} --embedding_dim=${EMBD_DIM} --embedding-constraint=${EMBD_CONSTRAINT} --num-labeled-datapoints=${NLABELS} --constrain-weak-pl-embedding --seed=4294967295 &
+
+  # else
+  #   python main.py --output-dirpath=${MODEL_FP} --trainer=${TRAINER} --last-layer=${LAST_LAYER} --optimizer=sgd --learning-rate=${LEARNING_RATE} --embedding_dim=${EMBD_DIM} --embedding-constraint=${EMBD_CONSTRAINT} --num-labeled-datapoints=${NLABELS} --seed=4294967295 &
+
+  # fi
+
+  python main.py --output-dirpath=${MODEL_FP} --trainer=${TRAINER} --last-layer=${LAST_LAYER} --optimizer=sgd --learning-rate=${LEARNING_RATE} --embedding_dim=${EMBD_DIM} --embedding-constraint=${EMBD_CONSTRAINT} --num-labeled-datapoints=${NLABELS} --ood_p=${OOD_PERC} &
+  #python main.py --output-dirpath=${MODEL_FP} --trainer=${TRAINER} --last-layer=${LAST_LAYER} --optimizer=sgd --learning-rate=${LEARNING_RATE} --embedding_dim=${EMBD_DIM} --embedding-constraint=${EMBD_CONSTRAINT} --num-labeled-datapoints=${NLABELS} --arch="wide_resnet28-8" --num-classes=100 --ood_p=${OOD_PERC} &
+
   INDEX=$((INDEX+1))
-  sleep 1  # separate launches by 1 second minimum
+  sleep 4  # separate launches by 1 second minimum
 done
 
 

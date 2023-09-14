@@ -161,6 +161,24 @@ class FixMatchTrainer(trainer.SupervisedTrainer):
                 train_stats.append_accumulate('train_embedding_constraint_loss', emb_constraint_loss_l.item())
                 loss_l += emb_constraint_loss_l
 
+                if pl_count > 0:
+                    # UL embedding on the strong augmentation should be close to the labeled embedding
+                    if self.args.constrain_weak_pl_embedding:
+                        emb_ul = embedding_ul_weak[valid_pl, :]
+                        logits_ul = logits_ul_weak[valid_pl, :]
+                        emb_constraint_ul = emb_constraint(emb_ul, model.last_layer.centers, logits_ul)
+                        emb_constraint_loss_ul = embedding_criterion(emb_constraint_ul, torch.zeros_like(emb_constraint_ul))
+                        train_stats.append_accumulate('train_embedding_constraint_ul_weak_loss', emb_constraint_loss_ul.item())
+                        loss_l += emb_constraint_loss_ul
+
+                    if self.args.constrain_strong_pl_embedding:
+                        emb_ul = embedding_ul_strong[valid_pl, :]
+                        logits_ul = logits_ul_weak[valid_pl, :]
+                        emb_constraint_ul = emb_constraint(emb_ul, model.last_layer.centers, logits_ul)
+                        emb_constraint_loss_ul = embedding_criterion(emb_constraint_ul, torch.zeros_like(emb_constraint_ul))
+                        train_stats.append_accumulate('train_embedding_constraint_ul_strong_loss', emb_constraint_loss_ul.item())
+                        loss_l += emb_constraint_loss_ul
+
             # keep just those labels which are valid PL
             logits_ul_strong = logits_ul_strong[valid_pl]
             logits_ul_weak = logits_ul_weak[valid_pl]
@@ -173,13 +191,22 @@ class FixMatchTrainer(trainer.SupervisedTrainer):
                 train_stats.append_accumulate('train_pseudo_label_loss', loss_ul.item())
 
                 if emb_constraint is not None:
-                    emb_constraint_ul_strong = emb_constraint(embedding_ul_strong, model.last_layer.centers, logits_ul_weak)
-                    emb_constraint_ul_weak = emb_constraint(embedding_ul_weak, model.last_layer.centers, logits_ul_weak)
+                    emb_constraint_loss_ul = torch.tensor(torch.nan).to(loss_l.device)
+                    if self.args.constrain_weak_pl_embedding:
+                        emb_constraint_ul_weak = emb_constraint(embedding_ul_weak, model.last_layer.centers, logits_ul_weak)
+                        emb_constraint_loss_ul_weak = embedding_criterion(emb_constraint_ul_weak, torch.zeros_like(emb_constraint_ul_weak))
+                        train_stats.append_accumulate('train_embedding_constraint_ul_weak_loss', emb_constraint_loss_ul_weak.item())
+                        emb_constraint_loss_ul = emb_constraint_loss_ul_weak
 
-                    emb_constraint_loss_ul_strong = embedding_criterion(emb_constraint_ul_strong, torch.zeros_like(emb_constraint_ul_strong))
-                    emb_constraint_loss_ul_weak = embedding_criterion(emb_constraint_ul_weak, torch.zeros_like(emb_constraint_ul_weak))
-                    emb_constraint_loss_ul = emb_constraint_loss_ul_strong + emb_constraint_loss_ul_weak
-                    train_stats.append_accumulate('train_pseudo_label_embedding_constraint_loss', emb_constraint_loss_ul.item())
+                    if self.args.constrain_strong_pl_embedding:
+                        emb_constraint_ul_strong = emb_constraint(embedding_ul_strong, model.last_layer.centers, logits_ul_weak)
+                        emb_constraint_loss_ul_strong = embedding_criterion(emb_constraint_ul_strong, torch.zeros_like(emb_constraint_ul_strong))
+                        train_stats.append_accumulate('train_embedding_constraint_ul_weak_loss', emb_constraint_loss_ul_strong.item())
+                        if torch.isnan(emb_constraint_loss_ul):
+                            emb_constraint_loss_ul = emb_constraint_loss_ul_strong
+                        else:
+                            emb_constraint_loss_ul += emb_constraint_loss_ul_strong
+                    train_stats.append_accumulate('train_embedding_constraint_ul_weak_loss', emb_constraint_loss_ul.item())
                 else:
                     emb_constraint_loss_ul = torch.tensor(torch.nan).to(loss_l.device)
             else:
@@ -227,19 +254,10 @@ class FixMatchTrainer(trainer.SupervisedTrainer):
 
         train_stats.add(epoch, 'train_wall_time', time.time() - start_time)
 
-        train_stats.close_accumulate(epoch, 'train_pseudo_label_count', method='sum', default_value=0.0)  # default value in case no data was collected
-        train_stats.close_accumulate(epoch, 'train_pseudo_label_mask_rate', method='avg', default_value=0.0)
-        train_stats.close_accumulate(epoch, 'train_pseudo_label_ood_mask_rate', method='avg', default_value=0.0)
-        train_stats.close_accumulate(epoch, 'train_pseudo_label_ood_count', method='sum', default_value=0.0)  # default value in case no data was collected
-        train_stats.close_accumulate(epoch, 'train_pseudo_label_accuracy', method='avg', default_value=0.0)  # default value in case no data was collected
-        train_stats.close_accumulate(epoch, 'train_pseudo_label_impurity', method='avg', default_value=0.0)
-
-        train_stats.close_accumulate(epoch, 'train_pseudo_label_loss', method='avg', default_value=0.0)  # default value in case no data was collected
-        if emb_constraint is not None:
-            train_stats.close_accumulate(epoch, 'train_embedding_constraint_loss', method='avg', default_value=0.0)  # default value in case no data was collected
-            train_stats.close_accumulate(epoch, 'train_pseudo_label_embedding_constraint_loss', method='avg', default_value=0.0)  # default value in case no data was collected
-        train_stats.close_accumulate(epoch, 'train_loss', method='avg')
-        train_stats.close_accumulate(epoch, 'train_accuracy', method='avg')
+        train_stats.close_accumulate(epoch, 'train_pseudo_label_count', method='sum', default_value=0.0)
+        train_stats.close_accumulate(epoch, 'train_pseudo_label_ood_count', method='sum', default_value=0.0)
+        # close the rest with avg
+        train_stats.close_all_accumulate(epoch, method='avg', default_value=0.0)
 
         for c in range(len(pl_acc_per_class)):
             pl_acc_per_class[c] = float(np.mean(pl_acc_per_class[c]))

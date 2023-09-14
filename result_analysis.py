@@ -5,7 +5,7 @@ import json
 import os
 
 # folder to read files from
-post_fix = 'all'
+post_fix = 'cifar10'
 post_fix = 'ingest'
 directory = 'models-{}'.format(post_fix)
 
@@ -60,12 +60,12 @@ for folder_name in folder_names:
         print("Model failure: {}".format(folder_name))
     elif not os.path.exists(os.path.join(directory, folder_name, 'success.txt')):
         print("Model non-success: {}".format(folder_name))
-        # # adding the row to final results
-        # row_df = pd.DataFrame([combined_dict])
-        # if results_df is None:
-        #     results_df = row_df
-        # else:
-        #     results_df = pd.concat([results_df, row_df])
+        # adding the row to final results
+        row_df = pd.DataFrame([combined_dict])
+        if results_df is None:
+            results_df = row_df
+        else:
+            results_df = pd.concat([results_df, row_df])
     else:
         nb_complete += 1
         success_list.append(folder_name)

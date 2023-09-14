@@ -9,7 +9,6 @@ import torch
 import torchvision
 import torch.utils.data
 import logging
-import random
 import torchvision.transforms
 
 import fixmatch_augmentation
@@ -177,8 +176,9 @@ class Cifar10(torch.utils.data.Dataset):
 
         val_size = int(val_fraction * len(self.data))
 
-        idx = list(range(len(self.data)))
-        random.shuffle(idx)
+        idx = torch.randperm(len(self.data)).detach().cpu().numpy().tolist()
+        # idx = list(range(len(self.data)))
+        # random.shuffle(idx)
         v_idx = idx[0:val_size]
         t_idx = idx[val_size:]
         t_idx.sort()
@@ -270,25 +270,20 @@ class Cifar10plus100(Cifar10):
         _dataset = torchvision.datasets.CIFAR100(self.lcl_fldr, train=True, download=True)
 
         # break the data up into a list instead of a single numpy block to allow deleting and addition
-        self.ood_targets = list()
-        self.ood_data = list()
         data_len = _dataset.data.shape[0]
-        idx = list(range(data_len))
-        random.shuffle(idx)
+        idx = torch.randperm(data_len).detach().cpu().numpy().tolist()
         idx = idx[0:int(p * len(self.data))]
-        for i in idx:
-            self.ood_data.append(_dataset.data[i, :, :, :])
-            self.ood_targets.append(_dataset.targets[i] + 100)  # offset by 100 to indicate its coming from cifar100
+        logging.info("Replacing {} ({}%) unlabeled Cifar10 samples with Cifar100 data".format(len(idx), 100 * p))
+
+        replacement_idx = torch.randperm(len(self.data)).detach().cpu().numpy().tolist()
+        replacement_idx = replacement_idx[0:len(idx)]
+
+        for i in range(len(idx)):
+            data = _dataset.data[idx[i], :, :, :]
+            # offset by 100 to indicate its coming from cifar100
+            target = _dataset.targets[idx[i]] + 100
+            self.data[replacement_idx[i]] = data
+            self.targets[replacement_idx[i]] = target
+
         # cleanup the tmp CIFAR object
         del _dataset
-
-        p = float(len(self.ood_data)) / float(len(self.data))
-        logging.info("adding {} ({}%)unlabeled ood examples".format(len(self.ood_data), 100*p))
-
-        for i in range(len(self.ood_data)):
-            data = self.ood_data[i]
-            target = self.ood_targets[i]
-
-            self.data.append(data)
-            self.targets.append(target)
-

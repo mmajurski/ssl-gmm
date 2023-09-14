@@ -75,15 +75,17 @@ import shutil
 
 import json
 
-ifp = '/home/mmajurski/github/ssl-gmm/models-all'
+ifp = '/home/mmajurski/github/ssl-gmm/models-ingest'
 fns = [fn for fn in os.listdir(ifp) if fn.startswith('id-')]
 fns.sort()
 
 for fn in fns:
-    json_file_path = os.path.join(ifp, fn, 'config.json')
-    with open(json_file_path) as json_file:
-        config_dict = json.load(json_file)
-
-    if config_dict['num_labeled_datapoints'] == 10:
-        print("rm -rf {}".format(fn))
-
+    log_fp = os.path.join(ifp, fn, 'log.txt')
+    # read the log txt file
+    with open(log_fp, 'r') as fh:
+        lines = fh.readlines()
+    lines = lines[0:100]
+    for line in lines:
+        if 'pn131285' in line:
+            print(fn)
+            break
