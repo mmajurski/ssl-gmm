@@ -8,7 +8,9 @@ import os
 
 def gen_key(cdict):
     key = ""
-    for col in cdict.keys():
+    keys = list(cdict.keys())
+    keys.sort()
+    for col in keys:
         key += str(col)[0:4] + ':' + str(cdict[col]) + '-'
     return key
 
@@ -76,6 +78,25 @@ for folder_name in folder_names:
             dict_of_df_lists[key] = list()
         dict_of_df_lists[key].append(combined_dict)
 
+
+last_layers_list = ['fc','kmeans','aa_gmm','aa_gmm_d1']
+emb_dim_list = [32, 128]
+embedding_constraint_list = ['none','l2','mean_covar']
+num_labeled_datapoints_list = [40, 250]
+for ll in last_layers_list:
+    for emb in emb_dim_list:
+        for emb_c in embedding_constraint_list:
+            for n in num_labeled_datapoints_list:
+                if ll == 'fc' and emb_c != 'none':
+                    continue
+                d = {'trainer': 'fixmatch', 'last_layer': ll, 'embedding_dim': emb, 'embedding_constraint': emb_c, 'num_labeled_datapoints': n}
+                key = gen_key(d)
+                if key not in dict_of_df_lists.keys():
+                    print("adding missing {}".format(d))
+                    dict_of_df_lists[key] = [d]
+
+
+
 df_list = list()
 for config_key in dict_of_df_lists.keys():
     # compute the average test_accuracy for all json dicts in this list
@@ -83,10 +104,17 @@ for config_key in dict_of_df_lists.keys():
     ep = list()
     mta = list()
     for d in dict_of_df_lists[config_key]:
-        ta.append(100 * d['test_accuracy'])
-        ep.append(d['epoch'])
-        mta.append(100 * d['min_test_accuracy_per_class'])
+        if 'test_accuracy' in d.keys():
+            ta.append(100 * d['test_accuracy'])
+            ep.append(d['epoch'])
+            mta.append(100 * d['min_test_accuracy_per_class'])
 
+
+    if len(ta) == 0:
+        a = dict_of_df_lists[config_key][0]
+        cd = pd.json_normalize(a)
+        df_list.append(cd)
+        continue
 
     mv = float(np.mean(ta))
     q1 = float(np.quantile(ta, 0.25))

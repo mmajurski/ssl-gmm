@@ -6,11 +6,11 @@ import os
 
 # folder to read files from
 post_fix = 'cifar10'
-post_fix = 'ingest'
+# post_fix = 'ingest'
 directory = 'models-{}'.format(post_fix)
 
 # columns to extract from file name
-config_columns = ['trainer', 'last_layer', 'use_ema', 'embedding_dim', 'num_labeled_datapoints', 'embedding_constraint', 'clip_grad', 'patience', 'nesterov']
+config_columns = ['trainer', 'last_layer', 'use_ema', 'embedding_dim', 'num_labeled_datapoints', 'embedding_constraint', 'clip_grad', 'patience']
 # columns to extract from result file (stats.json)
 result_columns = ['test_accuracy', 'epoch']
 results_df = None
@@ -31,12 +31,16 @@ for folder_name in folder_names:
     # if config_dict['num_labeled_datapoints'] != 40:
     #     continue
 
+
     # creating dictionary from stats.json file
     json_file_path = os.path.join(directory, folder_name, 'stats.json')
     result_dict = dict()
     if os.path.exists(json_file_path):
         with open(json_file_path) as json_file:
             result_dict = json.load(json_file)
+
+        # if result_dict['epoch'] > 150:
+        #     continue
 
         # do this if adding one of these columns as these are list values which will create multiple rows in excel file
         # result_dict['pseudo_label_counts_per_class'] = str(result_dict['pseudo_label_counts_per_class'])

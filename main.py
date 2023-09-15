@@ -56,8 +56,6 @@ def main():
     parser.add_argument('--num-epochs', default=None, type=int, help='number of epochs to train. If this is non-None it will suppress the use of a test split, and blindly run the training for N epochs.')
     parser.add_argument('--trainer', type=str, default='fixmatch', help='trainer to use (currently supported supervised, fixmatch)')
     parser.add_argument('--embedding-constraint', type=str, default=None, help='embedding constraint to enforce (currently supported None, mean_covar, gauss_moment)')
-    parser.add_argument('--constrain-weak-pl-embedding', action='store_true', default=False)
-    parser.add_argument('--constrain-strong-pl-embedding', action='store_true', default=False)
 
     parser.add_argument('--seed', type=int, default=None, help='seed for the random number generator')
     parser.add_argument('--ood_p', type=float, default='0.0', help='percentage of unlabeled data drawn from cifar100 which is ood for cifar10')

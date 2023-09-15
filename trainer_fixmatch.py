@@ -161,24 +161,6 @@ class FixMatchTrainer(trainer.SupervisedTrainer):
                 train_stats.append_accumulate('train_embedding_constraint_loss', emb_constraint_loss_l.item())
                 loss_l += emb_constraint_loss_l
 
-                if pl_count > 0:
-                    # UL embedding on the strong augmentation should be close to the labeled embedding
-                    if self.args.constrain_weak_pl_embedding:
-                        emb_ul = embedding_ul_weak[valid_pl, :]
-                        logits_ul = logits_ul_weak[valid_pl, :]
-                        emb_constraint_ul = emb_constraint(emb_ul, model.last_layer.centers, logits_ul)
-                        emb_constraint_loss_ul = embedding_criterion(emb_constraint_ul, torch.zeros_like(emb_constraint_ul))
-                        train_stats.append_accumulate('train_embedding_constraint_ul_weak_loss', emb_constraint_loss_ul.item())
-                        loss_l += emb_constraint_loss_ul
-
-                    if self.args.constrain_strong_pl_embedding:
-                        emb_ul = embedding_ul_strong[valid_pl, :]
-                        logits_ul = logits_ul_weak[valid_pl, :]
-                        emb_constraint_ul = emb_constraint(emb_ul, model.last_layer.centers, logits_ul)
-                        emb_constraint_loss_ul = embedding_criterion(emb_constraint_ul, torch.zeros_like(emb_constraint_ul))
-                        train_stats.append_accumulate('train_embedding_constraint_ul_strong_loss', emb_constraint_loss_ul.item())
-                        loss_l += emb_constraint_loss_ul
-
             # keep just those labels which are valid PL
             logits_ul_strong = logits_ul_strong[valid_pl]
             logits_ul_weak = logits_ul_weak[valid_pl]
@@ -186,32 +168,22 @@ class FixMatchTrainer(trainer.SupervisedTrainer):
             embedding_ul_strong = embedding_ul_strong[valid_pl]
             embedding_ul_weak = embedding_ul_weak[valid_pl]
 
+            loss_ul = torch.tensor(torch.nan).to(loss_l.device)
+            emb_constraint_loss_ul = torch.tensor(torch.nan).to(loss_l.device)
+
             if pl_count > 0:
                 loss_ul = criterion(logits_ul_strong, targets_weak_ul)
                 train_stats.append_accumulate('train_pseudo_label_loss', loss_ul.item())
 
                 if emb_constraint is not None:
-                    emb_constraint_loss_ul = torch.tensor(torch.nan).to(loss_l.device)
-                    if self.args.constrain_weak_pl_embedding:
-                        emb_constraint_ul_weak = emb_constraint(embedding_ul_weak, model.last_layer.centers, logits_ul_weak)
-                        emb_constraint_loss_ul_weak = embedding_criterion(emb_constraint_ul_weak, torch.zeros_like(emb_constraint_ul_weak))
-                        train_stats.append_accumulate('train_embedding_constraint_ul_weak_loss', emb_constraint_loss_ul_weak.item())
-                        emb_constraint_loss_ul = emb_constraint_loss_ul_weak
+                    emb_constraint_ul_strong = emb_constraint(embedding_ul_strong, model.last_layer.centers, logits_ul_weak)
+                    emb_constraint_ul_weak = emb_constraint(embedding_ul_weak, model.last_layer.centers, logits_ul_weak)
 
-                    if self.args.constrain_strong_pl_embedding:
-                        emb_constraint_ul_strong = emb_constraint(embedding_ul_strong, model.last_layer.centers, logits_ul_weak)
-                        emb_constraint_loss_ul_strong = embedding_criterion(emb_constraint_ul_strong, torch.zeros_like(emb_constraint_ul_strong))
-                        train_stats.append_accumulate('train_embedding_constraint_ul_weak_loss', emb_constraint_loss_ul_strong.item())
-                        if torch.isnan(emb_constraint_loss_ul):
-                            emb_constraint_loss_ul = emb_constraint_loss_ul_strong
-                        else:
-                            emb_constraint_loss_ul += emb_constraint_loss_ul_strong
-                    train_stats.append_accumulate('train_embedding_constraint_ul_weak_loss', emb_constraint_loss_ul.item())
-                else:
-                    emb_constraint_loss_ul = torch.tensor(torch.nan).to(loss_l.device)
-            else:
-                loss_ul = torch.tensor(torch.nan).to(loss_l.device)
-                emb_constraint_loss_ul = torch.tensor(torch.nan).to(loss_l.device)
+                    emb_constraint_loss_ul_strong = embedding_criterion(emb_constraint_ul_strong, torch.zeros_like(emb_constraint_ul_strong))
+                    emb_constraint_loss_ul_weak = embedding_criterion(emb_constraint_ul_weak, torch.zeros_like(emb_constraint_ul_weak))
+                    emb_constraint_loss_ul = emb_constraint_loss_ul_strong + emb_constraint_loss_ul_weak
+                    train_stats.append_accumulate('train_pseudo_label_embedding_constraint_loss', emb_constraint_loss_ul.item())
+
             batch_loss = loss_l
             if not torch.isnan(loss_ul):
                 batch_loss += loss_ul

@@ -94,6 +94,10 @@ def train(args):
     fh.setFormatter(logging.Formatter("%(asctime)s [%(levelname)s] [%(filename)s:%(lineno)d] %(message)s"))
     logging.getLogger().addHandler(fh)
 
+    if args.embedding_constraint == 'mean_covar':
+        logging.info("Enabling clip_grad for mean_covar constraint.")
+        args.clip_grad = True
+
     logging.info(args)
 
     try:

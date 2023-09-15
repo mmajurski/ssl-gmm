@@ -8,7 +8,7 @@
 #SBATCH --oversubscribe
 #SBATCH --cpus-per-task=10
 #SBATCH --gres=gpu:1
-#SBATCH --job-name=g40-ec
+#SBATCH --job-name=g40
 #SBATCH -o log-%N.%j.out
 #SBATCH --time=96:0:0
 
@@ -45,7 +45,7 @@ TRAINER='fixmatch'
 echo "Model Number Starting PointCount = $START_RUN"
 echo "Requested Model Count = $MODELS_PER_JOB"
 
-root_output_directory="./models-emb-const"
+root_output_directory="./models"
 if ! [ -d ${root_output_directory} ]; then
     mkdir ${root_output_directory}
 fi
