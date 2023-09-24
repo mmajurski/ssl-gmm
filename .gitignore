@@ -9,6 +9,13 @@ study.db
 study-bck.db
 *.db
 
+*.bbl
+*.aux
+*.blg
+*.out
+*.log
+*.synctex.gz
+
 *.ods
 *.pyc
 *.png

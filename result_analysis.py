@@ -6,7 +6,7 @@ import os
 
 # folder to read files from
 post_fix = 'cifar10'
-# post_fix = 'ingest'
+post_fix = 'ingest'
 directory = 'models-{}'.format(post_fix)
 
 # columns to extract from file name

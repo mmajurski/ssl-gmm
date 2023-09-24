@@ -8,19 +8,23 @@ import os
 
 def gen_key(cdict):
     key = ""
-    for col in cdict.keys():
-        if col == 'ood_p':
-            continue
+    keys = list(cdict.keys())
+    if 'ood_p' in keys:
+        keys.remove('ood_p')
+    keys.sort()
+    for col in keys:
         key += str(col)[0:4] + ':' + str(cdict[col]) + '-'
     return key
 
 # folder to read files from
-post_fix = 'ood'
+post_fix = 'cifar10-replaced100-ood'
+# post_fix = 'cifar10-added100-ood'
+post_fix_no_ood = 'cifar10'
 directory = 'models-{}'.format(post_fix)
 
 # columns to extract from file name
 # config_columns = ['trainer', 'last_layer', 'use_ema', 'embedding_dim', 'num_labeled_datapoints', 'embedding_constraint', 'clip_grad', 'patience', 'nesterov']
-config_columns = ['trainer', 'last_layer', 'embedding_dim', 'num_labeled_datapoints', 'embedding_constraint', 'ood_p']
+config_columns = ['trainer', 'last_layer', 'embedding_dim', 'num_labeled_datapoints', 'embedding_constraint', 'clip_grad', 'ood_p']
 # columns to extract from result file (stats.json)
 result_columns = ['test_accuracy', 'epoch', 'test_accuracy_per_class']
 results_df = None
@@ -45,12 +49,20 @@ for folder_name in folder_names:
 
         if config_dict['patience'] == 20:
             continue
-        if config_dict['clip_grad'] == False:
-            continue
-        if config_dict['embedding_dim'] != 128:
-            continue
-        # if config_dict['num_labeled_datapoints'] != 250:
+        # if config_dict['clip_grad'] == False:
         #     continue
+        # if config_dict['embedding_dim'] != 128:
+        #     continue
+        if config_dict['num_labeled_datapoints'] != 250:
+            continue
+        # if config_dict['last_layer'] == 'fc' and config_dict['clip_grad'] == True:
+        #     continue
+
+        # if config_dict['embedding_constraint'] == 'mean_covar' and config_dict['clip_grad'] == False:
+        #     continue
+        # if config_dict['embedding_constraint'] == 'mean_covar' and config_dict['num_labeled_datapoints'] == 40:
+        #     continue
+
 
         config_dict = dict((k, config_dict[k]) for k in config_columns)
 
@@ -80,12 +92,10 @@ for folder_name in folder_names:
             dict_of_df_lists[key] = list()
         dict_of_df_lists[key].append(combined_dict)
 
-post_fix = 'all'
-directory = 'models-{}'.format(post_fix)
+directory = 'models-{}'.format(post_fix_no_ood)
 folder_names = [fn for fn in os.listdir(directory) if fn.startswith('id-')]
 folder_names.sort()
 
-post_fix = 'ood'
 
 for folder_name in folder_names:
     # print(folder_name)
@@ -100,14 +110,22 @@ for folder_name in folder_names:
 
         if config_dict['patience'] == 20:
             continue
-        if config_dict['clip_grad'] == False:
-            continue
+        # if config_dict['clip_grad'] == False:
+        #     continue
         if config_dict['num_labeled_datapoints'] != 250:
             continue
-        if config_dict['embedding_dim'] != 128:
-            continue
+        # if config_dict['embedding_dim'] != 128:
+        #     continue
+        # if config_dict['last_layer'] == 'fc' and config_dict['clip_grad'] == True:
+        #     continue
 
+        if 'ood_p' not in config_dict.keys():
+            config_dict['ood_p'] = 0.0
         config_dict = dict((k, config_dict[k]) for k in config_columns)
+
+        key = gen_key(config_dict)
+        if key not in dict_of_df_lists.keys():
+            continue
 
         # creating dictionary from stats.json file
         json_file_path = os.path.join(directory, folder_name, 'stats.json')
@@ -155,18 +173,33 @@ for config_key in dict_of_df_lists.keys():
     del a['test_accuracy_per_class']
     del a['min_test_accuracy_per_class']
 
+    a['Method'] = a['last_layer'] + "-" + a['embedding_constraint'] + "-" + str(a['clip_grad'])
+
+    ta = np.asarray(ta)
     vals = np.unique(ood_p)
     for val in unique_ood_p_vals:
         if val in vals:
-            if val == 0.0:
-                o = np.mean(ta)
-            else:
-                idx = np.where(vals == val)[0][0]
-                o = ta[idx]
+            idx = np.where(np.asarray(ood_p) == val)[0]
+            o = np.mean(ta[idx])
         else:
             o = None
 
-        a['oop={}'.format(val)] = o
+        a['mu_oop={}'.format(val)] = o
+    for val in unique_ood_p_vals:
+        if val in vals:
+            idx = np.where(np.asarray(ood_p) == val)[0]
+            o = np.std(ta[idx])
+        else:
+            o = None
+
+        a['sigma_oop={}'.format(val)] = o
+
+    for val in unique_ood_p_vals:
+        if val in vals:
+            idx = np.where(np.asarray(ood_p) == val)[0]
+            a['n_oop={}'.format(val)] = len(idx)
+
+
 
     cd = pd.json_normalize(a)
     df_list.append(cd)

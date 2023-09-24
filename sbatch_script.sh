@@ -8,9 +8,9 @@
 #SBATCH --oversubscribe
 #SBATCH --cpus-per-task=10
 #SBATCH --gres=gpu:1
-#SBATCH --job-name=g40
+#SBATCH --job-name=g-fill
 #SBATCH -o log-%N.%j.out
-#SBATCH --time=96:0:0
+#SBATCH --time=196:0:0
 
 # NIST-developed software is provided by NIST as a public service. You may use, copy and distribute copies of the software in any medium, provided that you keep intact this entire notice. You may improve, modify and create derivative works of the software or any portion of the software, and you may copy and distribute such modifications or works. Modified works should carry a notice stating that you changed the software and should note the date and nature of any such change. Please explicitly acknowledge the National Institute of Standards and Technology as the source of the software.
 
@@ -22,7 +22,7 @@
 source /mnt/isgnas/home/mmajursk/miniconda3/etc/profile.d/conda.sh
 conda activate gmm
 
-#SBATCH --exclude=p100,quebec
+#SBATCH --exclude=p100,quebec,papa,oscar
 #SBATCH --nodelist=oscar
 
 
@@ -33,14 +33,11 @@ EMBD_CONSTRAINT=$4
 NLABELS=$5
 MODELS_PER_JOB=$6
 OOD_PERC=$7
-STRONG_PL_EMB_CONSTRAINT=$8
-WEAK_PL_EMB_CONSTRAINT=$9
+CLIP_GRAD=$8
 
 
 
 
-LEARNING_RATE=0.01
-TRAINER='fixmatch'
 
 echo "Model Number Starting PointCount = $START_RUN"
 echo "Requested Model Count = $MODELS_PER_JOB"
@@ -51,63 +48,82 @@ if ! [ -d ${root_output_directory} ]; then
 fi
 
 
-
-N_PARALLEL=1
-gpustr=$(nvidia-smi --query-gpu=gpu_name --format=csv)
-echo $gpustr
-substr1="80GB"
-substr2="40GB"
-substr3="H100"
-if [[ $gpustr == *"$substr1"* ]]; then
-N_PARALLEL=2  # how many parallel trains to run on each job
-elif [[ $gpustr == *"$substr2"* ]]; then
-N_PARALLEL=2  # how many parallel trains to run on each job
-elif [[ $gpustr == *"$substr3"* ]]; then
-N_PARALLEL=2  # how many parallel trains to run on each job
-else
-N_PARALLEL=1  # how many parallel trains to run on each job
-fi
-
-echo "Training $N_PARALLEL models in parallel for this slurm job."
-
 INDEX=$START_RUN
 SUCCESS_COUNT=0
-for i in $(seq $MODELS_PER_JOB); do
-  if [ $i -gt $N_PARALLEL ]; then
-    wait -n  # wait for the next job to terminate
-    sc=$? # get status code from main
-     if [ $sc -eq 0 ]; then
-       SUCCESS_COUNT=$((SUCCESS_COUNT+1))
-       echo "Successfully built $SUCCESS_COUNT models"
-     fi
-     if [ $SUCCESS_COUNT -ge $MODELS_PER_JOB ]; then
-       exit 0
-     fi
-  fi
+let N=2*${MODELS_PER_JOB}
+for i in $(seq $N); do
 
   MODEL_FP="${root_output_directory}/id-$(printf "%08d" ${INDEX})"
+  if [ $CLIP_GRAD -eq 0 ]; then
+    python main.py --output-dirpath=${MODEL_FP} --last-layer=${LAST_LAYER} --embedding_dim=${EMBD_DIM} --embedding-constraint=${EMBD_CONSTRAINT} --num-labeled-datapoints=${NLABELS} --ood_p=${OOD_PERC}
+    sc=$? # get status code from main
+  else
+    python main.py --output-dirpath=${MODEL_FP} --last-layer=${LAST_LAYER} --embedding_dim=${EMBD_DIM} --embedding-constraint=${EMBD_CONSTRAINT} --num-labeled-datapoints=${NLABELS} --ood_p=${OOD_PERC} --clip-grad
+    sc=$? # get status code from main
+  fi
 
-  # if [ $STRONG_PL_EMB_CONSTRAINT -gt 0 ] && [ $WEAK_PL_EMB_CONSTRAINT -gt 0 ]; then
-  #   python main.py --output-dirpath=${MODEL_FP} --trainer=${TRAINER} --last-layer=${LAST_LAYER} --optimizer=sgd --learning-rate=${LEARNING_RATE} --embedding_dim=${EMBD_DIM} --embedding-constraint=${EMBD_CONSTRAINT} --num-labeled-datapoints=${NLABELS} --constrain-weak-pl-embedding --constrain-strong-pl-embedding --seed=4294967295 &
 
-  # elif [ $STRONG_PL_EMB_CONSTRAINT -gt 0 ]; then
-  #   python main.py --output-dirpath=${MODEL_FP} --trainer=${TRAINER} --last-layer=${LAST_LAYER} --optimizer=sgd --learning-rate=${LEARNING_RATE} --embedding_dim=${EMBD_DIM} --embedding-constraint=${EMBD_CONSTRAINT} --num-labeled-datapoints=${NLABELS} --constrain-strong-pl-embedding --seed=4294967295 &
+  #python main.py --output-dirpath=${MODEL_FP} --last-layer=${LAST_LAYER} --embedding_dim=${EMBD_DIM} --embedding-constraint=${EMBD_CONSTRAINT} --num-labeled-datapoints=${NLABELS} --ood_p=${OOD_PERC}
+  # sc=$? # get status code from main
 
-  # elif [ $WEAK_PL_EMB_CONSTRAINT -gt 0 ]; then
-  #   python main.py --output-dirpath=${MODEL_FP} --trainer=${TRAINER} --last-layer=${LAST_LAYER} --optimizer=sgd --learning-rate=${LEARNING_RATE} --embedding_dim=${EMBD_DIM} --embedding-constraint=${EMBD_CONSTRAINT} --num-labeled-datapoints=${NLABELS} --constrain-weak-pl-embedding --seed=4294967295 &
-
-  # else
-  #   python main.py --output-dirpath=${MODEL_FP} --trainer=${TRAINER} --last-layer=${LAST_LAYER} --optimizer=sgd --learning-rate=${LEARNING_RATE} --embedding_dim=${EMBD_DIM} --embedding-constraint=${EMBD_CONSTRAINT} --num-labeled-datapoints=${NLABELS} --seed=4294967295 &
-
-  # fi
-
-  python main.py --output-dirpath=${MODEL_FP} --trainer=${TRAINER} --last-layer=${LAST_LAYER} --optimizer=sgd --learning-rate=${LEARNING_RATE} --embedding_dim=${EMBD_DIM} --embedding-constraint=${EMBD_CONSTRAINT} --num-labeled-datapoints=${NLABELS} --ood_p=${OOD_PERC} &
-  #python main.py --output-dirpath=${MODEL_FP} --trainer=${TRAINER} --last-layer=${LAST_LAYER} --optimizer=sgd --learning-rate=${LEARNING_RATE} --embedding_dim=${EMBD_DIM} --embedding-constraint=${EMBD_CONSTRAINT} --num-labeled-datapoints=${NLABELS} --arch="wide_resnet28-8" --num-classes=100 --ood_p=${OOD_PERC} &
+  if [ $sc -eq 0 ]; then
+     SUCCESS_COUNT=$((SUCCESS_COUNT+1))
+     echo "Successfully built $SUCCESS_COUNT models"
+   fi
+   if [ $SUCCESS_COUNT -ge $MODELS_PER_JOB ]; then
+     exit 0
+   fi
 
   INDEX=$((INDEX+1))
-  sleep 4  # separate launches by 1 second minimum
+
+  # safety
+  if [ $INDEX -ge 10 ]; then
+   exit 0
+ fi
 done
 
 
-# wait for all of the runs to complete before exiting
-wait
+# N_PARALLEL=1
+# gpustr=$(nvidia-smi --query-gpu=gpu_name --format=csv)
+# echo $gpustr
+# substr1="80GB"
+# substr2="40GB"
+# substr3="H100"
+# if [[ $gpustr == *"$substr1"* ]]; then
+# N_PARALLEL=2  # how many parallel trains to run on each job
+# elif [[ $gpustr == *"$substr2"* ]]; then
+# N_PARALLEL=2  # how many parallel trains to run on each job
+# elif [[ $gpustr == *"$substr3"* ]]; then
+# N_PARALLEL=2  # how many parallel trains to run on each job
+# else
+# N_PARALLEL=1  # how many parallel trains to run on each job
+# fi
+
+# echo "Training $N_PARALLEL models in parallel for this slurm job."
+
+# INDEX=$START_RUN
+# SUCCESS_COUNT=0
+# for i in $(seq $MODELS_PER_JOB); do
+#   if [ $i -gt $N_PARALLEL ]; then
+#     wait -n  # wait for the next job to terminate
+#     sc=$? # get status code from main
+#      if [ $sc -eq 0 ]; then
+#        SUCCESS_COUNT=$((SUCCESS_COUNT+1))
+#        echo "Successfully built $SUCCESS_COUNT models"
+#      fi
+#      if [ $SUCCESS_COUNT -ge $MODELS_PER_JOB ]; then
+#        exit 0
+#      fi
+#   fi
+
+#   MODEL_FP="${root_output_directory}/id-$(printf "%08d" ${INDEX})"
+#   python main.py --output-dirpath=${MODEL_FP} --last-layer=${LAST_LAYER} --embedding_dim=${EMBD_DIM} --embedding-constraint=${EMBD_CONSTRAINT} --num-labeled-datapoints=${NLABELS} --ood_p=${OOD_PERC} &
+#   #python main.py --output-dirpath=${MODEL_FP} --last-layer=${LAST_LAYER} --embedding_dim=${EMBD_DIM} --embedding-constraint=${EMBD_CONSTRAINT} --num-labeled-datapoints=${NLABELS} --arch="wide_resnet28-8" --num-classes=100 --ood_p=${OOD_PERC} &
+
+#   INDEX=$((INDEX+1))
+#   sleep 4  # separate launches by 1 second minimum
+# done
+
+
+# # wait for all of the runs to complete before exiting
+# wait

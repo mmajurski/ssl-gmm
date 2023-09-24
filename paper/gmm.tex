@@ -1,0 +1,155 @@
+
+\documentclass[10pt,twocolumn]{article} 
+\usepackage{simpleConference}
+%\documentclass{article}
+%\usepackage{arxiv}
+%\usepackage[margin=1in]{geometry}
+
+
+
+\usepackage[utf8]{inputenc} % allow utf-8 input
+\usepackage{hyperref}       % hyperlinks
+\usepackage{url}            % simple URL typesetting
+\usepackage{booktabs}       % professional-quality tables
+\usepackage{amsfonts}       % blackboard math symbols
+\usepackage{amsmath}
+\usepackage{amssymb}
+\usepackage{nicefrac}       % compact symbols for 1/2, etc.
+\usepackage{graphicx}
+\usepackage{natbib}
+\usepackage{doi}
+\usepackage{wrapfig}
+
+
+\usepackage{listings}
+\usepackage{xcolor}
+
+\definecolor{codegreen}{rgb}{0,0.6,0}
+\definecolor{codegray}{rgb}{0.5,0.5,0.5}
+\definecolor{codepurple}{rgb}{0.58,0,0.82}
+\definecolor{backcolour}{rgb}{0.97,0.97,0.97}
+
+\lstdefinestyle{mystyle}{
+	backgroundcolor=\color{backcolour},   
+	commentstyle=\color{codegreen},
+	keywordstyle=\color{magenta},
+	numberstyle=\tiny\color{codegray},
+	stringstyle=\color{codepurple},
+	basicstyle=\ttfamily\footnotesize,
+	breakatwhitespace=false,         
+	breaklines=true,                 
+	captionpos=b,                    
+	keepspaces=true,                 
+	numbers=left,                    
+	numbersep=5pt,                  
+	showspaces=false,                
+	showstringspaces=false,
+	showtabs=false,                  
+	tabsize=2
+}
+
+\lstset{style=mystyle}
+
+
+\title{Going beyond the Final Linear Layer: Enhancing Decision Boundaries}
+
+\author{Michael Majurski, David Chapman\thanks{Information Technology Lab, National Institute of Standards and Technology, michael.majurski@nist.gov}
+}
+
+
+
+
+%%% Add PDF metadata to help others organize their library
+%%% Once the PDF is generated, you can check the metadata with
+%%% $ pdfinfo template.pdf
+\hypersetup{
+	pdftitle={Beyond the Final Linear Layer},
+	pdfauthor={Michael Majurski, David Chapman},
+	pdfkeywords={AI,Semi-Supervised,Classification,FixMatch},
+}
+
+
+\begin{document}
+\maketitle
+
+\begin{abstract}
+Semi-Supervised image classification has become a playground for exploring new ideas in extracting signal from unannotated image datasets.
+This paper presents a novel extension to any image classification architecture which improves accuracy in low-label regimes. 
+We extend the FixMatch \cite{sohn2020fixmatch} training scheme with our novel last layers and demonstrate test accuracy improvement. 
+The novelty consists of 2 elements, first we replace the last linear layer with a GMM trained via backprop, and impose class-wise constraints on the embedding space the GMM operates on.
+These methods match published SOTA 250 label Cifar10 \cite{cifar10} results and come close to matching SOTA in the 40 label regime without the significant model complexity of methods like SimMatchV2 \cite{zheng2023simmatchv2}.
+Our method achieves 94.8\% and 94.2\% accuracy with 250 and 40 Cifar10 labels respectively.
+\end{abstract}
+
+
+\section{Introduction}
+Semi-Supervised learning attempts to leverage the abundance of unlabeled image data to improve deep learning based model performance under limited training data regimes \cite{zhu2022introduction,li2019safe,hady2013semi}.
+The early sucesses of deep learning based methods relied on large populations of annotated 
+
+
+%PyTorch \cite{pytorch} 
+
+
+
+\section{Related Work}
+
+
+
+\subsection{Pseudo-Labeling}
+
+\subsection{Consistency Regularization}
+
+\subsection{Contrastive Learning}
+
+%
+%\begin{lstlisting}[language=Python]
+%class Factor:
+%	"""Class to store DEX (Design of Experiment) factor data.
+%	"""
+%	
+%	def __init__(self, 
+%				levels: list[any], 
+%				jitter: float = None, 
+%				rso: np.random.RandomState = None, 
+%				requested_level: any = None):
+%		"""
+%		Initialize a Factor class instance with the provided levels. This includes sampling from those levels to pick an instance, apply any jitter, constructing the final dex factor value.
+%		
+%		Args:
+%		levels: The levels to select from for this factor.
+%		jitter: Any jitter to apply to the selected level before saving it into the value. I.e. value = 5.0 +- 1.2, results in a value between 3.8 and 6.2
+%		rso: The ransom state object used to do the sampling.
+%		requested_level: The requested level for this factor. This must a value within the provided levels list.
+%		"""
+%\end{lstlisting}
+
+
+\section{Methodology}
+
+\subsection{KMeans}
+
+\subsection{Axis Aligned Differentiable Gaussian Mixture Model}
+
+
+\subsection{Embedding Constraints}
+
+
+
+\section{Experiments}
+
+
+\subsection{Ablation Study}
+
+
+
+\section{Conclusions}
+
+
+
+
+
+\bibliographystyle{unsrt}
+\bibliography{refs}
+	
+	
+\end{document}

@@ -13,6 +13,6 @@ conda install pytorch torchvision pytorch-cuda=11.8 -c pytorch -c nvidia
 
 conda install pandas matplotlib scikit-learn jsonpickle psutil -y
 
-pip install --extra-index-url https://developer.download.nvidia.com/compute/redist --upgrade nvidia-dali-cuda110
+#pip install --extra-index-url https://developer.download.nvidia.com/compute/redist --upgrade nvidia-dali-cuda110
 
 #pip install optuna

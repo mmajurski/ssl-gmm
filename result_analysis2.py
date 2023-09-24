@@ -21,7 +21,7 @@ directory = 'models-{}'.format(post_fix)
 
 # columns to extract from file name
 # config_columns = ['trainer', 'last_layer', 'use_ema', 'embedding_dim', 'num_labeled_datapoints', 'embedding_constraint', 'clip_grad', 'patience', 'nesterov']
-config_columns = ['trainer', 'last_layer', 'embedding_dim', 'num_labeled_datapoints', 'embedding_constraint']
+config_columns = ['trainer', 'last_layer', 'embedding_dim', 'num_labeled_datapoints', 'embedding_constraint', 'clip_grad']
 # columns to extract from result file (stats.json)
 result_columns = ['test_accuracy', 'epoch', 'test_accuracy_per_class']
 results_df = None
@@ -44,11 +44,17 @@ for folder_name in folder_names:
 
         if config_dict['patience'] == 20:
             continue
-        if config_dict['clip_grad'] == True:
-            continue
+        # if config_dict['embedding_constraint'] != 'mean_covar' and config_dict['clip_grad'] == True:
+        #     continue
         if config_dict['embedding_dim'] == 8:
             continue
         # if config_dict['embedding_constraint'] == 'mean_covar':
+        #     continue
+        # if config_dict['last_layer'] == 'fc' and config_dict['clip_grad'] == True:
+        #     continue
+        if config_dict['embedding_constraint'] == 'mean_covar' and config_dict['clip_grad'] == False:
+            continue
+        # if config_dict['embedding_constraint'] == 'mean_covar' and config_dict['num_labeled_datapoints'] == 40:
         #     continue
 
         config_dict = dict((k, config_dict[k]) for k in config_columns)
@@ -83,17 +89,25 @@ last_layers_list = ['fc','kmeans','aa_gmm','aa_gmm_d1']
 emb_dim_list = [32, 128]
 embedding_constraint_list = ['none','l2','mean_covar']
 num_labeled_datapoints_list = [40, 250]
+clip_grad_values = [True, False]
 for ll in last_layers_list:
     for emb in emb_dim_list:
         for emb_c in embedding_constraint_list:
             for n in num_labeled_datapoints_list:
-                if ll == 'fc' and emb_c != 'none':
-                    continue
-                d = {'trainer': 'fixmatch', 'last_layer': ll, 'embedding_dim': emb, 'embedding_constraint': emb_c, 'num_labeled_datapoints': n}
-                key = gen_key(d)
-                if key not in dict_of_df_lists.keys():
-                    print("adding missing {}".format(d))
-                    dict_of_df_lists[key] = [d]
+                for c in clip_grad_values:
+                    if ll == 'fc' and emb_c != 'none':
+                        continue
+                    # if ll == 'fc' and c:
+                    #     continue
+                    if emb_c == 'mean_covar' and not c:
+                        continue
+                    # if emb_c == 'mean_covar' and n == 40:
+                    #     continue
+                    d = {'trainer': 'fixmatch', 'last_layer': ll, 'embedding_dim': emb, 'embedding_constraint': emb_c, 'num_labeled_datapoints': n, 'clip_grad': c}
+                    key = gen_key(d)
+                    if key not in dict_of_df_lists.keys():
+                        print("adding missing {}".format(d))
+                        dict_of_df_lists[key] = [d]
 
 
 
@@ -132,6 +146,10 @@ for config_key in dict_of_df_lists.keys():
     removed_mta = np.asarray(mta)[idx].tolist()
     mta = np.asarray(mta)[np.logical_not(idx)].tolist()
 
+    if len(ta) < 5:
+        print(config_key)
+        print("missing {}".format(5 - len(ta)))
+
     a = dict_of_df_lists[config_key][0]
     del a['test_accuracy']
     del a['epoch']
@@ -164,6 +182,11 @@ results_df = pd.concat(df_list, axis=0)
 for num_labeled_datapoints in results_df['num_labeled_datapoints'].unique():
     df = results_df[results_df['num_labeled_datapoints'] == num_labeled_datapoints]
     df.to_csv('results-{}-{}labels.csv'.format(post_fix, num_labeled_datapoints), index=False)
+
+    # for ll in results_df['last_layer'].unique():
+    #     df = results_df[results_df['num_labeled_datapoints'] == num_labeled_datapoints]
+    #     df = df[df['last_layer'] == ll]
+    #     df.to_csv('results-{}-{}labels-{}.csv'.format(post_fix, num_labeled_datapoints,ll), index=False)
 
 
 # # exporting to cvs file
