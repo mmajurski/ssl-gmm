@@ -43,6 +43,7 @@ def main():
     parser.add_argument('--ema-decay', default=0.999, type=float)
     parser.add_argument('--clip-grad', action='store_true', default=False)
     parser.add_argument('--pseudo-label-threshold', default=0.95, type=float, help='Threshold logits when filtering pseudo-labeling.')
+    parser.add_argument('--pseudo-label-negative-threshold', default=0.1, type=float, help='Threshold logits when filtering negative pseudo-labeling. I.e. PL with logits < this will be included as negative examples.')
     parser.add_argument('--cosine-sim-pl-threshold', default=0.0, type=float, help='Threshold when filtering pseudo-labeling using cosine similarity. Only PL with a min CosineSim to the labeled embedding > x are used. Set to 0 to disable.')
     parser.add_argument('--cosine-sim-topk', default=6, type=float, help='Nearest N neighbors to consider when using cosine similarity to select psudo-labels.')
 

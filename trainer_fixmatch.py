@@ -133,6 +133,7 @@ class FixMatchTrainer(trainer.SupervisedTrainer):
             targets_ul_valid = targets_ul[valid_pl]
             ood_pl_count = torch.sum(targets_ul_valid > 100).item()
             train_stats.append_accumulate('train_pseudo_label_ood_count', ood_pl_count)
+            # TODO record the ood selected vs ood available ratio
             train_stats.append_accumulate('train_pseudo_label_ood_mask_rate', (ood_pl_count / (self.args.batch_size * self.args.mu)))
 
             if pl_count > 0:
@@ -154,6 +155,29 @@ class FixMatchTrainer(trainer.SupervisedTrainer):
             acc_vec = pred_l == targets_l
             for c in range(self.args.num_classes):
                 l_acc_per_class[c].extend(acc_vec[targets_l == c].detach().cpu().tolist())
+
+            # handle negative samples (any logit < 0.1) has its CE calculated and added to the loss
+            invalid_pl_logits_mask = softmax_ul_weak < torch.tensor(self.args.pseudo_label_negative_threshold)
+            if torch.any(invalid_pl_logits_mask):
+                # calculate y and yhat, subsetting to only those logits which are invalid PL
+                y = torch.nn.functional.one_hot(targets_weak_ul, self.args.num_classes)[invalid_pl_logits_mask]
+                softmax_ul_strong = torch.nn.functional.softmax(logits_ul_strong, dim=-1)
+                yhat = softmax_ul_strong[invalid_pl_logits_mask]
+
+                # if there are any true class predictions among the invalid PL, return that as impurity.
+                train_stats.append_accumulate('train_invalid_pl_impurity', torch.mean(y>0, dtype=yhat.dtype).item())
+
+                # implement log_loss by hand
+                minus_one_over_N = (-1.0 / torch.numel(yhat))
+
+                log_yhat = torch.log(torch.clamp(yhat, min=0.0001))
+                log_one_minus_yhat = torch.log(torch.clamp(1.0 - yhat, min=0.0001))
+                presum = (y * log_yhat + (1.0 - y) * log_one_minus_yhat) * minus_one_over_N
+                loss_invalid_pl = torch.sum(presum)
+                # scale the loss to equal the contribution of the valid PL
+                loss_invalid_pl = loss_invalid_pl * (1.0 / self.args.num_classes)
+                loss_l += loss_invalid_pl
+                train_stats.append_accumulate('train_invalid_pl_loss', loss_invalid_pl.item())
 
             if emb_constraint is not None:
                 emb_constraint_l = emb_constraint(embedding_l, model.last_layer.centers, logits_l)

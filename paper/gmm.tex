@@ -1,63 +1,43 @@
 
-\documentclass[10pt,twocolumn]{article} 
-\usepackage{simpleConference}
-%\documentclass{article}
-%\usepackage{arxiv}
+%\documentclass[10pt,twocolumn]{article} 
+\documentclass[10pt,twocolumn,letterpaper]{article}
+%\usepackage[review]{cvpr}
+\usepackage{cvpr}
+
+%\usepackage{simpleConference}
+
 %\usepackage[margin=1in]{geometry}
 
 
 
 \usepackage[utf8]{inputenc} % allow utf-8 input
-\usepackage{hyperref}       % hyperlinks
 \usepackage{url}            % simple URL typesetting
-\usepackage{booktabs}       % professional-quality tables
 \usepackage{amsfonts}       % blackboard math symbols
-\usepackage{amsmath}
-\usepackage{amssymb}
 \usepackage{nicefrac}       % compact symbols for 1/2, etc.
 \usepackage{graphicx}
 \usepackage{natbib}
-\usepackage{doi}
 \usepackage{wrapfig}
 
 
-\usepackage{listings}
-\usepackage{xcolor}
+% Include other packages here, before hyperref.
+\usepackage{graphicx}
+\usepackage{amsmath}
+\usepackage{amssymb}
+\usepackage{booktabs}
 
-\definecolor{codegreen}{rgb}{0,0.6,0}
-\definecolor{codegray}{rgb}{0.5,0.5,0.5}
-\definecolor{codepurple}{rgb}{0.58,0,0.82}
-\definecolor{backcolour}{rgb}{0.97,0.97,0.97}
+% It is strongly recommended to use hyperref, especially for the review version.
+% hyperref with option pagebackref eases the reviewers' job.
+% Please disable hyperref *only* if you encounter grave issues, e.g. with the
+% file validation for the camera-ready version.
+%
+% If you comment hyperref and then uncomment it, you should delete
+% ReviewTempalte.aux before re-running LaTeX.
+% (Or just hit 'q' on the first LaTeX run, let it finish, and you
+%  should be clear).
+\usepackage[pagebackref,breaklinks,colorlinks]{hyperref}
 
-\lstdefinestyle{mystyle}{
-	backgroundcolor=\color{backcolour},   
-	commentstyle=\color{codegreen},
-	keywordstyle=\color{magenta},
-	numberstyle=\tiny\color{codegray},
-	stringstyle=\color{codepurple},
-	basicstyle=\ttfamily\footnotesize,
-	breakatwhitespace=false,         
-	breaklines=true,                 
-	captionpos=b,                    
-	keepspaces=true,                 
-	numbers=left,                    
-	numbersep=5pt,                  
-	showspaces=false,                
-	showstringspaces=false,
-	showtabs=false,                  
-	tabsize=2
-}
-
-\lstset{style=mystyle}
-
-
-\title{Going beyond the Final Linear Layer: Enhancing Decision Boundaries}
-
-\author{Michael Majurski, David Chapman\thanks{Information Technology Lab, National Institute of Standards and Technology, michael.majurski@nist.gov}
-}
-
-
-
+\def\confName{ar$\xi$iv}
+\def\confYear{2023}
 
 %%% Add PDF metadata to help others organize their library
 %%% Once the PDF is generated, you can check the metadata with
@@ -69,37 +49,106 @@
 }
 
 
+
 \begin{document}
+
+\title{Beyond the Final Linear Layer: Enhancing Decision Boundaries}
+
+\author{Michael Majurski\\
+	Information Technology Lab, NIST\\
+%	100 Bureau Dr. Gaithersburg MD, 20899\\
+	{\tt\small michael.majurski@nist.gov}
+	% For a paper whose authors are all at the same institution,
+	% omit the following lines up until the closing ``}''.
+% Additional authors and addresses can be added with ``\and'',
+% just like the second author.
+% To save space, use either the email address or home page, not both
+\and
+Sumeet Menon\\
+University of Maryland, Baltimore County\\
+\and
+David Chapman\\
+University of Maryland, Baltimore County\\
+}
 \maketitle
 
+
+
+
+
+
+
+
+	
+	
+\maketitle
+
+
 \begin{abstract}
-Semi-Supervised image classification has become a playground for exploring new ideas in extracting signal from unannotated image datasets.
+SSL leverages an abundance of unlabeled data to improve deep learning based model performance under limited training data regimes.
 This paper presents a novel extension to any image classification architecture which improves accuracy in low-label regimes. 
 We extend the FixMatch \cite{sohn2020fixmatch} training scheme with our novel last layers and demonstrate test accuracy improvement. 
-The novelty consists of 2 elements, first we replace the last linear layer with a GMM trained via backprop, and impose class-wise constraints on the embedding space the GMM operates on.
+The novelty consists of 2 elements: first we replace the last linear layer with a GMM trained via backprop, and second, we impose class-wise constraints on the embedding space the GMM operates on.
 These methods match published SOTA 250 label Cifar10 \cite{cifar10} results and come close to matching SOTA in the 40 label regime without the significant model complexity of methods like SimMatchV2 \cite{zheng2023simmatchv2}.
 Our method achieves 94.8\% and 94.2\% accuracy with 250 and 40 Cifar10 labels respectively.
 \end{abstract}
 
 
 \section{Introduction}
-Semi-Supervised learning attempts to leverage the abundance of unlabeled image data to improve deep learning based model performance under limited training data regimes \cite{zhu2022introduction,li2019safe,hady2013semi}.
-The early sucesses of deep learning based methods relied on large populations of annotated 
+SSL leverages an abundance of unlabeled data to improve deep learning based model performance under limited training data regimes \cite{zhu2022introduction,li2019safe,hady2013semi}.
+Image classification has become a playground for exploring new SSL ideas.
+The early successes of deep learning based methods relied on large annotated datasets to enable models to learn the relevant features to perform the task, i.e. image classification build on top of ImageNet \cite{deng2009imagenet}.
+With data annotation becoming a significant bottleneck, especially in application domains outside of the standard benchmarks, another learning paradigm was needed.
 
+There are several flavors of SSL.
+Contrastive learning methods leverage the intuition that similar instances should be close in the representation space, while different instances are farther apart \cite{yang2022class,li2021comatch}.
+Consistency regularization borrows the intuition that modified views of the same instance should have similar representations and predictions \cite{sohn2020fixmatch,lee2022contrastive,zhang2021flexmatch,kim2022conmatch}.
+Pseudo-labeling methods like FixMatch \cite{sohn2020fixmatch} fall within the consistency regularization domain.
+
+% TODO write up what the motivation for our method was, why do the things we do...? (not because they are easy, but because they are hard...) Most papers have an inciting incident in the intro which outlines the hypothesis that X is a problem, and we addressed that via Y to improve the results by Z.
+
+
+% TODO CE masked where any truely low logit values are kept, but those midling are left alone.? I.e keep CE <0.1 but ignore those 0.1 < x < 0.95. cite chen2023boosting and rizve2021defense and kim2019nlnl for the idea. I.e. keep the strong negative PL in the CE term. chen2023boosting uses topk, instead of thresholds. 
+
+% TODO talk about how our method utilizes all of the unlabeled data due to the embedding constraints, unlike FixMatch which only learns from the valid PL samples.
 
 %PyTorch \cite{pytorch} 
 
+% right now our method is a combination of 
+% - last layer replacement fc -> GMM
+% - embedding constraint l2
+% - null result that fancy embedding constraints help (mean_covar is worse performing)
+% - (maybe) that negative sampling helps a la chen2023boosting and rizve2021defense
+% - TODO ablation study on the above
 
+% TODO test more potent clustering method in place of l2 kenyon2018clustering
+
+% TODO cite https://arxiv.org/abs/1807.05520 for kmeans clustering?
 
 \section{Related Work}
 
+% TODO abosolutly compare our method to li2021comatch
+% TODO compare our method to lee2022contrastive which uses explicit cluster centers, and draws both the valid and non valid PL to the cluster center, just like we do, we just don't have a contrastive element like they do
 
 
 \subsection{Pseudo-Labeling}
+Self-supervised learning was among the initial approaches employed in the context of semi-supervised learning to annotate unlabeled images. 
+This technique involves the initial training of a classifier with a limited set of labeled samples and incorporates pseudo-labels into the gradient descent process, exceeding a predefined threshold \cite{yarowsky1995unsupervised, mcclosky2006reranking, olivier2006semi,zhai2019s4l,livieris2019predicting,rosenberg2005semi}. 
+A closely related method to self-training is co-training, where a given dataset is represented as two distinct feature sets. 
+These independent sample sets are subsequently trained separately using two distinct models, and the sample predictions surpassing predetermined thresholds are utilized in the final model training process \cite{blum1998combining,prakash2014survey}.
+A notably advanced approach to pseudo-labeling is the Mean Teacher algorithm \cite{tarvainen2017mean}, which leverages exponential moving averages of model parameters to acquire a notably more stable target prediction. 
+This refinement has a substantial impact on enhancing the convergence of the algorithm.
+
 
 \subsection{Consistency Regularization}
 
+Consistency regularization operates on the premise that when augmenting an unlabeled sample, its label should remain consistent. 
+This approach implicitly enforces a smoothness assumption, promoting coherence between unlabeled samples and their basic augmentations. 
+In other words, the model should be able to predict the unlabeled sample x exactly the same way it predicts the class for Augmented(x) \cite{berthelot2019mixmatch,sohn2020fixmatch,berthelot2019remixmatch,mustafa2020transformation}. 
+In addition to evaluating image-wise augmentations, recent research has demonstrated that incorporating class-wise and instance-based consistencies yields superior performance outcomes \cite{zheng2022simmatch,li2021comatch}.
+
 \subsection{Contrastive Learning}
+
 
 %
 %\begin{lstlisting}[language=Python]
