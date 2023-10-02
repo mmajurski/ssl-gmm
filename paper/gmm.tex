@@ -89,8 +89,9 @@ SSL leverages an abundance of unlabeled data to improve deep learning based mode
 This paper presents a novel extension to any image classification architecture which improves accuracy in low-label regimes. 
 We extend the FixMatch \cite{sohn2020fixmatch} training scheme with our novel last layers and demonstrate test accuracy improvement. 
 The novelty consists of 2 elements: first we replace the last linear layer with a GMM trained via backprop, and second, we impose class-wise constraints on the embedding space the GMM operates on.
-These methods match published SOTA 250 label Cifar10 \cite{cifar10} results and come close to matching SOTA in the 40 label regime without the significant model complexity of methods like SimMatchV2 \cite{zheng2023simmatchv2}.
-Our method achieves 94.8\% and 94.2\% accuracy with 250 and 40 Cifar10 labels respectively.
+These methods match published SOTA 250 label CIFAR10 \cite{cifar10} results and come close to matching SOTA in the 40 label regime without the significant model complexity of methods like SimMatchV2 \cite{zheng2023simmatchv2}.
+Our method achieves 94.8\% and 94.2\% accuracy with 250 and 40 CIFAR10 labels respectively.
+Our code is available at: \url{https://github.com/mmajurski/ssl-gmm}  % TOOD cleanup the repo
 \end{abstract}
 
 
@@ -105,12 +106,36 @@ Contrastive learning methods leverage the intuition that similar instances shoul
 Consistency regularization borrows the intuition that modified views of the same instance should have similar representations and predictions \cite{sohn2020fixmatch,lee2022contrastive,zhang2021flexmatch,kim2022conmatch}.
 Pseudo-labeling methods like FixMatch \cite{sohn2020fixmatch} fall within the consistency regularization domain.
 
+This work argues that pseudo-labeling methods can be improved with better calibration of the network logits used to filter the pseudo-labels into reliable and unreliable. 
+Neural networks are known to be overconfident in their predictions \cite{wei2022mitigating}, and this affects the pseudo-labeling process. 
+Potentially allowing for the inclusion of more incorrect pseudo-labels any specific logit threshold would otherwise have.
+This work demonstrates the better calibrated replacements for a models final linear layer can improve the final accuracy of pseudo-labeling based SSL algorithms in very label scarce regimes. 
+
+With that goal in mind, this work proposes replacing the final linear layer of the neural network with one of a few options, all of which have explicit modeling of class cluster centroids.
+First, a nearest neighbor (k=1) kmeans layer.
+Second, an axis-aligned  differentiable Gaussian Mixture Model (GMM) trained via back prop.
+Third, an identity covariance axis-aligned differentiable GMM trained via back prop. 
+These three methods represent differing levels of prescription about how the final embedding space should be arranged. 
+
 % TODO write up what the motivation for our method was, why do the things we do...? (not because they are easy, but because they are hard...) Most papers have an inciting incident in the intro which outlines the hypothesis that X is a problem, and we addressed that via Y to improve the results by Z.
+
+Additionally, to assist these cluster based final embedding classification layers, we explore the effect of different constraints on the embedding space.
+We explore 1) no constraints, 2) an L2 penalty between observed cluster centers and the learned cluster centroids, 3) a mean/covariance constraint which combined the l2 penalty with an identity covariance constraint, and finally 4) a full method of moments enforcing an identity representation for the first 4 gaussian moments. 
+These four constraints represent increasing levels of prescription about how the embedding space should be organized.
+The L2 constraint is adding a penalty term for any embedding which does not have an identity first gaussian moment.
+The mean/covariance constraint extents that penalty to enforce an identity first and second gaussian moment.
+The final constraint explores whether including all of the first 4 gaussian moments improves the final learned model test accuracy. 
+
+This paper contributes a simple easy to implement improvement to pseudo-labeling methods where very few annotations are available, replace the last linear layer with a kmeans layer which explicitly models class cluster centers.
+We demonstrate this methodology using CIFAR10 and CIFAR100 \cite{cifar10} with 40 and 400 labels respectively. 
+Additionally, we explore and demonstrate that high level prescriptive constraints on the embedding space produce significantly worse outcomes than allowing the embedding space to take on whatever emergent structure the training process produces. 
+Finally, because the L2 cluster centroid penalty is applied to all unlabeled data and not just the valid pseudo-labels, our method extracts some training signal from every unlabeled data point, unlike FixMatch \cite{sohn2020fixmatch} and other methods which only learn from the valid pseudo-labels.
+
+
 
 
 % TODO CE masked where any truely low logit values are kept, but those midling are left alone.? I.e keep CE <0.1 but ignore those 0.1 < x < 0.95. cite chen2023boosting and rizve2021defense and kim2019nlnl for the idea. I.e. keep the strong negative PL in the CE term. chen2023boosting uses topk, instead of thresholds. 
 
-% TODO talk about how our method utilizes all of the unlabeled data due to the embedding constraints, unlike FixMatch which only learns from the valid PL samples.
 
 %PyTorch \cite{pytorch} 
 
