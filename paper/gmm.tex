@@ -85,12 +85,13 @@ University of Maryland, Baltimore County\\
 
 
 \begin{abstract}
+% TODO rewrite abstract once paper is done to fill in details
 SSL leverages an abundance of unlabeled data to improve deep learning based model performance under limited training data regimes.
 This paper presents a novel extension to any image classification architecture which improves accuracy in low-label regimes. 
 We extend the FixMatch \cite{sohn2020fixmatch} training scheme with our novel last layers and demonstrate test accuracy improvement. 
 The novelty consists of 2 elements: first we replace the last linear layer with a GMM trained via backprop, and second, we impose class-wise constraints on the embedding space the GMM operates on.
-These methods match published SOTA 250 label CIFAR10 \cite{cifar10} results and come close to matching SOTA in the 40 label regime without the significant model complexity of methods like SimMatchV2 \cite{zheng2023simmatchv2}.
-Our method achieves 94.8\% and 94.2\% accuracy with 250 and 40 CIFAR10 labels respectively.
+These methods match published SOTA 250 label CIFAR-10 \cite{cifar10} results and come close to matching SOTA in the 40 label regime without the significant model complexity of methods like SimMatchV2 \cite{zheng2023simmatchv2}.
+Our method achieves 94.8\% and 94.2\% accuracy with 250 and 40 CIFAR-10 labels respectively.
 Our code is available at: \url{https://github.com/mmajurski/ssl-gmm}  % TOOD cleanup the repo
 \end{abstract}
 
@@ -111,30 +112,36 @@ Neural networks are known to be overconfident in their predictions \cite{wei2022
 Potentially allowing for the inclusion of more incorrect pseudo-labels any specific logit threshold would otherwise have.
 This work demonstrates the better calibrated replacements for a models final linear layer can improve the final accuracy of pseudo-labeling based SSL algorithms in very label scarce regimes. 
 
-With that goal in mind, this work proposes replacing the final linear layer of the neural network with one of a few options, all of which have explicit modeling of class cluster centroids.
-First, a nearest neighbor (k=1) kmeans layer.
+With that goal in mind, this work proposes replacing the final linear (fully connected) layer of the neural network with one of a few options, all of which have explicit modeling of class cluster centroids.
+First, a nearest neighbor (k=1) kmeans layer, which has been used in prior work \cite{dwibedi2021little}.
 Second, an axis-aligned  differentiable Gaussian Mixture Model (GMM) trained via back prop.
 Third, an identity covariance axis-aligned differentiable GMM trained via back prop. 
-These three methods represent differing levels of prescription about how the final embedding space should be arranged. 
+These three methods represent differing levels of prescription about how the final embedding space should be arranged.
+The idea of leveraging clusters in embedding space is not new \cite{caron2018deep,caron2020unsupervised}, but we extend the core idea with a novel differentiable model of learned cluster centroids. 
 
 % TODO write up what the motivation for our method was, why do the things we do...? (not because they are easy, but because they are hard...) Most papers have an inciting incident in the intro which outlines the hypothesis that X is a problem, and we addressed that via Y to improve the results by Z.
 
 Additionally, to assist these cluster based final embedding classification layers, we explore the effect of different constraints on the embedding space.
-We explore 1) no constraints, 2) an L2 penalty between observed cluster centers and the learned cluster centroids, 3) a mean/covariance constraint which combined the l2 penalty with an identity covariance constraint, and finally 4) a full method of moments enforcing an identity representation for the first 4 gaussian moments. 
-These four constraints represent increasing levels of prescription about how the embedding space should be organized.
-The L2 constraint is adding a penalty term for any embedding which does not have an identity first gaussian moment.
-The mean/covariance constraint extents that penalty to enforce an identity first and second gaussian moment.
-The final constraint explores whether including all of the first 4 gaussian moments improves the final learned model test accuracy. 
+All of the embedding space constraints are based on specifying how many of the first 4 gaussian moments are identity/zero.
+Moment1 (cluster mean position) should have zero distance to the learned cluster centroids. % TODO (chapman) need citation for guassian moments
+Moment2 (cluster variance) should be the identity matrix.
+Moment3 (cluster skew) should be zero.
+Moment4 (cluster kurtosis) should be the identity matrix. 
+We explore how no constraints, moment1, moment1-2, and moment1-4 impact the final learned model accuracy.
 
 This paper contributes a simple easy to implement improvement to pseudo-labeling methods where very few annotations are available, replace the last linear layer with a kmeans layer which explicitly models class cluster centers.
-We demonstrate this methodology using CIFAR10 and CIFAR100 \cite{cifar10} with 40 and 400 labels respectively. 
+We demonstrate this methodology using CIFAR-10 and CIFAR-100 \cite{cifar10} with 40 and 400 labels respectively. 
 Additionally, we explore and demonstrate that high level prescriptive constraints on the embedding space produce significantly worse outcomes than allowing the embedding space to take on whatever emergent structure the training process produces. 
-Finally, because the L2 cluster centroid penalty is applied to all unlabeled data and not just the valid pseudo-labels, our method extracts some training signal from every unlabeled data point, unlike FixMatch \cite{sohn2020fixmatch} and other methods which only learn from the valid pseudo-labels.
+Finally, because the embedding constraint penalties are applied to all unlabeled data and not just the valid pseudo-labels, our method extracts training signal from every unlabeled data point, unlike FixMatch \cite{sohn2020fixmatch} and other methods which only learn from the valid pseudo-labels.
 
 
 
 
 % TODO CE masked where any truely low logit values are kept, but those midling are left alone.? I.e keep CE <0.1 but ignore those 0.1 < x < 0.95. cite chen2023boosting and rizve2021defense and kim2019nlnl for the idea. I.e. keep the strong negative PL in the CE term. chen2023boosting uses topk, instead of thresholds. 
+
+% TODO perform study with best mothod (i.e. aa_gmm_d1 or kmeans with l2) and show impact of PL threshold and the model impurity rate compared to baseline fixmatch (fc). Gerenate plot of impurity for FM vs gmm over the first 100-200 epochs?
+
+% TODO build t-SNE plots of the embedding spaces for the best models (1 per configuration)
 
 
 %PyTorch \cite{pytorch} 
@@ -148,18 +155,19 @@ Finally, because the L2 cluster centroid penalty is applied to all unlabeled dat
 
 % TODO test more potent clustering method in place of l2 kenyon2018clustering
 
-% TODO cite https://arxiv.org/abs/1807.05520 for kmeans clustering?
 
 \section{Related Work}
 
-% TODO abosolutly compare our method to li2021comatch
+
 % TODO compare our method to lee2022contrastive which uses explicit cluster centers, and draws both the valid and non valid PL to the cluster center, just like we do, we just don't have a contrastive element like they do
 
+Semi-Supervised learning has recently show great progress in learning high quality models, in some cases match fully supervised performance, for a number of benchmarks \cite{zhang2021flexmatch}.
+The goal of SSL is to produce a trained model of equivalent accuracy to fully supervised training, with vastly reduced data annotation requirements.
 
 \subsection{Pseudo-Labeling}
 Self-supervised learning was among the initial approaches employed in the context of semi-supervised learning to annotate unlabeled images. 
 This technique involves the initial training of a classifier with a limited set of labeled samples and incorporates pseudo-labels into the gradient descent process, exceeding a predefined threshold \cite{yarowsky1995unsupervised, mcclosky2006reranking, olivier2006semi,zhai2019s4l,livieris2019predicting,rosenberg2005semi}. 
-A closely related method to self-training is co-training, where a given dataset is represented as two distinct feature sets. 
+A closely related method to self-training is co-training, where a given dataset is represented as two distinct feature sets \cite{blum1998combining}. 
 These independent sample sets are subsequently trained separately using two distinct models, and the sample predictions surpassing predetermined thresholds are utilized in the final model training process \cite{blum1998combining,prakash2014survey}.
 A notably advanced approach to pseudo-labeling is the Mean Teacher algorithm \cite{tarvainen2017mean}, which leverages exponential moving averages of model parameters to acquire a notably more stable target prediction. 
 This refinement has a substantial impact on enhancing the convergence of the algorithm.
@@ -168,44 +176,45 @@ This refinement has a substantial impact on enhancing the convergence of the alg
 \subsection{Consistency Regularization}
 
 Consistency regularization operates on the premise that when augmenting an unlabeled sample, its label should remain consistent. 
-This approach implicitly enforces a smoothness assumption, promoting coherence between unlabeled samples and their basic augmentations. 
+This approach implicitly enforces a smoothness assumption, promoting coherence between unlabeled samples and their basic augmentations \cite{xie2020unsupervised}. 
 In other words, the model should be able to predict the unlabeled sample x exactly the same way it predicts the class for Augmented(x) \cite{berthelot2019mixmatch,sohn2020fixmatch,berthelot2019remixmatch,mustafa2020transformation}. 
 In addition to evaluating image-wise augmentations, recent research has demonstrated that incorporating class-wise and instance-based consistencies yields superior performance outcomes \cite{zheng2022simmatch,li2021comatch}.
+Finally, pseudo-labeling filtering based on consistence between strongly augmented views shows convergence improvement \cite{kim2022conmatch}.
 
-\subsection{Contrastive Learning}
+\subsection{Embedding Clustering/Constraints}
+
+% TODO talk about the paper which find linear layers end up being nearest neighbor assignment (with cone away from origin structure) in the embedding space
+
+Several papers have attempted to improve the quality of pseudo-labels to either improve the final model accuracy, improve the rate of convergence, or avoid confirmation bias \cite{arazo2020pseudo}.
+Rizve et al. \cite{rizve2021defense} explores how uncertainty aware pseudo-label selection/filtering can be used to reduce the label noise.
+Incorrect pseudo-labels can be viewed as a network calibration issue \cite{rizve2021defense} where better network logit calibration might improve results \cite{Xing2020DistanceBased}.
+Other work has attempted to improve the pseudo-labeling process by imposing curriculum \cite{zhang2021flexmatch} or by including a class-aware contrastive term \cite{yang2022class}.
+Previous work has leveraged the concept of explicit class cluster centers for conditioning semantic similarity \cite{zheng2022simmatch}.
+Recent work has extended purely clustering based methods like DINO \cite{caron2021emerging} into semi-supervised methods \cite{fini2023semi}.
 
 
-%
-%\begin{lstlisting}[language=Python]
-%class Factor:
-%	"""Class to store DEX (Design of Experiment) factor data.
-%	"""
-%	
-%	def __init__(self, 
-%				levels: list[any], 
-%				jitter: float = None, 
-%				rso: np.random.RandomState = None, 
-%				requested_level: any = None):
-%		"""
-%		Initialize a Factor class instance with the provided levels. This includes sampling from those levels to pick an instance, apply any jitter, constructing the final dex factor value.
-%		
-%		Args:
-%		levels: The levels to select from for this factor.
-%		jitter: Any jitter to apply to the selected level before saving it into the value. I.e. value = 5.0 +- 1.2, results in a value between 3.8 and 6.2
-%		rso: The ransom state object used to do the sampling.
-%		requested_level: The requested level for this factor. This must a value within the provided levels list.
-%		"""
-%\end{lstlisting}
+
 
 
 \section{Methodology}
 
-\subsection{KMeans}
+In this section, we explore the details of our proposed embedding constraints and final linear layer replacements.
 
-\subsection{Axis Aligned Differentiable Gaussian Mixture Model}
+\subsection{Fully Connected Replacements}
+
+\subsubsection{KMeans}
+
+\subsubsection{Differentiable Axis Aligned Gaussian Mixture Model}
 
 
 \subsection{Embedding Constraints}
+
+\subsubsection{L2}
+
+\subsubsection{mean/covar}
+
+
+
 
 
 
