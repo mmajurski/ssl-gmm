@@ -31,7 +31,7 @@ def main():
     parser.add_argument('--tau', default=1.0, type=float, help='temperature value to sharpen the logits. Set to 1 to disable. If tau is 1, hard pseudo-labeling is used instead of soft pseudo-labeling.')
     parser.add_argument('--tau-method', type=str, default='fixmatch', help='what type of tau temp scaling to use, (fixmatch or mixmatch)')
     parser.add_argument('--mu', default=7, type=int, help='the number of unlabeled batches per labeled batch factor.')
-    parser.add_argument('--eps', default=1e-4, type=float, help='eps value for determining early stopping metric equivalence.')
+    parser.add_argument('--eps', default=1e-3, type=float, help='eps value for determining early stopping metric equivalence.')
     parser.add_argument('--patience', default=50, type=int, help='number of epochs past optimal to explore before early stopping terminates training.')
     parser.add_argument('--embedding_dim', default=16, type=int, help='dimensionality of the embedding space.')
     parser.add_argument('--weight-decay', default=0.0005, type=float)  # 5e-4
