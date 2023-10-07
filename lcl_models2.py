@@ -191,6 +191,9 @@ class axis_aligned_gmm_cmm_layer(torch.nn.Module):
 
 
 class axis_aligned_gmm_cmm_D1_layer(torch.nn.Module):
+
+    # this is identical to the kmeans layer, but with more complicated math doing the same work
+
     def __init__(self, embeddign_dim: int, num_classes: int, return_gmm: bool = True, return_cmm: bool = True):
         super().__init__()
 
@@ -228,16 +231,19 @@ class axis_aligned_gmm_cmm_D1_layer(torch.nn.Module):
         # Subtract to get diff of [batch, num_classes, dim]
         diff = x_rep - centers_rep
 
-        # Calculate each dist_sq entry separately
-        dist_sq = torch.zeros_like(torch.sum(diff, 2))
-        for k in range(self.num_classes):
-            curr_diff = diff[:, k]
-            curr_diff_t = torch.transpose(curr_diff, 0, 1)
-            Sig_inv_curr_diff_t = torch.mm(Sigma_inv, curr_diff_t)
-            Sig_inv_curr_diff_t_t = torch.transpose(Sig_inv_curr_diff_t, 0, 1)
-            curr_dist_sq = curr_diff * Sig_inv_curr_diff_t_t
-            curr_dist_sq = torch.sum(curr_dist_sq, 1)
-            dist_sq[:, k] = curr_dist_sq
+        dist_sq = diff * diff
+        dist_sq = torch.sum(dist_sq, 2)
+
+        # # Calculate each dist_sq entry separately
+        # dist_sq = torch.zeros_like(torch.sum(diff, 2))
+        # for k in range(self.num_classes):
+        #     curr_diff = diff[:, k]
+        #     curr_diff_t = torch.transpose(curr_diff, 0, 1)
+        #     Sig_inv_curr_diff_t = torch.mm(Sigma_inv, curr_diff_t)
+        #     Sig_inv_curr_diff_t_t = torch.transpose(Sig_inv_curr_diff_t, 0, 1)
+        #     curr_dist_sq = curr_diff * Sig_inv_curr_diff_t_t
+        #     curr_dist_sq = torch.sum(curr_dist_sq, 1)
+        #     dist_sq[:, k] = curr_dist_sq
 
         #   GMM
         # dist_sq = (x-mu) Sigma_inv (x-mu)T

@@ -1,7 +1,8 @@
 import os
 
 ifp = './models-cifar10'
-# ifp = './models-cifar100'
+# ifp = './models-cifar10-old'
+ifp = './models-cifar100'
 # ifp = './models-cifar10-replaced100-ood'
 
 fns = [fn for fn in os.listdir(ifp) if fn.startswith('id-')]

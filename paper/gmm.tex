@@ -1,13 +1,7 @@
-
-%\documentclass[10pt,twocolumn]{article} 
 \documentclass[10pt,twocolumn,letterpaper]{article}
 %\usepackage[review]{cvpr}
-\usepackage{cvpr}
-
-%\usepackage{simpleConference}
-
-%\usepackage[margin=1in]{geometry}
-
+%\usepackage[final]{cvpr}
+\usepackage[pagenumbers]{cvpr} % To force page numbers, e.g. for an arXiv version
 
 
 \usepackage[utf8]{inputenc} % allow utf-8 input
@@ -15,15 +9,25 @@
 \usepackage{amsfonts}       % blackboard math symbols
 \usepackage{nicefrac}       % compact symbols for 1/2, etc.
 \usepackage{graphicx}
-\usepackage{natbib}
 \usepackage{wrapfig}
-
 
 % Include other packages here, before hyperref.
 \usepackage{graphicx}
 \usepackage{amsmath}
 \usepackage{amssymb}
 \usepackage{booktabs}
+
+
+%
+% --- inline annotations
+%
+\usepackage[dvipsnames]{xcolor}
+\newcommand{\red}[1]{{\color{red}#1}}
+\newcommand{\todo}[1]{{\color{red}#1}}
+\newcommand{\TODO}[1]{\textbf{\color{red}[TODO: #1]}}
+% --- disable by uncommenting  
+% \renewcommand{\TODO}[1]{}
+% \renewcommand{\todo}[1]{#1}
 
 % It is strongly recommended to use hyperref, especially for the review version.
 % hyperref with option pagebackref eases the reviewers' job.
@@ -34,7 +38,8 @@
 % ReviewTempalte.aux before re-running LaTeX.
 % (Or just hit 'q' on the first LaTeX run, let it finish, and you
 %  should be clear).
-\usepackage[pagebackref,breaklinks,colorlinks]{hyperref}
+\definecolor{cvprblue}{rgb}{0.21,0.49,0.74}
+\usepackage[pagebackref,breaklinks,colorlinks,citecolor=cvprblue]{hyperref}
 
 \def\confName{ar$\xi$iv}
 \def\confYear{2023}
@@ -51,12 +56,12 @@
 
 
 \begin{document}
-
+	
 \title{Beyond the Final Linear Layer: Enhancing Decision Boundaries}
 
 \author{Michael Majurski\\
 	Information Technology Lab, NIST\\
-%	100 Bureau Dr. Gaithersburg MD, 20899\\
+	%	100 Bureau Dr. Gaithersburg MD, 20899\\
 	{\tt\small michael.majurski@nist.gov}
 	% For a paper whose authors are all at the same institution,
 	% omit the following lines up until the closing ``}''.
@@ -68,31 +73,22 @@ Sumeet Menon\\
 University of Maryland, Baltimore County\\
 \and
 David Chapman\\
-University of Maryland, Baltimore County\\
+University of Miami\\
 }
-\maketitle
 
-
-
-
-
-
-
-
-	
-	
 \maketitle
 
 
 \begin{abstract}
-% TODO rewrite abstract once paper is done to fill in details
+\TODO {(majurski) rewrite abstract once paper is done to fill in details}
 SSL leverages an abundance of unlabeled data to improve deep learning based model performance under limited training data regimes.
 This paper presents a novel extension to any image classification architecture which improves accuracy in low-label regimes. 
 We extend the FixMatch \cite{sohn2020fixmatch} training scheme with our novel last layers and demonstrate test accuracy improvement. 
 The novelty consists of 2 elements: first we replace the last linear layer with a GMM trained via backprop, and second, we impose class-wise constraints on the embedding space the GMM operates on.
 These methods match published SOTA 250 label CIFAR-10 \cite{cifar10} results and come close to matching SOTA in the 40 label regime without the significant model complexity of methods like SimMatchV2 \cite{zheng2023simmatchv2}.
 Our method achieves 94.8\% and 94.2\% accuracy with 250 and 40 CIFAR-10 labels respectively.
-Our code is available at: \url{https://github.com/mmajurski/ssl-gmm}  % TOOD cleanup the repo
+\TODO {cleanup the repo}
+Our code is available at: \url{https://github.com/mmajurski/ssl-gmm}
 \end{abstract}
 
 
@@ -105,7 +101,7 @@ With data annotation becoming a significant bottleneck, especially in applicatio
 \begin{figure}[ht]
 	\centering
 	\includegraphics[width=0.9\columnwidth]{example-image-a}
-	\caption{High level overview of our method.}
+	\caption{High level overview of our method. \TODO {(majurski) Create this figure.}}
 	\label{fig:schema}
 \end{figure}
 
@@ -124,7 +120,7 @@ This work proposes:
 \begin{enumerate}
 	\item Replacing the final linear (fully connected) layer of the neural network with either kmeans \cite{dwibedi2021little} or axis-aligned differentiable Gaussian Mixture Model (GMM) trained via back prop, both of which have explicit modeling of class cluster centroids. 
 	\item We explore various constraints on how the embedding space should be structured by adding penalties if the per-class clustering does not conform to between 0 and 4 of the first gaussian moments being identity/zero.
-	\item We demonstrate that increasing the specificity of how the embedding space should be structure negatively impacts model performance. % TODO (chapman) need citation for guassian moments
+	\item We demonstrate that increasing the specificity of how the embedding space should be structure negatively impacts model performance. \TODO {(chapman) need citation for guassian moments}
 \end{enumerate}
 
 This paper contributes a simple easy to implement improvement to pseudo-labeling methods where very few annotations are available, replace the last linear layer with a kmeans layer which explicitly models class cluster centers.
@@ -137,7 +133,9 @@ Finally, because the embedding constraint penalties are applied to all unlabeled
 
 % TODO perform study with best mothod (i.e. aa_gmm_d1 or kmeans with l2) and show impact of PL threshold and the model impurity rate compared to baseline fixmatch (fc). Gerenate plot of impurity for FM vs gmm over the first 100-200 epochs?
 
-% TODO build t-SNE plots of the embedding spaces for the best models (1 per configuration)
+\TODO {(majurski) build t-SNE plots of the embedding spaces for the best models (1 per configuration)}
+
+\TODO {(majurski) purge bibliography of arxiv pre-prints where possible, replacing with their peer reviewed equivalents}
 
 
 %PyTorch \cite{pytorch} 
@@ -153,8 +151,6 @@ Finally, because the embedding constraint penalties are applied to all unlabeled
 
 
 \section{Related Work}
-
-% TODO mention yang2022survey
 
 
 % TODO compare our method to lee2022contrastive which uses explicit cluster centers, and draws both the valid and non valid PL to the cluster center, just like we do, we just don't have a contrastive element like they do
@@ -182,7 +178,7 @@ Finally, pseudo-labeling filtering based on consistence between strongly augment
 
 \subsection{Embedding Clustering/Constraints}
 
-% TODO talk about the paper which find linear layers end up being nearest neighbor assignment (with cone away from origin structure) in the embedding space
+% TODO talk about the paper which find linear layers end up being nearest neighbor assignment (with cone away from origin structure) in the embedding space (Majurski cannot find the citation, so anyone who remembers what this paper was titled please leave a comment here.
 
 Several papers have attempted to improve the quality of pseudo-labels to either improve the final model accuracy, improve the rate of convergence, or avoid confirmation bias \cite{arazo2020pseudo}.
 Rizve et al. \cite{rizve2021defense} explores how uncertainty aware pseudo-label selection/filtering can be used to reduce the label noise.
@@ -191,45 +187,152 @@ Other work has attempted to improve the pseudo-labeling process by imposing curr
 Previous work has leveraged the concept of explicit class cluster centers for conditioning semantic similarity \cite{zheng2022simmatch}.
 Recent work has extended purely clustering based methods like DINO \cite{caron2021emerging} into semi-supervised methods \cite{fini2023semi}.
 
-% TODO talk about clustering method from enguehard2019semi
-
 % TODO talk about SimMatch embedding constraint via semantic seimilarity?
 
 
 
 \section{Methodology}
 
-In this section, we explore the details of our proposed embedding constraints and final linear layer replacements.
+In this section, we explore our proposed final layer replacements and embedding space constraints.
+FixMatch \cite{sohn2020fixmatch} is a simple, well performing, SSL algorithm.
+As such it serves as a good comparison point for exploring the effect of our contributions.
+Our methodology is based upon the published FixMatch \cite{sohn2020fixmatch} algorithm, with identical hyper-parameters unless otherwise stated.
+We add to FixMatch an early-stopping condition when the model has not improved for 40 epochs (where epoch size is 1024 batches as in FixMatch), with 2 learning rate reductions by a factor of $0.2$ instead of configuring a fixed number of training epochs with a cosine learning rate decay.
+Additionally, we employ a cyclic learning rate scheduler to vary the learning rate by a factor of $\pm2.0$ within each epoch to make training less dependent upon exact learning rate value.
 
-%These fully connected layer replacements represent differing levels of prescription about how the final embedding space should be arranged.
-%The idea of leveraging clusters in embedding space is not new \cite{caron2018deep,caron2020unsupervised}, but we extend the core idea with a novel differentiable model of learned cluster centroids and GMMs.
+Both the linear layer replacements and the embedding constraints explored herein represent increasing levels of prescription about how the final embedding space should be arranged compared to a final linear layer.
+The idea of leveraging clusters in embedding space is not new \cite{caron2018deep,caron2020unsupervised}, but we extend the core idea with a novel differentiable model of learned cluster centroids and GMMs.
+
+\subsection{Alternative Final Layers}
+
+A limitation of traditional final activation layers such as softmax is that they are fully discriminative; i.e. they estimate the posterior $p(Y|X)$, but do not attempt to model the sample distribution $p(X)$ or the joint probabilities $p(Y,X)$. 
+To overcome this limitation, we present two semi-parametric final activation layers (a) the Axis Aligned GMM (AAGMM) layer, and (b) an equal variance version of AAGMM that we henceforth call the KMeans activation layer due to the similarity of the objective function with a gradient based KMeans.
+
+These activation layers are fully differentiable and integrated into the neural network architecture as a module in the same way as a traditional final linear layer. 
+As such, they do not require or depend on external training and do not use expectation maximization.
+They are drop in replacements for the final linear layer.
+
+Importantly, these activation layers exhibit both discriminative and generative properties. 
+The neural network model $F(X;\theta_F)$ transforms the data $X$ into a latent space $Z = F(X;\theta_F)$, and the final activation layer estimates the probability densities $p(X)$, $p(Y;X)$ and $p(Y|X)$ by fitting a parametric model to the latent representation $Z$.
+
+\subsubsection{Axis Aligned Gaussian Mixture Model Layer}
+
+The AAGMM layer defines a set of $K$ trainable clusters, one cluster per label category. 
+Each cluster $k=1 \dots K$ has a cluster center $\mu_k$ and cluster covariance $\Sigma_k$. 
+The prior probability of any given sample $X_i$ is defined by the mixture of cluster probability densities over the latent representation $Z_i$ as follows,
+
+\begin{equation}
+	\begin{aligned}
+		\label{eq_px}
+		&p(X_i) = \sum_{k=1}^K \mathcal{N} (Z_i, \mu_{k}, \Sigma_k)
+		\\[10pt]
+		&\textit{where} \quad Z_i = F(X_i, \theta_F)
+	\end{aligned}
+\end{equation}
+
+Where $\mathcal{N}(Z_i, \mu_k, \Sigma_k)$ represents the multivariate gaussian pdf with centroid $\mu$ and covariance $\Sigma_k$. 
+AAGMM is axis aligned because $\Sigma_k$ is a diagonal matrix, as such the Normal pdf simplifies to the joint density of the pdfs along each of the $D$ axes as follows,
+
+\begin{equation}
+	\begin{aligned}
+		\mathcal{N} (X_i, \mu_{k}, \Sigma_k) &=  \prod_{d=1}^D \frac{1}{\sigma_{k,d}\sqrt{2 \pi}} exp \Big( \frac{Z_{i,d} - \mu_{k,d}} {\sigma_{k,d}} \Big)^2 \\[10pt]
+		&\textit{where} \quad \sigma^2_{k,d} = \Sigma_{k,d,d}
+	\end{aligned}
+\end{equation}
+
+As there is one cluster per label category, the joint probability for sample $i$ with label assignment $k$, $p(Y_k,X_i)$ is the given by the normal pdf of the $k^{th}$ cluster,
+
+\begin{equation}
+	\label{eq_pyx}
+	p(Y_{i,k},X_i) = \mathcal{N} (Z_i, \mu_{k}, \Sigma_k) \end{equation}
+
+By simple Bayesian identity, the posterior probability $\hat{Y}_k=p(Y_{k}|X_i)$ can therefore be inferred from eq \ref{eq_px} and \ref{eq_pyx} as follows,
+
+\begin{equation}
+	\hat{Y}_{i,k} = p(Y_{i,k}|X_i) = \frac{p(Y_{i,k}, X_i)}{p(X_i)}
+\end{equation}
+
+%The $\mu_k$ and $\Sigma_k$ are trainable parameters and are trained as part of the gradient descent procedure.  The posterior probabilities $\hat{Y}_{i,c} = p(Y_i=c|X_i)$ are calculated by making use of a Bayesian identity $p(b|a) = p(b,a)/p(a)$, along with mutual exclusion of the label categories as follows,
 %
-%The first four gaussian moments being identity/zero increasingly constrain the model embedding space right before the last layer. 
-%Moment1 (cluster mean position) should have zero distance to the learned cluster centroids. 
-%Moment2 (cluster variance) should be the identity matrix.
-%Moment3 (cluster skew) should be zero.
-%Moment4 (cluster kurtosis) should be the identity matrix. 
-%We explore how no constraints, moment1, moment1-2, and moment1-4 impact the final learned model accuracy.
+%\begin{equation}
+%p(Y_i=c|X_i) = \frac{p(Y_i=c,X_i)}{\sum_{j=1}^C}
+%\end{equation}
 
-\subsection{Fully Connected Replacements}
+%as follows,
+%
+%\begin{equation}
+%\begin{aligned}
+%\mathcal{N} (X_i, \mu_{k}, \Sigma_d) = \\
+%(d \pi)^{- \frac{d}{2}}det(\Sigma_k)^{- \frac{1}{2}} \\
+%exp\Big(-\frac{1}{2}(X_i-\mu_k)^t \Sigma^{-1} (X_i-\mu_k)\Big)
+%\end{aligned}
+%\end{equation}
 
-\subsubsection{KMeans}
+\subsubsection{KMeans Layer}
 
-\subsubsection{Differentiable Axis Aligned Gaussian Mixture Model}
+The KMeans final layer is a more restrictive form of the AAGMM layer, in the sense that we impose an additional constraint that the gaussian covariance matrix $\Sigma_k$ for each cluster center $k$ is the $[D \times D]$ identity matrix. 
+This constraint yields spherical cluster centers similar to how the traditional KMeans algorithm also assumes spherical clusters.
+%It is notable, that in both cases, the AAGMM layer and the KMeans layer are not trained using the KMeans algorithm, or with any form of expectation maximization.  Rather, they are trained by gradient descent as a fully integrated module within the network architecture.  
 
+%The KMeans activation layer defines a set of C trainable cluster centers, one cluster center per label category.  This layer is called a KMeans layer because, like KMeans, it makes use of equal-variance gaussians to define the prior $p(X)$.  However, it is not trained using the KMeans algorithm, but instead by making use of cross entropy loss as part of the neural network model.  We define $K$ $D$-dimensional cluster centers $\mu_1 \ldots \mu_K$, one center per label category.  This constitutes a generative model, where the prior probability of any given sample $X_i$ is defined in terms of the cluster centers as follows
 
-\subsection{Embedding Constraints}
+\subsection{Semi-parametric Embedding Constraints}
 
-\subsubsection{L2}
+We introduce and evaluate a series of embedding constraints based on the Method of Moments (MoM). 
+%MoM constraints typically use the L2 norm to constrain the.  % TODO clarification for this sentence?
+As our goal is semi-supervised classification, the primary goal is to minimize the expected difference between $Y$ and $\hat{Y}$ through cross entropy loss. 
+However, if one were to train the model without any embedding constraints, then it is possible that the model could learn a good decision boundary for the posteriors $p(Y|X)$ but without actually modeling the probability of samples $p(X)$.
+The first four gaussian moments being identity/zero increasingly constrain the model latent embedding space. 
 
-\subsubsection{mean/covar}
+%Define $Z^k$, $X^k$, $Y^k$, and $\hat{Y}^k$, as the latents, samples, labels, and posteriors for the elements that are predicted to reside with label $Y^k$ as follows,
+%
+%\begin{equation}
+%(Z^k, X^k, Y^k, \hat{Y}^k) = \{(Z_i, X_i, Y_i, \hat{Y}_i) \; \; | \; \;  \underset{\rm j}{\rm argmax} \; \hat{Y}_{i,j}=k \}
+%\end{equation}
 
+\subsubsection{Moment1}
+
+This constraint encourages the learned cluster means to have zero distance to the ovserved centroids. 
+Define $pred_k$ as the set of indices $i=1 \dots K$ such that are predicted to be of category $k$ as follows,
+
+\begin{equation}
+	pred_k = \{i \;\; | \;\; \underset{j}{argmax} \; \hat{Y}_{i,j} \; \text{is equal to} \; k\}
+\end{equation}
+
+This embedding constraint ensures that cluster centers $\mu_k$ approximate the sample distribution of latent points that are part of cluster $k$, $E(Z_i|\hat{Y}_{i,k}=1)$. 
+The $L2$ norm is used as a loss function to constrain cluster centers as follows,
+
+\begin{equation}
+	\begin{aligned}
+		\mathcal{L}_{L2} = \sum_{k=1}^K \Bigm\lvert\Bigm\lvert \mu_k - \bar{Z} \Bigm\lvert\Bigm\lvert_2 \\[5pt]
+		\textit{where} \quad \bar{Z} = E_{i \in pred_k}Z_i
+	\end{aligned}
+\end{equation}
+
+\subsubsection{Moment2}
+
+Additionally, the L2 norm was also used to constraint the cluster covariance terms to the identity matrix.
+Although the AAGMM assumes a diagonal covariance matrix $\Sigma_k$, the mini-batch sample estimate of the covariance may exhibit off-diagonal terms, which represent
+
+\subsubsection{Moments 3 and 4}
+
+Moment3 encourages clusters to have zero skew. 
+% TODO {fill in with math if required? Or just remove the subsubsections and talk about all the moments in a few paragraphs}
+
+Moment4 encourages cluster kurtosis to be the identity matrix. 
+% TODO {fill in with math if required? Or just remove the subsubsections and talk about all the moments in a few paragraphs}
+
+\TODO {figure out how to talk about the moments 3 and 4, since all of our testing indicates that the GPU memory requirement is horrifying, and they are unstable as hell. As such they are not useful but as a baseline to compare the feasibility.}
 
 
 
 
 
 \section{Experiments}
+
+We evaluate our drop in final linear layer replacements on common SSL 
+
+\TODO {(majurski) continue writing here}
 
 
 \subsection{Ablation Study}
@@ -242,8 +345,11 @@ In this section, we explore the details of our proposed embedding constraints an
 
 
 
-\bibliographystyle{unsrt}
-\bibliography{refs}
-	
-	
+{
+	\small
+	\bibliographystyle{ieeenat_fullname}
+	\bibliography{refs}
+}
+
+
 \end{document}

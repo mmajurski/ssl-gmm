@@ -46,16 +46,15 @@ for folder_name in folder_names:
             continue
         # if config_dict['embedding_constraint'] != 'mean_covar' and config_dict['clip_grad'] == True:
         #     continue
-        if config_dict['embedding_dim'] == 8:
-            continue
+        # if config_dict['embedding_dim'] == 8:
+        #     continue
         # if config_dict['embedding_constraint'] == 'mean_covar':
         #     continue
         # if config_dict['last_layer'] == 'fc' and config_dict['clip_grad'] == True:
         #     continue
-        if config_dict['embedding_constraint'] == 'mean_covar' and config_dict['clip_grad'] == False:
-            continue
-        # if config_dict['embedding_constraint'] == 'mean_covar' and config_dict['num_labeled_datapoints'] == 40:
+        # if config_dict['embedding_constraint'] == 'mean_covar' and config_dict['clip_grad'] == False:
         #     continue
+
 
         config_dict = dict((k, config_dict[k]) for k in config_columns)
 
@@ -84,12 +83,17 @@ for folder_name in folder_names:
             dict_of_df_lists[key] = list()
         dict_of_df_lists[key].append(combined_dict)
 
-
-last_layers_list = ['fc','kmeans','aa_gmm','aa_gmm_d1']
+last_layers_list = ['fc','kmeans','aa_gmm']
 emb_dim_list = [32, 128]
 embedding_constraint_list = ['none','l2','mean_covar']
 num_labeled_datapoints_list = [40, 250]
 clip_grad_values = [True, False]
+if post_fix == 'cifar100':
+    last_layers_list = ['fc','kmeans','aa_gmm']
+    emb_dim_list = [32, 128]
+    embedding_constraint_list = ['none','l2']
+    num_labeled_datapoints_list = [400, 2500]
+    clip_grad_values = [True, False]
 for ll in last_layers_list:
     for emb in emb_dim_list:
         for emb_c in embedding_constraint_list:
@@ -97,10 +101,12 @@ for ll in last_layers_list:
                 for c in clip_grad_values:
                     if ll == 'fc' and emb_c != 'none':
                         continue
-                    # if ll == 'fc' and c:
-                    #     continue
-                    if emb_c == 'mean_covar' and not c:
+                    if ll == 'fc' and c:
                         continue
+                    if ll == 'aa_gmm' and not c:
+                        continue
+                    # if emb_c == 'mean_covar' and not c:
+                    #     continue
                     # if emb_c == 'mean_covar' and n == 40:
                     #     continue
                     d = {'trainer': 'fixmatch', 'last_layer': ll, 'embedding_dim': emb, 'embedding_constraint': emb_c, 'num_labeled_datapoints': n, 'clip_grad': c}
@@ -176,12 +182,45 @@ for config_key in dict_of_df_lists.keys():
     df_list.append(cd)
 
 results_df = pd.concat(df_list, axis=0)
+results_df.insert(5, 'clip_grad marginal utility', value=None)
 
 # split the pandas dataframe results_df into multiple dataframes based on the column num_labeled_datapoints
 # and save them to csv files
 for num_labeled_datapoints in results_df['num_labeled_datapoints'].unique():
+    #df = results_df[results_df['num_labeled_datapoints'] == num_labeled_datapoints]
+    #df.to_csv('results-{}-{}labels.csv'.format(post_fix, num_labeled_datapoints), index=False)
+
+    #print("******** {} ********".format(num_labeled_datapoints))
+    for ll in results_df['last_layer'].unique():
+        for emb in results_df['embedding_constraint'].unique():
+            for emb_c in results_df['embedding_dim'].unique():
+                df = results_df[results_df['num_labeled_datapoints'] == num_labeled_datapoints]
+                df = df[df['last_layer'] == ll]
+                df = df[df['embedding_constraint'] == emb]
+                df = df[df['embedding_dim'] == emb_c]
+                a = df[df['clip_grad'] == True]
+                b = df[df['clip_grad'] == False]
+                if ll != 'fc' and len(a) > 0 and len(b) > 0:
+                    idx = (results_df['num_labeled_datapoints'] == num_labeled_datapoints) & \
+                                               (results_df['last_layer'] == ll) & \
+                                               (results_df['embedding_constraint'] == emb) & \
+                                               (results_df['embedding_dim'] == emb_c) & \
+                                               (results_df['clip_grad'] == True)
+
+
+                    a = a['mean_test_accuracy'].values[0]
+                    b = b['mean_test_accuracy'].values[0]
+                    results_df.loc[idx, 'clip_grad marginal utility'] = a - b
+                    #df['clip_grad marginal utility'] = a - b
+
+                    #print("{},{},{}\tclip_grad = {}, without = {}, delta = {}".format(ll, emb, emb_c, a, b, a-b))
     df = results_df[results_df['num_labeled_datapoints'] == num_labeled_datapoints]
+    cols = list(df.columns)
+    cols.remove('clip_grad marginal utility')
+    cols = cols.insert(5, 'clip_grad marginal utility')
     df.to_csv('results-{}-{}labels.csv'.format(post_fix, num_labeled_datapoints), index=False)
+
+
 
     # for ll in results_df['last_layer'].unique():
     #     df = results_df[results_df['num_labeled_datapoints'] == num_labeled_datapoints]
