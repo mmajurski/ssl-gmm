@@ -18,6 +18,7 @@
 \usepackage{booktabs}
 \usepackage{placeins}
 \usepackage{tabularx}
+\usepackage{multirow}
 
 
 %
@@ -334,19 +335,35 @@ Moment4 encourages cluster kurtosis to be the identity matrix.
 
 \TODO {(majurski) add rows for embedding size}
 \begin{table*}[ht!]
-	\begin{tabularx}{\textwidth}{c|XXXXXX}
-		\multicolumn{1}{c|}{Last Layer}           & \multicolumn{5}{c}{CIFAR-10} \\ \hline\hline
-		\multicolumn{1}{c|}{}     & \multicolumn{5}{c}{40 Labels}            \\ \hline
-		\multicolumn{1}{c|}{Embedding Constraint} & None & Moment1 & Moment12 & Moment123 & Moment1234  \\ \hline
-		\multicolumn{1}{l|}{FullyConnected}   & $xx.yy$ \scriptsize{$\pm z.zz$}   & $xx.yy$ \scriptsize{$\pm z.zz$} & $xx.yy$ \scriptsize{$\pm z.zz$} & $xx.yy$ \scriptsize{$\pm z.zz$} & $xx.yy$ \scriptsize{$\pm z.zz$}  \\
-		\multicolumn{1}{l|}{KMeans}  & $xx.yy$ \scriptsize{$\pm z.zz$}    & $xx.yy$ \scriptsize{$\pm z.zz$} & $xx.yy$ \scriptsize{$\pm z.zz$} & $xx.yy$ \scriptsize{$\pm z.zz$} & $xx.yy$ \scriptsize{$\pm z.zz$}  \\
-		\multicolumn{1}{l|}{AAGMM}   & $xx.yy$ \scriptsize{$\pm z.zz$}    & $xx.yy$ \scriptsize{$\pm z.zz$} & $xx.yy$ \scriptsize{$\pm z.zz$} & $xx.yy$ \scriptsize{$\pm z.zz$} & $xx.yy$ \scriptsize{$\pm z.zz$} \\
+	\begin{tabularx}{\textwidth}{c|c|XXXXXX}
+		        \multicolumn{6}{c}{CIFAR-10} \\ \hline\hline
+		 Last Layer &   Emb Dim   & \multicolumn{5}{c}{40 Labels}            \\ \hline
+		Embedding Constraint  &  & None & Moment1 & Moment12 & Moment123 & Moment1234  \\ \hline
+		 & 128  & $xx.yy$ \scriptsize{$\pm z.zz$}   & $xx.yy$ \scriptsize{$\pm z.zz$} & $xx.yy$ \scriptsize{$\pm z.zz$} & $xx.yy$ \scriptsize{$\pm z.zz$} & $xx.yy$ \scriptsize{$\pm z.zz$}  \\
+		 FullyConnected & 32  & $xx.yy$ \scriptsize{$\pm z.zz$}   & $xx.yy$ \scriptsize{$\pm z.zz$} & $xx.yy$ \scriptsize{$\pm z.zz$} & $xx.yy$ \scriptsize{$\pm z.zz$} & $xx.yy$ \scriptsize{$\pm z.zz$}  \\
+		  & 8  & $xx.yy$ \scriptsize{$\pm z.zz$}   & $xx.yy$ \scriptsize{$\pm z.zz$} & $xx.yy$ \scriptsize{$\pm z.zz$} & $xx.yy$ \scriptsize{$\pm z.zz$} & $xx.yy$ \scriptsize{$\pm z.zz$}  \\
+		\hline
+		 & 128  & $xx.yy$ \scriptsize{$\pm z.zz$}    & $xx.yy$ \scriptsize{$\pm z.zz$} & $xx.yy$ \scriptsize{$\pm z.zz$} & $xx.yy$ \scriptsize{$\pm z.zz$} & $xx.yy$ \scriptsize{$\pm z.zz$}  \\
+		KMeans & 32  & $xx.yy$ \scriptsize{$\pm z.zz$}    & $xx.yy$ \scriptsize{$\pm z.zz$} & $xx.yy$ \scriptsize{$\pm z.zz$} & $xx.yy$ \scriptsize{$\pm z.zz$} & $xx.yy$ \scriptsize{$\pm z.zz$}  \\
+		 & 8  & $xx.yy$ \scriptsize{$\pm z.zz$}    & $xx.yy$ \scriptsize{$\pm z.zz$} & $xx.yy$ \scriptsize{$\pm z.zz$} & $xx.yy$ \scriptsize{$\pm z.zz$} & $xx.yy$ \scriptsize{$\pm z.zz$}  \\
+		\hline
+		  & 128  & $xx.yy$ \scriptsize{$\pm z.zz$}    & $xx.yy$ \scriptsize{$\pm z.zz$} & $xx.yy$ \scriptsize{$\pm z.zz$} & $xx.yy$ \scriptsize{$\pm z.zz$} & $xx.yy$ \scriptsize{$\pm z.zz$} \\
+		AAGMM  & 32  & $xx.yy$ \scriptsize{$\pm z.zz$}    & $xx.yy$ \scriptsize{$\pm z.zz$} & $xx.yy$ \scriptsize{$\pm z.zz$} & $xx.yy$ \scriptsize{$\pm z.zz$} & $xx.yy$ \scriptsize{$\pm z.zz$} \\
+		  & 8  & $xx.yy$ \scriptsize{$\pm z.zz$}    & $xx.yy$ \scriptsize{$\pm z.zz$} & $xx.yy$ \scriptsize{$\pm z.zz$} & $xx.yy$ \scriptsize{$\pm z.zz$} & $xx.yy$ \scriptsize{$\pm z.zz$} \\
 		\hline\hline
-		\multicolumn{1}{c|}{}     & \multicolumn{5}{c}{250 Labels}            \\ \hline
-		\multicolumn{1}{c|}{Embedding Constraint} & None & Moment1 & Moment12 & Moment123 & Moment1234  \\ \hline
-		\multicolumn{1}{l|}{FullyConnected}   & $xx.yy$ \scriptsize{$\pm z.zz$}   & $xx.yy$ \scriptsize{$\pm z.zz$} & $xx.yy$ \scriptsize{$\pm z.zz$} & $xx.yy$ \scriptsize{$\pm z.zz$} & $xx.yy$ \scriptsize{$\pm z.zz$}  \\
-		\multicolumn{1}{l|}{KMeans}  & $xx.yy$ \scriptsize{$\pm z.zz$}    & $xx.yy$ \scriptsize{$\pm z.zz$} & $xx.yy$ \scriptsize{$\pm z.zz$} & $xx.yy$ \scriptsize{$\pm z.zz$} & $xx.yy$ \scriptsize{$\pm z.zz$}  \\
-		\multicolumn{1}{l|}{AAGMM}   & $xx.yy$ \scriptsize{$\pm z.zz$}    & $xx.yy$ \scriptsize{$\pm z.zz$}& $xx.yy$ \scriptsize{$\pm z.zz$} & $xx.yy$ \scriptsize{$\pm z.zz$} & $xx.yy$ \scriptsize{$\pm z.zz$}  \\
+		 Last Layer  &   Emb Dim  & \multicolumn{5}{c}{250 Labels}            \\ \hline
+		\multicolumn{1}{c|}{Embedding Constraint} &  & None & Moment1 & Moment12 & Moment123 & Moment1234  \\ \hline
+		 & ???   & $xx.yy$ \scriptsize{$\pm z.zz$}   & $xx.yy$ \scriptsize{$\pm z.zz$} & $xx.yy$ \scriptsize{$\pm z.zz$} & $xx.yy$ \scriptsize{$\pm z.zz$} & $xx.yy$ \scriptsize{$\pm z.zz$}  \\
+		FullyConnected & ???   & $xx.yy$ \scriptsize{$\pm z.zz$}   & $xx.yy$ \scriptsize{$\pm z.zz$} & $xx.yy$ \scriptsize{$\pm z.zz$} & $xx.yy$ \scriptsize{$\pm z.zz$} & $xx.yy$ \scriptsize{$\pm z.zz$}  \\
+		 & ???   & $xx.yy$ \scriptsize{$\pm z.zz$}   & $xx.yy$ \scriptsize{$\pm z.zz$} & $xx.yy$ \scriptsize{$\pm z.zz$} & $xx.yy$ \scriptsize{$\pm z.zz$} & $xx.yy$ \scriptsize{$\pm z.zz$}  \\
+		 \hline
+		  & ??? & $xx.yy$ \scriptsize{$\pm z.zz$}    & $xx.yy$ \scriptsize{$\pm z.zz$} & $xx.yy$ \scriptsize{$\pm z.zz$} & $xx.yy$ \scriptsize{$\pm z.zz$} & $xx.yy$ \scriptsize{$\pm z.zz$}  \\
+		KMeans  & ??? & $xx.yy$ \scriptsize{$\pm z.zz$}    & $xx.yy$ \scriptsize{$\pm z.zz$} & $xx.yy$ \scriptsize{$\pm z.zz$} & $xx.yy$ \scriptsize{$\pm z.zz$} & $xx.yy$ \scriptsize{$\pm z.zz$}  \\
+		  & ??? & $xx.yy$ \scriptsize{$\pm z.zz$}    & $xx.yy$ \scriptsize{$\pm z.zz$} & $xx.yy$ \scriptsize{$\pm z.zz$} & $xx.yy$ \scriptsize{$\pm z.zz$} & $xx.yy$ \scriptsize{$\pm z.zz$}  \\
+		  \hline
+		 & ???   & $xx.yy$ \scriptsize{$\pm z.zz$}    & $xx.yy$ \scriptsize{$\pm z.zz$}& $xx.yy$ \scriptsize{$\pm z.zz$} & $xx.yy$ \scriptsize{$\pm z.zz$} & $xx.yy$ \scriptsize{$\pm z.zz$}  \\
+		AAGMM & ???   & $xx.yy$ \scriptsize{$\pm z.zz$}    & $xx.yy$ \scriptsize{$\pm z.zz$}& $xx.yy$ \scriptsize{$\pm z.zz$} & $xx.yy$ \scriptsize{$\pm z.zz$} & $xx.yy$ \scriptsize{$\pm z.zz$}  \\
+		 & ???   & $xx.yy$ \scriptsize{$\pm z.zz$}    & $xx.yy$ \scriptsize{$\pm z.zz$}& $xx.yy$ \scriptsize{$\pm z.zz$} & $xx.yy$ \scriptsize{$\pm z.zz$} & $xx.yy$ \scriptsize{$\pm z.zz$}  \\
 	\end{tabularx}
 	\caption{Error rate \% for CIFAR-10/100 SSL benchmark comparing various configurations of our method. Results are based on 6 runs.}
 	\label{table1}
