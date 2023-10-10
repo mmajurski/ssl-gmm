@@ -279,7 +279,7 @@ This constraint yields spherical cluster centers similar to how the traditional 
 
 %The KMeans activation layer defines a set of C trainable cluster centers, one cluster center per label category.  This layer is called a KMeans layer because, like KMeans, it makes use of equal-variance gaussians to define the prior $p(X)$.  However, it is not trained using the KMeans algorithm, but instead by making use of cross entropy loss as part of the neural network model.  We define $K$ $D$-dimensional cluster centers $\mu_1 \ldots \mu_K$, one center per label category.  This constitutes a generative model, where the prior probability of any given sample $X_i$ is defined in terms of the cluster centers as follows
 
-\subsection{Semi-parametric Embedding Constraints}
+\subsection{Method of Moments Embedding Constraints}
 
 We introduce and evaluate a series of embedding constraints based on the Method of Moments (MoM). 
 %MoM constraints typically use the L2 norm to constrain the.  % TODO clarification for this sentence?
@@ -365,7 +365,7 @@ Moment4 encourages cluster kurtosis to be the identity matrix.
 		AAGMM & ???   & $xx.yy$ \scriptsize{$\pm z.zz$}    & $xx.yy$ \scriptsize{$\pm z.zz$}& $xx.yy$ \scriptsize{$\pm z.zz$} & $xx.yy$ \scriptsize{$\pm z.zz$} & $xx.yy$ \scriptsize{$\pm z.zz$}  \\
 		 & ???   & $xx.yy$ \scriptsize{$\pm z.zz$}    & $xx.yy$ \scriptsize{$\pm z.zz$}& $xx.yy$ \scriptsize{$\pm z.zz$} & $xx.yy$ \scriptsize{$\pm z.zz$} & $xx.yy$ \scriptsize{$\pm z.zz$}  \\
 	\end{tabularx}
-	\caption{Error rate \% for CIFAR-10/100 SSL benchmark comparing various configurations of our method. Results are based on 6 runs.}
+	\caption{Error rate \% for CIFAR-10 SSL benchmark comparing various configurations of our method. Results are based on 6 runs.}
 	\label{table1}
 	
 \end{table*}
@@ -388,13 +388,13 @@ As prior work \cite{sohn2020fixmatch} has noted, resulting model quality is high
 
 \begin{table}[htbp]
 	\begin{tabular}{c|cc}
-		\multicolumn{1}{c|}{Method}           & \multicolumn{2}{c}{CIFAR-10} \\ \hline
-		\multicolumn{1}{c|}{Label Count}     & 40            & 250           \\
-		\multicolumn{1}{l|}{Supervised} & $77.18$ \scriptsize{$\pm1.32$}   & $56.24$ \scriptsize{$\pm3.41$}   \\ \hline
-		\multicolumn{1}{l|}{FixMatch}   & $13.81$ \scriptsize{$\pm3.37$}   & $5.07$ \scriptsize{$\pm0.65$}     \\
-		\multicolumn{1}{l|}{FlexMatch}  & $5.29$ \scriptsize{$\pm0.29$}    & $4.97$ \scriptsize{$\pm0.07$}    \\
-		\multicolumn{1}{l|}{SimMatch}   & $5.38$ \scriptsize{$\pm0.01$}    & $5.36$ \scriptsize{$\pm0.08$}    \\
-		\multicolumn{1}{l|}{SimMatchV2} & $4.90$ \scriptsize{$\pm0.16$}    & $5.04$ \scriptsize{$\pm0.09$}    \\ \hline
+		Method          & \multicolumn{2}{c}{CIFAR-10} \\ \hline
+		Label Count     & 40            & 250           \\
+		Supervised & $77.18$ \scriptsize{$\pm1.32$}   & $56.24$ \scriptsize{$\pm3.41$}   \\ \hline
+		FixMatch   & $13.81$ \scriptsize{$\pm3.37$}   & $5.07$ \scriptsize{$\pm0.65$}     \\
+		FlexMatch  & $5.29$ \scriptsize{$\pm0.29$}    & $4.97$ \scriptsize{$\pm0.07$}    \\
+		SimMatch   & $5.38$ \scriptsize{$\pm0.01$}    & $5.36$ \scriptsize{$\pm0.08$}    \\
+		SimMatchV2 & $4.90$ \scriptsize{$\pm0.16$}    & $5.04$ \scriptsize{$\pm0.09$}    \\ \hline
 		Ours (TBD)                            & $xx.yy$ \scriptsize{$\pm z.zz$}           & $xx.yy$ \scriptsize{$\pm z.zz$}           
 	\end{tabular}
 	\caption{Error rate \% for CIFAR-10 SSL benchmark comparing to state of the art results. Results are copied from USB \cite{wang2022usb} unless otherwise stated. USB results are based on 3 runs. FixMatch \cite{sohn2020fixmatch} results are based on 5 runs.}
@@ -410,13 +410,14 @@ As prior work \cite{sohn2020fixmatch} has noted, resulting model quality is high
 
 \begin{table}[htbp]
 	\begin{tabular}{c|cc}
-		\multicolumn{1}{c|}{Method}            & \multicolumn{2}{c}{CIFAR-100} \\ \hline
-		\multicolumn{1}{c|}{Label Count}           & 400           & 2500          \\
-		\multicolumn{1}{l|}{Supervised}   & $89.6$ \scriptsize{$\pm0.43$}    & $58.33$ \scriptsize{$\pm1.41$}   \\ \hline
-		\multicolumn{1}{l|}{FixMatch}      & $48.85$ \scriptsize{$\pm1.75$}   & $28.29$ \scriptsize{$\pm0.11$}   \\
-		\multicolumn{1}{l|}{FlexMatch}   & $40.73$ \scriptsize{$\pm1.44$}   & $26.17$ \scriptsize{$\pm0.18$}   \\
-		\multicolumn{1}{l|}{SimMatch}    & $39.32$ \scriptsize{$\pm0.72$}   & $26.21$ \scriptsize{$\pm0.37$}   \\
-		\multicolumn{1}{l|}{SimMatchV2}    & $36.68$ \scriptsize{$\pm0.86$}   & $26.66$ \scriptsize{$\pm0.38$}   \\ \hline
+		Method            & \multicolumn{2}{c}{CIFAR-100} \\ 
+		\hline
+		Label Count           & 400           & 2500          \\
+		Supervised   & $89.6$ \scriptsize{$\pm0.43$}    & $58.33$ \scriptsize{$\pm1.41$}   \\ \hline
+		FixMatch      & $48.85$ \scriptsize{$\pm1.75$}   & $28.29$ \scriptsize{$\pm0.11$}   \\
+		FlexMatch   & $40.73$ \scriptsize{$\pm1.44$}   & $26.17$ \scriptsize{$\pm0.18$}   \\
+		SimMatch    & $39.32$ \scriptsize{$\pm0.72$}   & $26.21$ \scriptsize{$\pm0.37$}   \\
+		SimMatchV2    & $36.68$ \scriptsize{$\pm0.86$}   & $26.66$ \scriptsize{$\pm0.38$}   \\ \hline
 		Ours (TBD)                            & $xx.yy$ \scriptsize{$\pm z.zz$}           & $xx.yy$ \scriptsize{$\pm z.zz$}  
 	\end{tabular}
 	\caption{Error rate \% for CIFAR-100 SSL benchmark comparing to state of the art results. Results are copied from USB \cite{wang2022usb} unless otherwise stated. USB results are based on 3 runs. FixMatch \cite{sohn2020fixmatch} results are based on 5 runs.}
@@ -425,6 +426,27 @@ As prior work \cite{sohn2020fixmatch} has noted, resulting model quality is high
 
 \subsection{Ablation Study}
 
+\begin{table}[htbp]
+	% TODO include a histogram showing the bi-modal behavior of the final accuracy numbers
+	\begin{tabular}{c|c}
+		Run Number            & Our method on CIFAR-10 \\ 
+		\hline
+		Label Count           & 40                     \\
+		\hline
+		Run 1   & $xx.yy$ \scriptsize{$\pm z.zz$}     \\ 
+		Run 2      & $xx.yy$ \scriptsize{$\pm z.zz$}    \\
+		Run 3   & $xx.yy$ \scriptsize{$\pm z.zz$}   \\
+		Run 4    & $xx.yy$ \scriptsize{$\pm z.zz$}   \\
+		Run 5    & $xx.yy$ \scriptsize{$\pm z.zz$}     \\ 
+		Run 6    & $xx.yy$ \scriptsize{$\pm z.zz$}     \\ 
+		Run 7    & $xx.yy$ \scriptsize{$\pm z.zz$}     \\ 
+		Run 8    & $xx.yy$ \scriptsize{$\pm z.zz$}     \\ 
+		Run 9    & $xx.yy$ \scriptsize{$\pm z.zz$}     \\ 
+		Run 10    & $xx.yy$ \scriptsize{$\pm z.zz$}     \\ 
+	\end{tabular}
+	\caption{Error rate \% for CIFAR-10 SSL benchmark showing the run-to-run variance depending on the quality of the 40 labels selected from the full population.}
+	\label{table4}
+\end{table}
 
 % TODO write up Things we tried which didn't work: Gaussian Moments 1-4, Cauchy Mixture model.
 

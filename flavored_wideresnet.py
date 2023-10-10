@@ -139,6 +139,10 @@ class WideResNetMajurski(nn.Module):
 
         self.count = 0
 
+        self.fc1 = nn.Linear(channels[3], channels[3])
+        self.fc2 = nn.Linear(channels[3], channels[3])
+        self.fc3 = nn.Linear(channels[3], channels[3])
+
         if self.last_layer_name == 'fc':
             self.last_layer = nn.Linear(self.embedding_dim, self.num_classes)
         elif self.last_layer_name == 'aa_gmm':
@@ -166,6 +170,10 @@ class WideResNetMajurski(nn.Module):
         out = self.relu(self.bn1(out))
         out = F.adaptive_avg_pool2d(out, 1)
         embedding = out.view(-1, self.channels)
+
+        embedding = self.relu(self.fc1(embedding))
+        embedding = self.relu(self.fc2(embedding))
+        embedding = self.relu(self.fc3(embedding))
 
         if self.emb_linear is not None:
             embedding = self.emb_linear(embedding)
