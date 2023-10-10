@@ -152,9 +152,9 @@ for config_key in dict_of_df_lists.keys():
     removed_mta = np.asarray(mta)[idx].tolist()
     mta = np.asarray(mta)[np.logical_not(idx)].tolist()
 
-    if len(ta) < 5:
+    if len(ta) < 6:
         print(config_key)
-        print("missing {}".format(5 - len(ta)))
+        print("missing {}".format(6 - len(ta)))
 
     a = dict_of_df_lists[config_key][0]
     del a['test_accuracy']

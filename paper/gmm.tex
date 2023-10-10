@@ -16,6 +16,8 @@
 \usepackage{amsmath}
 \usepackage{amssymb}
 \usepackage{booktabs}
+\usepackage{placeins}
+\usepackage{tabularx}
 
 
 %
@@ -160,7 +162,7 @@ The goal of SSL is to produce a trained model of equivalent accuracy to fully su
 
 \subsection{Pseudo-Labeling}
 Self-supervised learning was among the initial approaches employed in the context of semi-supervised learning to annotate unlabeled images. 
-This technique involves the initial training of a classifier with a limited set of labeled samples and incorporates pseudo-labels into the gradient descent process, exceeding a predefined threshold \cite{yarowsky1995unsupervised, mcclosky2006reranking, olivier2006semi,zhai2019s4l,livieris2019predicting,rosenberg2005semi}. 
+This technique involves the initial training of a classifier with a limited set of labeled samples and incorporates pseudo-labels into the gradient descent process, exceeding a predefined threshold \cite{yarowsky1995unsupervised, mcclosky2006reranking, olivier2006semi,zhai2019s4l,livieris2019predicting,rosenberg2005semi,menon2020deep}. 
 A closely related method to self-training is co-training, where a given dataset is represented as two distinct feature sets \cite{blum1998combining}. 
 These independent sample sets are subsequently trained separately using two distinct models, and the sample predictions surpassing predetermined thresholds are utilized in the final model training process \cite{blum1998combining,prakash2014survey}.
 A notably advanced approach to pseudo-labeling is the Mean Teacher algorithm \cite{tarvainen2017mean}, which leverages exponential moving averages of model parameters to acquire a notably more stable target prediction. 
@@ -174,7 +176,7 @@ This approach implicitly enforces a smoothness assumption, promoting coherence b
 In other words, the model should be able to predict the unlabeled sample x exactly the same way it predicts the class for Augmented(x) \cite{berthelot2019mixmatch,sohn2020fixmatch,berthelot2019remixmatch,mustafa2020transformation}. 
 In addition to evaluating image-wise augmentations, recent research has demonstrated that incorporating class-wise and instance-based consistencies yields superior performance outcomes \cite{zheng2022simmatch,li2021comatch}. 
 Similarly, using consistencies between augmentations, of the predictions and low-dimensional embeddings of the strong and weak augmentations of the unlabeled images in a graph based setup has shown improvement over class-wise and instance-based consistencies \cite{zheng2023simmatchv2}.
-Finally, pseudo-labeling filtering based on consistence between strongly augmented views shows convergence improvement \cite{kim2022conmatch}.
+Finally, pseudo-labeling filtering based on consistence between strongly augmented views, gaussian filtering and embedding based nearest neighbor filtering shows convergence improvement \cite{kim2022conmatch,menon2022semisupervised}.
 
 \subsection{Embedding Clustering/Constraints}
 
@@ -201,7 +203,7 @@ We add to FixMatch an early-stopping condition when the model has not improved f
 Additionally, we employ a cyclic learning rate scheduler to vary the learning rate by a factor of $\pm2.0$ within each epoch to make training less dependent upon exact learning rate value.
 
 Both the linear layer replacements and the embedding constraints explored herein represent increasing levels of prescription about how the final embedding space should be arranged compared to a final linear layer.
-The idea of leveraging clusters in embedding space is not new \cite{caron2018deep,caron2020unsupervised}, but we extend the core idea with a novel differentiable model of learned cluster centroids and GMMs.
+The idea of leveraging clusters in embedding space is not new \cite{caron2018deep,caron2020unsupervised,enguehard2019semi}, but we extend the core idea with a novel differentiable model of learned cluster centroids and GMMs.
 
 \subsection{Alternative Final Layers}
 
@@ -330,19 +332,91 @@ Moment4 encourages cluster kurtosis to be the identity matrix.
 
 \section{Experiments}
 
-We evaluate our drop in final linear layer replacements on common SSL 
+\TODO {(majurski) add rows for embedding size}
+\begin{table*}[ht!]
+	\begin{tabularx}{\textwidth}{c|XXXXXX}
+		\multicolumn{1}{c|}{Last Layer}           & \multicolumn{5}{c}{CIFAR-10} \\ \hline\hline
+		\multicolumn{1}{c|}{}     & \multicolumn{5}{c}{40 Labels}            \\ \hline
+		\multicolumn{1}{c|}{Embedding Constraint} & None & Moment1 & Moment12 & Moment123 & Moment1234  \\ \hline
+		\multicolumn{1}{l|}{FullyConnected}   & $xx.yy$ \scriptsize{$\pm z.zz$}   & $xx.yy$ \scriptsize{$\pm z.zz$} & $xx.yy$ \scriptsize{$\pm z.zz$} & $xx.yy$ \scriptsize{$\pm z.zz$} & $xx.yy$ \scriptsize{$\pm z.zz$}  \\
+		\multicolumn{1}{l|}{KMeans}  & $xx.yy$ \scriptsize{$\pm z.zz$}    & $xx.yy$ \scriptsize{$\pm z.zz$} & $xx.yy$ \scriptsize{$\pm z.zz$} & $xx.yy$ \scriptsize{$\pm z.zz$} & $xx.yy$ \scriptsize{$\pm z.zz$}  \\
+		\multicolumn{1}{l|}{AAGMM}   & $xx.yy$ \scriptsize{$\pm z.zz$}    & $xx.yy$ \scriptsize{$\pm z.zz$} & $xx.yy$ \scriptsize{$\pm z.zz$} & $xx.yy$ \scriptsize{$\pm z.zz$} & $xx.yy$ \scriptsize{$\pm z.zz$} \\
+		\hline\hline
+		\multicolumn{1}{c|}{}     & \multicolumn{5}{c}{250 Labels}            \\ \hline
+		\multicolumn{1}{c|}{Embedding Constraint} & None & Moment1 & Moment12 & Moment123 & Moment1234  \\ \hline
+		\multicolumn{1}{l|}{FullyConnected}   & $xx.yy$ \scriptsize{$\pm z.zz$}   & $xx.yy$ \scriptsize{$\pm z.zz$} & $xx.yy$ \scriptsize{$\pm z.zz$} & $xx.yy$ \scriptsize{$\pm z.zz$} & $xx.yy$ \scriptsize{$\pm z.zz$}  \\
+		\multicolumn{1}{l|}{KMeans}  & $xx.yy$ \scriptsize{$\pm z.zz$}    & $xx.yy$ \scriptsize{$\pm z.zz$} & $xx.yy$ \scriptsize{$\pm z.zz$} & $xx.yy$ \scriptsize{$\pm z.zz$} & $xx.yy$ \scriptsize{$\pm z.zz$}  \\
+		\multicolumn{1}{l|}{AAGMM}   & $xx.yy$ \scriptsize{$\pm z.zz$}    & $xx.yy$ \scriptsize{$\pm z.zz$}& $xx.yy$ \scriptsize{$\pm z.zz$} & $xx.yy$ \scriptsize{$\pm z.zz$} & $xx.yy$ \scriptsize{$\pm z.zz$}  \\
+	\end{tabularx}
+	\caption{Error rate \% for CIFAR-10/100 SSL benchmark comparing various configurations of our method. Results are based on 6 runs.}
+	\label{table1}
+	
+\end{table*}
 
-\TODO {(majurski) continue writing here}
 
+We evaluate enhancements replacements on common SSL datasets CIFAR-10/100 \cite{cifar10} under various label scarcities. 
+% FixMatch \cite{sohn2020fixmatch}, CoMatch \cite{li2021comatch}, and SimMatch \cite{zheng2022simmatch} serve as our primary comparisons.
+When comparing against other CIFAR-10/100 SSl benchmark results (like SimMatch \cite{zheng2022simmatch}) it is unclear how the labeled sampled were selected. 
+For our evaluation, for each model training run, the required number of labeled samples are drawn without replacement from the training population of the dataset.
+All data not in this labeled subset is used as unlabeled data (i.e. labels are not used).
+We evaluate our method against CIFAR-10 at 250 and 40 labeled data points, and CIFAR-100 at 400 and 2500 labels. 
+This corresponds to 4 or 25 samples per class.
+As prior work \cite{sohn2020fixmatch} has noted, resulting model quality is highly variable when only 4 samples are selected per class, as the quality and usefulness of the specific 4 samples can vary drastically. 
+
+
+
+\subsection{CIFAR-10}
+
+\TODO {document hyper-parameters}
+
+\begin{table}[htbp]
+	\begin{tabular}{c|cc}
+		\multicolumn{1}{c|}{Method}           & \multicolumn{2}{c}{CIFAR-10} \\ \hline
+		\multicolumn{1}{c|}{Label Count}     & 40            & 250           \\
+		\multicolumn{1}{l|}{Supervised} & $77.18$ \scriptsize{$\pm1.32$}   & $56.24$ \scriptsize{$\pm3.41$}   \\ \hline
+		\multicolumn{1}{l|}{FixMatch}   & $13.81$ \scriptsize{$\pm3.37$}   & $5.07$ \scriptsize{$\pm0.65$}     \\
+		\multicolumn{1}{l|}{FlexMatch}  & $5.29$ \scriptsize{$\pm0.29$}    & $4.97$ \scriptsize{$\pm0.07$}    \\
+		\multicolumn{1}{l|}{SimMatch}   & $5.38$ \scriptsize{$\pm0.01$}    & $5.36$ \scriptsize{$\pm0.08$}    \\
+		\multicolumn{1}{l|}{SimMatchV2} & $4.90$ \scriptsize{$\pm0.16$}    & $5.04$ \scriptsize{$\pm0.09$}    \\ \hline
+		Ours (TBD)                            & $xx.yy$ \scriptsize{$\pm z.zz$}           & $xx.yy$ \scriptsize{$\pm z.zz$}           
+	\end{tabular}
+	\caption{Error rate \% for CIFAR-10 SSL benchmark comparing to state of the art results. Results are copied from USB \cite{wang2022usb} unless otherwise stated. USB results are based on 3 runs. FixMatch \cite{sohn2020fixmatch} results are based on 5 runs.}
+	\label{table2}
+\end{table}
+
+%\FloatBarrier
+
+\subsection{CIFAR-100}
+
+\TODO {document hyper-parameters}
+
+
+\begin{table}[htbp]
+	\begin{tabular}{c|cc}
+		\multicolumn{1}{c|}{Method}            & \multicolumn{2}{c}{CIFAR-100} \\ \hline
+		\multicolumn{1}{c|}{Label Count}           & 400           & 2500          \\
+		\multicolumn{1}{l|}{Supervised}   & $89.6$ \scriptsize{$\pm0.43$}    & $58.33$ \scriptsize{$\pm1.41$}   \\ \hline
+		\multicolumn{1}{l|}{FixMatch}      & $48.85$ \scriptsize{$\pm1.75$}   & $28.29$ \scriptsize{$\pm0.11$}   \\
+		\multicolumn{1}{l|}{FlexMatch}   & $40.73$ \scriptsize{$\pm1.44$}   & $26.17$ \scriptsize{$\pm0.18$}   \\
+		\multicolumn{1}{l|}{SimMatch}    & $39.32$ \scriptsize{$\pm0.72$}   & $26.21$ \scriptsize{$\pm0.37$}   \\
+		\multicolumn{1}{l|}{SimMatchV2}    & $36.68$ \scriptsize{$\pm0.86$}   & $26.66$ \scriptsize{$\pm0.38$}   \\ \hline
+		Ours (TBD)                            & $xx.yy$ \scriptsize{$\pm z.zz$}           & $xx.yy$ \scriptsize{$\pm z.zz$}  
+	\end{tabular}
+	\caption{Error rate \% for CIFAR-100 SSL benchmark comparing to state of the art results. Results are copied from USB \cite{wang2022usb} unless otherwise stated. USB results are based on 3 runs. FixMatch \cite{sohn2020fixmatch} results are based on 5 runs.}
+	\label{table3}
+\end{table}
 
 \subsection{Ablation Study}
 
 
-
-\section{Conclusions}
-
+% TODO write up Things we tried which didn't work: Gaussian Moments 1-4, Cauchy Mixture model.
 
 
+
+\section{Conclusion}
+
+
+\section{Acknowledgment}
 
 
 {

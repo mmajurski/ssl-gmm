@@ -97,6 +97,9 @@ def train(args):
     if args.embedding_constraint == 'mean_covar':
         logging.info("Enabling clip_grad for mean_covar constraint.")
         args.clip_grad = True
+    if args.last_layer == 'aa_gmm':
+        logging.info("Enabling clip_grad for aa_gmm.")
+        args.clip_grad = True
 
     logging.info(args)
 
@@ -181,8 +184,10 @@ def train(args):
         emb_constraint = embedding_constraints.MeanCovar()
     elif args.embedding_constraint == 'l2':
         emb_constraint = embedding_constraints.Mean()
-    elif args.embedding_constraint == 'gauss_moment':
-        emb_constraint = embedding_constraints.GaussianMoments(embedding_dim=args.embedding_dim, num_classes=args.num_classes)
+    elif args.embedding_constraint == 'gauss_moment3':
+        emb_constraint = embedding_constraints.GaussianMoments3(embedding_dim=args.embedding_dim, num_classes=args.num_classes)
+    elif args.embedding_constraint == 'gauss_moment4':
+        emb_constraint = embedding_constraints.GaussianMoments3(embedding_dim=args.embedding_dim, num_classes=args.num_classes)
     else:
         raise RuntimeError("Invalid embedding constraint type: {}".format(args.embedding_constraint))
 
