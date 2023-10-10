@@ -187,7 +187,7 @@ def train(args):
     elif args.embedding_constraint == 'gauss_moment3':
         emb_constraint = embedding_constraints.GaussianMoments3(embedding_dim=args.embedding_dim, num_classes=args.num_classes)
     elif args.embedding_constraint == 'gauss_moment4':
-        emb_constraint = embedding_constraints.GaussianMoments3(embedding_dim=args.embedding_dim, num_classes=args.num_classes)
+        emb_constraint = embedding_constraints.GaussianMoments4(embedding_dim=args.embedding_dim, num_classes=args.num_classes)
     else:
         raise RuntimeError("Invalid embedding constraint type: {}".format(args.embedding_constraint))
 

@@ -346,9 +346,6 @@ class GaussianMoments3(torch.nn.Module):
         cluster_weight_rep = cluster_weight_rep.unsqueeze(3).repeat((1, 1, 1, self.dim))
         moment3_weight = cluster_weight_rep * self.moment3_weight.unsqueeze(0).repeat((self.num_classes, 1, 1, 1))
 
-        cluster_weight_rep = cluster_weight_rep.unsqueeze(4).repeat((1, 1, 1, 1, self.dim))
-        moment4_weight = cluster_weight_rep * self.moment4_weight.unsqueeze(0).repeat((self.num_classes, 1, 1, 1, 1))
-
         # calculate the penalty loss function
         moment_penalty1 = torch.sum(moment1_weight * torch.pow((moment1 - moment1_target), 2))
         moment_penalty2 = torch.sum(moment2_weight * torch.pow((moment2 - moment2_target), 2))
