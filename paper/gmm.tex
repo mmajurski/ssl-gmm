@@ -20,7 +20,6 @@
 \usepackage{tabularx}
 \usepackage{multirow}
 
-
 %
 % --- inline annotations
 %
@@ -123,7 +122,7 @@ This work proposes:
 \begin{enumerate}
 	\item Replacing the final linear (fully connected) layer of the neural network with either kmeans \cite{dwibedi2021little} or axis-aligned differentiable Gaussian Mixture Model (GMM) trained via back prop, both of which have explicit modeling of class cluster centroids. 
 	\item We explore various constraints on how the embedding space should be structured by adding penalties if the per-class clustering does not conform to between 0 and 4 of the first gaussian moments being identity/zero.
-	\item We demonstrate that increasing the specificity of how the embedding space should be structure negatively impacts model performance. \TODO {(chapman) need citation for guassian moments}
+	\item We demonstrate that increasing the specificity of how the embedding space should be structure negatively impacts model performance. \TODO {(chapman) need citation for guassian method of moments}
 \end{enumerate}
 
 This paper contributes a simple easy to implement improvement to pseudo-labeling methods where very few annotations are available, replace the last linear layer with a kmeans layer which explicitly models class cluster centers.
@@ -285,7 +284,46 @@ We introduce and evaluate a series of embedding constraints based on the Method 
 %MoM constraints typically use the L2 norm to constrain the.  % TODO clarification for this sentence?
 As our goal is semi-supervised classification, the primary goal is to minimize the expected difference between $Y$ and $\hat{Y}$ through cross entropy loss. 
 However, if one were to train the model without any embedding constraints, then it is possible that the model could learn a good decision boundary for the posteriors $p(Y|X)$ but without actually modeling the probability of samples $p(X)$.
-The first four gaussian moments being identity/zero increasingly constrain the model latent embedding space. 
+The first four gaussian moments being identity/zero increasingly constrain the model latent embedding space.
+
+The MoM relies on the use of \textit{consistent estimators}, as these asymptotically share sample and population statistics.   Assume that $z$ is a finite sample of $n$ elements drawn from infinite population $Z$, then a series of $P$ well-behaved sample statistics $g_p$ should very closely approximate their $k$ population statistic as follows,
+
+\begin{equation}
+	\forall p=1 \dots P \quad
+	\frac{1}{n} \sum_{i=1}^n g_p(z_i) \approx E(g_p(Z))
+\end{equation}
+
+We can therefore constrain the latent representation of our model to approximate an independent joint Gaussian distribution. In the univariate Gaussian case, the $p^{th}$ order centralized moment constraint is the following.
+
+\begin{equation}
+	E\left[ (Z-\mu)^p \right] = 
+	\begin{cases} 
+		0 &  \text{if} \; p \; \text{is odd} \\
+		\sigma^p(p - 1)!! & \text{if} \; p \; \text{is even}
+	\end{cases}
+\end{equation}
+
+By this formula, the univariate unit gaussian has mean $0$, standard deviation $1$, skew $0$, and kurtosis 3.
+
+In the joint multivariate case, each dimension is independent by definition.  As such, if we redefine $Z$, $\mu$, and $p$ to be all $D$ dimensional, then the centrallized joint gaussian moment can be defined as follows,
+
+\begin{equation}
+	E\left[g_p(Z - \mu)\right] = E\left[ \prod_{d=1}^D (Z_d - \mu_d)^p_d \right]
+\end{equation}
+
+Due to independence of the axes, this moment can be represented as a product of univariate moments of the individual gaussians as follows,
+
+\begin{equation}
+	E\left[ \prod_{d=1}^D (Z_d - \mu_d)^p_d \right] = \prod_{d=1}^D E\left[ (Z_d - \mu_d)^p_d \right]
+\end{equation}
+
+The error (loss) term associated with the embedding constraint for any moment $p$ is equal to the L2 difference between the sample and population statistics as follows,
+
+\begin{equation}
+	\varepsilon_p = \left( \frac{1}{n} \sum_{i=1}^n g_p(z_i) - E(g_p(Z)) \right)^2
+\end{equation}
+
+Some moments are more important than others, and must be weighted more heavily.  For example, first order moments are simply the sample mean, and should be given the greatest weight as an embedding constraint.  The second order moments form a sample covariance matrix, which ideally should be equal to the identity matrix, but the diagonal terms should be given greater weight than the off-diagonal terms.  This is because, in a $D \times D$ covariance matrix, there are $D(D-1)$ off diagonal terms, but only $D$, diagonal terms.  The $p^{th}$ order sample moments form a $p-1$ dimensional hyper-covariance matrix, with terms residing on the intersection of anywhere between $0$ and $p-1$ hyper-diagonals.  In order to prevent over-representation of off-diagonal terms, and encourage representation of on-diagonal terms, the loss function for any given moment term is inversely proportional to the number moment terms that share the same number of hyper-diagonals.  This heuristic weighting scheme is reasonable as it ensures that the overall contribution of each moment order is not overly influenced by the off-diagonal terms, and that the error weighting is therefore diagonally dominant.
 
 %Define $Z^k$, $X^k$, $Y^k$, and $\hat{Y}^k$, as the latents, samples, labels, and posteriors for the elements that are predicted to reside with label $Y^k$ as follows,
 %
