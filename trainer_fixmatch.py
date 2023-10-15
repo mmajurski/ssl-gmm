@@ -63,8 +63,10 @@ class FixMatchTrainer(trainer.SupervisedTrainer):
 
         embedding_criterion = torch.nn.MSELoss()
 
-        if hasattr(model.last_layer, 'centers'):
-            model.last_layer.centers = model.last_layer.centers.cuda()
+        # if hasattr(model, 'last_layer') and hasattr(model.last_layer, 'centers'):
+        #     model.last_layer.centers = model.last_layer.centers.cuda()
+        # if hasattr(model, 'module') and hasattr(model.module.last_layer, 'centers'):
+        #     model.module.last_layer.centers = model.module.last_layer.centers.cuda()
 
         for batch_idx, tensor_dict_l in enumerate(dataloader):
             inputs_l = tensor_dict_l[0]
@@ -80,10 +82,11 @@ class FixMatchTrainer(trainer.SupervisedTrainer):
             inputs = inputs.cuda()
 
             # interleave not required for single GPU training
-            # inputs = utils.interleave(inputs, 2 * self.args.mu + 1)
+            inputs = utils.interleave(inputs, 2 * self.args.mu + 1)
             embedding, logits = model(inputs)
-            # logits = utils.de_interleave(logits, 2 * self.args.mu + 1)
-            # embedding = utils.de_interleave(embedding, 2 * self.args.mu + 1)
+
+            logits = utils.de_interleave(logits, 2 * self.args.mu + 1)
+            embedding = utils.de_interleave(embedding, 2 * self.args.mu + 1)
 
             targets_l = targets_l.cuda()
             targets_ul = targets_ul.cuda()
@@ -180,7 +183,10 @@ class FixMatchTrainer(trainer.SupervisedTrainer):
                 train_stats.append_accumulate('train_invalid_pl_loss', loss_invalid_pl.item())
 
             if emb_constraint is not None:
-                emb_constraint_l = emb_constraint(embedding_l, model.last_layer.centers, logits_l)
+                if hasattr(model, 'module'):
+                    emb_constraint_l = emb_constraint(embedding_l, model.module.last_layer.centers, logits_l)
+                else:
+                    emb_constraint_l = emb_constraint(embedding_l, model.last_layer.centers, logits_l)
                 emb_constraint_loss_l = embedding_criterion(emb_constraint_l, torch.zeros_like(emb_constraint_l))
                 train_stats.append_accumulate('train_embedding_constraint_loss', emb_constraint_loss_l.item())
                 loss_l += emb_constraint_loss_l
@@ -200,8 +206,12 @@ class FixMatchTrainer(trainer.SupervisedTrainer):
                 train_stats.append_accumulate('train_pseudo_label_loss', loss_ul.item())
 
                 if emb_constraint is not None:
-                    emb_constraint_ul_strong = emb_constraint(embedding_ul_strong, model.last_layer.centers, logits_ul_weak)
-                    emb_constraint_ul_weak = emb_constraint(embedding_ul_weak, model.last_layer.centers, logits_ul_weak)
+                    if hasattr(model, 'module'):
+                        emb_constraint_ul_strong = emb_constraint(embedding_ul_strong, model.module.last_layer.centers, logits_ul_weak)
+                        emb_constraint_ul_weak = emb_constraint(embedding_ul_weak, model.module.last_layer.centers, logits_ul_weak)
+                    else:
+                        emb_constraint_ul_strong = emb_constraint(embedding_ul_strong, model.last_layer.centers, logits_ul_weak)
+                        emb_constraint_ul_weak = emb_constraint(embedding_ul_weak, model.last_layer.centers, logits_ul_weak)
 
                     emb_constraint_loss_ul_strong = embedding_criterion(emb_constraint_ul_strong, torch.zeros_like(emb_constraint_ul_strong))
                     emb_constraint_loss_ul_weak = embedding_criterion(emb_constraint_ul_weak, torch.zeros_like(emb_constraint_ul_weak))
@@ -302,7 +312,10 @@ class FixMatchTrainer(trainer.SupervisedTrainer):
                 if emb_constraint is not None:
                     # only include a "logit" loss, when there are other terms
                     train_stats.append_accumulate('{}_logit_loss'.format(split_name), loss.item())
-                    emb_constraint_l = emb_constraint(embedding, model.last_layer.centers, logits)
+                    if hasattr(model, 'module'):
+                        emb_constraint_l = emb_constraint(embedding, model.module.last_layer.centers, logits)
+                    else:
+                        emb_constraint_l = emb_constraint(embedding, model.last_layer.centers, logits)
                     emb_constraint_loss = embedding_criterion(emb_constraint_l, torch.zeros_like(emb_constraint_l))
                     train_stats.append_accumulate('{}_emb_constraint_loss'.format(split_name), emb_constraint_loss.item())
                     loss += emb_constraint_loss

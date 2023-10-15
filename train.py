@@ -3,6 +3,7 @@ import time
 import copy
 import numpy as np
 import torch
+import torch.distributed
 import torchvision
 import json
 import logging
@@ -16,6 +17,7 @@ import utils
 import trainer
 import trainer_fixmatch
 import embedding_constraints
+
 
 
 def setup(args):
@@ -155,9 +157,10 @@ def train(args):
     epoch = -1
     best_epoch = 0
     best_model = model
+    model.cuda()
 
     # Move model to device
-    model.cuda()
+    model = torch.nn.DataParallel(model)
 
     # setup early stopping on convergence using LR reduction on plateau
     optimizer = utils.configure_optimizer(model, args.weight_decay, args.learning_rate, method='sgd', nesterov=args.nesterov)
