@@ -51,7 +51,10 @@ def setup(args):
     elif args.num_classes == 100:
         train_dataset = cifar_datasets.Cifar100(transform=cifar_datasets.Cifar100.TRANSFORM_TRAIN, train=True, subset=args.debug)
     else:
-        raise RuntimeError("unsupported CIFAR class count: {}".format(args.num_classes))
+        if args.num_classes < 10:
+            train_dataset = cifar_datasets.Cifar10(transform=cifar_datasets.Cifar10.TRANSFORM_TRAIN, train=True, subset=args.debug, num_classes=args.num_classes)
+        else:
+            raise RuntimeError("unsupported CIFAR class count: {}".format(args.num_classes))
 
     train_dataset.load_data()
 
@@ -74,7 +77,10 @@ def setup(args):
     elif args.num_classes == 100:
         test_dataset = cifar_datasets.Cifar100(transform=cifar_datasets.Cifar100.TRANSFORM_TEST, train=False)
     else:
-        raise RuntimeError("unsupported CIFAR class count: {}".format(args.num_classes))
+        if args.num_classes < 10:
+            test_dataset = cifar_datasets.Cifar10(transform=cifar_datasets.Cifar10.TRANSFORM_TEST, train=False, subset=args.debug, num_classes=args.num_classes)
+        else:
+            raise RuntimeError("unsupported CIFAR class count: {}".format(args.num_classes))
 
     test_dataset.load_data()
 
@@ -96,9 +102,9 @@ def train(args):
     fh.setFormatter(logging.Formatter("%(asctime)s [%(levelname)s] [%(filename)s:%(lineno)d] %(message)s"))
     logging.getLogger().addHandler(fh)
 
-    if args.embedding_constraint == 'mean_covar':
-        logging.info("Enabling clip_grad for mean_covar constraint.")
-        args.clip_grad = True
+    # if args.embedding_constraint == 'mean_covar':
+    #     logging.info("Enabling clip_grad for mean_covar constraint.")
+    #     args.clip_grad = True
     if args.last_layer == 'aa_gmm':
         logging.info("Enabling clip_grad for aa_gmm.")
         args.clip_grad = True
@@ -159,8 +165,12 @@ def train(args):
     best_model = model
     model.cuda()
 
-    # Move model to device
-    model = torch.nn.DataParallel(model)
+    # Move model to devic
+    gpu_count = torch.cuda.device_count()
+    logging.info("Found {} gpus".format(gpu_count))
+    if gpu_count > 1:
+        logging.info("Using DataParallel")
+        model = torch.nn.DataParallel(model)
 
     # setup early stopping on convergence using LR reduction on plateau
     optimizer = utils.configure_optimizer(model, args.weight_decay, args.learning_rate, method='sgd', nesterov=args.nesterov)

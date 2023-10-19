@@ -50,7 +50,7 @@ fi
 
 INDEX=$START_RUN
 SUCCESS_COUNT=0
-let N=2*${MODELS_PER_JOB}
+let N=4*${MODELS_PER_JOB}
 for i in $(seq $N); do
 
   MODEL_FP="${root_output_directory}/id-$(printf "%08d" ${INDEX})"
@@ -76,10 +76,6 @@ for i in $(seq $N); do
 
   INDEX=$((INDEX+1))
 
-  # safety
-  if [ $INDEX -ge 10 ]; then
-   exit 0
- fi
 done
 
 

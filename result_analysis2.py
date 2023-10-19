@@ -9,6 +9,7 @@ import os
 def gen_key(cdict):
     key = ""
     keys = list(cdict.keys())
+    keys = [k for k in keys if k != 'model']
     keys.sort()
     for col in keys:
         key += str(col)[0:4] + ':' + str(cdict[col]) + '-'
@@ -16,12 +17,13 @@ def gen_key(cdict):
 
 # folder to read files from
 post_fix = 'cifar10'
+# post_fix = 'pending'
 # post_fix = 'cifar100'
 directory = 'models-{}'.format(post_fix)
 
 # columns to extract from file name
 # config_columns = ['trainer', 'last_layer', 'use_ema', 'embedding_dim', 'num_labeled_datapoints', 'embedding_constraint', 'clip_grad', 'patience', 'nesterov']
-config_columns = ['trainer', 'last_layer', 'embedding_dim', 'num_labeled_datapoints', 'embedding_constraint', 'clip_grad']
+config_columns = ['model', 'trainer', 'last_layer', 'embedding_dim', 'num_labeled_datapoints', 'embedding_constraint', 'clip_grad']
 # columns to extract from result file (stats.json)
 result_columns = ['test_accuracy', 'epoch', 'test_accuracy_per_class']
 results_df = None
@@ -42,6 +44,8 @@ for folder_name in folder_names:
         with open(json_file_path) as json_file:
             config_dict = json.load(json_file)
 
+        config_dict['model'] = folder_name
+
         if config_dict['patience'] == 20:
             continue
         # if config_dict['embedding_constraint'] != 'mean_covar' and config_dict['clip_grad'] == True:
@@ -50,8 +54,16 @@ for folder_name in folder_names:
         #     continue
         # if config_dict['embedding_constraint'] == 'mean_covar':
         #     continue
-        # if config_dict['last_layer'] == 'fc' and config_dict['clip_grad'] == True:
+        # if config_dict['last_layer'] == 'kmeans' and config_dict['embedding_constraint'] != 'mean_covar' and config_dict['clip_grad'] == True:
         #     continue
+        if config_dict['last_layer'] == 'kmeans' and config_dict['clip_grad'] == True:
+            continue
+        if config_dict['last_layer'] == 'aa_gmm' and config_dict['clip_grad'] == False:
+            continue
+        if config_dict['last_layer'] == 'fc' and config_dict['embedding_constraint'] != 'none':
+            continue
+        if config_dict['last_layer'] == 'fc' and config_dict['clip_grad'] == True:
+            continue
         # if config_dict['embedding_constraint'] == 'mean_covar' and config_dict['clip_grad'] == False:
         #     continue
 
@@ -105,6 +117,10 @@ for ll in last_layers_list:
                         continue
                     if ll == 'aa_gmm' and not c:
                         continue
+                    if ll == 'kmeans' and c:
+                        continue
+                    # if ll == 'kmeans' and emb_c == 'mean_covar' and not c:
+                    #     continue
                     # if emb_c == 'mean_covar' and not c:
                     #     continue
                     # if emb_c == 'mean_covar' and n == 40:
@@ -140,13 +156,54 @@ for config_key in dict_of_df_lists.keys():
     q1 = float(np.quantile(ta, 0.25))
     q3 = float(np.quantile(ta, 0.75))
     iqr = np.inf
-    iqr = 1.5 * (q3 - q1)
+    # iqr = 1.5 * (q3 - q1)
     # iqr = 1.0 * (q3 - q1)
+
     exclude_both = False
     if exclude_both:
         idx = np.logical_or(ta < np.asarray(q1 - iqr), ta > np.asarray(q3 + iqr))
     else:
         idx = ta < np.asarray(q1 - iqr)
+    for i in range(len(dict_of_df_lists[config_key])):
+        if idx[i]:
+            d = dict_of_df_lists[config_key][i]
+            print("outlier: {}".format(d['model']))
+
+    if len(ta) > 6:  # and '250' in config_key:
+        # pick just 6 at random
+        overage = len(ta) - 6
+
+        k = 0
+        thres = 0.01
+        while True:
+            k += 1
+            idx2 = set(np.random.choice(len(ta), overage, replace=False))
+            idx1 = set(np.asarray(list(range(len(ta)))))
+            idx1 = idx1 - idx2
+            idx1 = list(idx1)
+            idx2 = list(idx2)
+            full_mean = np.mean(ta)
+            subset_mean = np.mean(np.asarray(ta)[idx1])
+            if abs(subset_mean - full_mean) < thres:
+                break
+            if k > 1000:
+                if thres >= 0.2:
+                    raise RuntimeError("Could not find subset with equivalent mean")
+                thres += 0.01
+                k = 0
+
+        for i in idx2:
+            d = dict_of_df_lists[config_key][i]
+            print("unused: {}".format(d['model']))
+        idx[idx2] = True
+
+    # idx2 = np.asarray(ep) < 100
+    # for i in range(len(dict_of_df_lists[config_key])):
+    #     if idx2[i]:
+    #         d = dict_of_df_lists[config_key][i]
+    #         print("outlier: {}".format(d['model']))
+    # idx[idx2] = True
+
     removed_ta = np.asarray(ta)[idx].tolist()
     ta = np.asarray(ta)[np.logical_not(idx)].tolist()
     removed_mta = np.asarray(mta)[idx].tolist()
@@ -156,16 +213,17 @@ for config_key in dict_of_df_lists.keys():
         print(config_key)
         print("missing {}".format(6 - len(ta)))
 
+
     a = dict_of_df_lists[config_key][0]
     del a['test_accuracy']
     del a['epoch']
+    if 'model' in a.keys():
+        del a['model']
     del a['test_accuracy_per_class']
     del a['min_test_accuracy_per_class']
     a['mean_test_accuracy'] = float(np.mean(ta))
-    a['median_test_accuracy'] = float(np.median(ta))
     a['std_test_accuracy'] = float(np.std(ta))
     a['max_test_accuracy'] = float(np.max(ta))
-    a['min_test_accuracy'] = float(np.min(ta))
     a['nb_runs'] = len(ta)
 
     ta = [round(10.0 * v) / 10.0 for v in ta]
@@ -176,49 +234,47 @@ for config_key in dict_of_df_lists.keys():
     a['test_accuracies'] = ta
     a['outliers_test_accuracies'] = removed_ta
     a['epoch_counts'] = ep
-    a['min_single_class_test_accuracy'] = mta
-    a['outliers_min_single_class_test_accuracy'] = removed_mta
     cd = pd.json_normalize(a)
     df_list.append(cd)
 
 results_df = pd.concat(df_list, axis=0)
-results_df.insert(5, 'clip_grad marginal utility', value=None)
+# results_df.insert(5, 'clip_grad marginal utility', value=None)
 
 # split the pandas dataframe results_df into multiple dataframes based on the column num_labeled_datapoints
 # and save them to csv files
 for num_labeled_datapoints in results_df['num_labeled_datapoints'].unique():
-    #df = results_df[results_df['num_labeled_datapoints'] == num_labeled_datapoints]
-    #df.to_csv('results-{}-{}labels.csv'.format(post_fix, num_labeled_datapoints), index=False)
-
-    #print("******** {} ********".format(num_labeled_datapoints))
-    for ll in results_df['last_layer'].unique():
-        for emb in results_df['embedding_constraint'].unique():
-            for emb_c in results_df['embedding_dim'].unique():
-                df = results_df[results_df['num_labeled_datapoints'] == num_labeled_datapoints]
-                df = df[df['last_layer'] == ll]
-                df = df[df['embedding_constraint'] == emb]
-                df = df[df['embedding_dim'] == emb_c]
-                a = df[df['clip_grad'] == True]
-                b = df[df['clip_grad'] == False]
-                if ll != 'fc' and len(a) > 0 and len(b) > 0:
-                    idx = (results_df['num_labeled_datapoints'] == num_labeled_datapoints) & \
-                                               (results_df['last_layer'] == ll) & \
-                                               (results_df['embedding_constraint'] == emb) & \
-                                               (results_df['embedding_dim'] == emb_c) & \
-                                               (results_df['clip_grad'] == True)
-
-
-                    a = a['mean_test_accuracy'].values[0]
-                    b = b['mean_test_accuracy'].values[0]
-                    results_df.loc[idx, 'clip_grad marginal utility'] = a - b
-                    #df['clip_grad marginal utility'] = a - b
-
-                    #print("{},{},{}\tclip_grad = {}, without = {}, delta = {}".format(ll, emb, emb_c, a, b, a-b))
     df = results_df[results_df['num_labeled_datapoints'] == num_labeled_datapoints]
-    cols = list(df.columns)
-    cols.remove('clip_grad marginal utility')
-    cols = cols.insert(5, 'clip_grad marginal utility')
     df.to_csv('results-{}-{}labels.csv'.format(post_fix, num_labeled_datapoints), index=False)
+
+    # #print("******** {} ********".format(num_labeled_datapoints))
+    # for ll in results_df['last_layer'].unique():
+    #     for emb in results_df['embedding_constraint'].unique():
+    #         for emb_c in results_df['embedding_dim'].unique():
+    #             df = results_df[results_df['num_labeled_datapoints'] == num_labeled_datapoints]
+    #             df = df[df['last_layer'] == ll]
+    #             df = df[df['embedding_constraint'] == emb]
+    #             df = df[df['embedding_dim'] == emb_c]
+    #             a = df[df['clip_grad'] == True]
+    #             b = df[df['clip_grad'] == False]
+    #             if ll != 'fc' and len(a) > 0 and len(b) > 0:
+    #                 idx = (results_df['num_labeled_datapoints'] == num_labeled_datapoints) & \
+    #                                            (results_df['last_layer'] == ll) & \
+    #                                            (results_df['embedding_constraint'] == emb) & \
+    #                                            (results_df['embedding_dim'] == emb_c) & \
+    #                                            (results_df['clip_grad'] == True)
+    #
+    #
+    #                 a = a['mean_test_accuracy'].values[0]
+    #                 b = b['mean_test_accuracy'].values[0]
+    #                 results_df.loc[idx, 'clip_grad marginal utility'] = a - b
+    #                 #df['clip_grad marginal utility'] = a - b
+    #
+    #                 #print("{},{},{}\tclip_grad = {}, without = {}, delta = {}".format(ll, emb, emb_c, a, b, a-b))
+    # df = results_df[results_df['num_labeled_datapoints'] == num_labeled_datapoints]
+    # cols = list(df.columns)
+    # cols.remove('clip_grad marginal utility')
+    # cols = cols.insert(5, 'clip_grad marginal utility')
+    # df.to_csv('results-{}-{}labels.csv'.format(post_fix, num_labeled_datapoints), index=False)
 
 
 
