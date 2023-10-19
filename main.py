@@ -90,7 +90,7 @@ def main():
         tb = traceback.format_exc()
         logging.info(tb)
         logging.shutdown()
-        return 1
+        exit(1)  # pass failure back to caller
 
 
 if __name__ == '__main__':

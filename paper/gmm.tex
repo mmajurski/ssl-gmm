@@ -373,41 +373,49 @@ Some moments are more important than others, and must be weighted more heavily. 
 
 \section{Experiments}
 
+% all constratinst > l2 have grad_clip
+% all aagmm have grad_clip
+
 \begin{table*}[ht!]
 	\begin{tabularx}{\textwidth}{c|c|XXXXXX}
-		        \multicolumn{6}{c}{CIFAR-10} \\ \hline\hline
-		 Last Layer &   Emb Dim   & \multicolumn{5}{c}{40 Labels (6 trials)}            \\ \hline
-		Embedding Constraint  &  & None & $1st$ Order & $2nd$ Order & $3rd$ Order & $4th$ Order  \\ \hline
-		& 128  & $xx.yy$ \scriptsize{$\pm z.zz$}  &  &  &  &   \\
-		FixMatch\cite{sohn2020fixmatch} & 32  & $xx.yy$ \scriptsize{$\pm z.zz$}    &  &  &  &   \\
+		\multicolumn{6}{c}{CIFAR-10} \\ \hline\hline
+		Last Layer &   Emb Dim   & \multicolumn{5}{c}{40 Labels (6 trials)}            \\ 
+		\hline
+		Embedding Constraint  &  & None & $1st$ Order & $2nd$ Order & $3rd$ Order & $4th$ Order  \\ 
+		\hline
+		& 128  & $83.23$ \scriptsize{$\pm 3.74$}   &  &  &  &   \\
+		FixMatch\cite{sohn2020fixmatch} & 32  & $82.87$ \scriptsize{$\pm 2.56$}    &  &  &  &   \\
 		(i.e. FullyConnected) & 8  & $xx.yy$ \scriptsize{$\pm z.zz$}      &  &  &  &   \\
 		\hline
-		 & 128  & $xx.yy$ \scriptsize{$\pm z.zz$}    & $xx.yy$ \scriptsize{$\pm z.zz$} & $xx.yy$ \scriptsize{$\pm z.zz$} &  &  \\
-		KMeans & 32  & $xx.yy$ \scriptsize{$\pm z.zz$}    & $xx.yy$ \scriptsize{$\pm z.zz$} & $xx.yy$ \scriptsize{$\pm z.zz$} &  &  \\
-		 & 8  & $xx.yy$ \scriptsize{$\pm z.zz$}    & $xx.yy$ \scriptsize{$\pm z.zz$} & $xx.yy$ \scriptsize{$\pm z.zz$} & $xx.yy$ \scriptsize{$\pm z.zz$} & $xx.yy$ \scriptsize{$\pm z.zz$}  \\
+		& 128  & $84.65$ \scriptsize{$\pm 4.86$}    & $87.66$ \scriptsize{$\pm 4.45$} & $70.94$ \scriptsize{$\pm 2.51$} &  &  \\
+		KMeans & 32  & $86.90$ \scriptsize{$\pm 5.38$}    & $\boldsymbol{91.58}$ \scriptsize{$\pm 1.39$} & $75.24$ \scriptsize{$\pm 3.35$} &  &  \\
+		& 8  & $85.22$ \scriptsize{$\pm 4.53$}    & $87.97$ \scriptsize{$\pm 3.04$} & $68.21$ \scriptsize{$\pm 3.09$} & $xx.yy$ \scriptsize{$\pm z.zz$} & $xx.yy$ \scriptsize{$\pm z.zz$}  \\
 		\hline
-		  & 128  & $xx.yy$ \scriptsize{$\pm z.zz$}    & $xx.yy$ \scriptsize{$\pm z.zz$} & $xx.yy$ \scriptsize{$\pm z.zz$} &  &  \\
-		AAGMM  & 32  & $xx.yy$ \scriptsize{$\pm z.zz$}    & $xx.yy$ \scriptsize{$\pm z.zz$} & $xx.yy$ \scriptsize{$\pm z.zz$} &  &  \\
-		  & 8  & $xx.yy$ \scriptsize{$\pm z.zz$}    & $xx.yy$ \scriptsize{$\pm z.zz$} & $xx.yy$ \scriptsize{$\pm z.zz$} & $xx.yy$ \scriptsize{$\pm z.zz$} & $xx.yy$ \scriptsize{$\pm z.zz$} \\
-		  
+		& 128  & $88.21$ \scriptsize{$\pm 3.32$}    & $88.83$ \scriptsize{$\pm 4.38$} & $85.29$ \scriptsize{$\pm 2.67$} &  &  \\
+		AAGMM  & 32  & $85.31$ \scriptsize{$\pm 6.31$}    & $86.89$ \scriptsize{$\pm 3.44$} & $84.47$ \scriptsize{$\pm 2.38$} &  &  \\
+		& 8  & $87.44$ \scriptsize{$\pm 3.44$}    & $88.37$ \scriptsize{$\pm 5.21$} & $81.59$ \scriptsize{$\pm 3.23$} & $xx.yy$ \scriptsize{$\pm z.zz$} & $xx.yy$ \scriptsize{$\pm z.zz$} \\
+		
 		\hline\hline
-		 Last Layer  &   Emb Dim  & \multicolumn{5}{c}{250 Labels (6 trials)}            \\ \hline
-		\multicolumn{1}{c|}{Embedding Constraint} &  & None & $1st$ Order & $2nd$ Order & $3rd$ Order & $4th$ Order  \\ \hline
-		& 128  & $xx.yy$ \scriptsize{$\pm z.zz$}   &  &  &  &   \\
-		FixMatch\cite{sohn2020fixmatch} & 32  & $xx.yy$ \scriptsize{$\pm z.zz$}    &  &  &  &   \\
-		(i.e. FullyConnected) & 8  & $xx.yy$ \scriptsize{$\pm z.zz$}      &  &  &  &   \\
+		Last Layer  &   Emb Dim  & \multicolumn{5}{c}{250 Labels (6 trials)}            \\ 
 		\hline
-		  & 128 & $xx.yy$ \scriptsize{$\pm z.zz$}    & $xx.yy$ \scriptsize{$\pm z.zz$} & $xx.yy$ \scriptsize{$\pm z.zz$} &  &  \\
-		KMeans  & 32 & $xx.yy$ \scriptsize{$\pm z.zz$}    & $xx.yy$ \scriptsize{$\pm z.zz$} & $xx.yy$ \scriptsize{$\pm z.zz$} &  &  \\
-		  & 8 & $xx.yy$ \scriptsize{$\pm z.zz$}    & $xx.yy$ \scriptsize{$\pm z.zz$} & $xx.yy$ \scriptsize{$\pm z.zz$} & $xx.yy$ \scriptsize{$\pm z.zz$} & $xx.yy$ \scriptsize{$\pm z.zz$}  \\
-		  \hline
-		 & 128   & $xx.yy$ \scriptsize{$\pm z.zz$}    & $xx.yy$ \scriptsize{$\pm z.zz$} & $xx.yy$ \scriptsize{$\pm z.zz$} &  &  \\
-		AAGMM & 32   & $xx.yy$ \scriptsize{$\pm z.zz$} & $xx.yy$ \scriptsize{$\pm z.zz$} & \scriptsize{$\pm z.zz$} &  &  \\
-		 & 8   & $xx.yy$ \scriptsize{$\pm z.zz$} & $xx.yy$ \scriptsize{$\pm z.zz$} & $xx.yy$ \scriptsize{$\pm z.zz$} & $xx.yy$ \scriptsize{$\pm z.zz$} & $xx.yy$ \scriptsize{$\pm z.zz$}  \\
+		\multicolumn{1}{c|}{Embedding Constraint} &  & None & $1st$ Order & $2nd$ Order & $3rd$ Order & $4th$ Order  \\ 
+		\hline
+		& 128  & $94.73$ \scriptsize{$\pm 0.18$}   &  &  &  &   \\
+		FixMatch\cite{sohn2020fixmatch} & 32  & $94.07$ \scriptsize{$\pm 0.96$}    &  &  &  &   \\
+		(i.e. FullyConnected) & 8  & $94.70$ \scriptsize{$\pm 0.13$}      &  &  &  &   \\
+		\hline
+		& 128  & $94.56$ \scriptsize{$\pm 0.17$}    & $94.40$ \scriptsize{$\pm 0.18$} & $89.77$ \scriptsize{$\pm 0.47$} &  &  \\
+		KMeans & 32  & $94.66$ \scriptsize{$\pm 0.27$}    & $94.32$ \scriptsize{$\pm 0.39$} & $91.56$ \scriptsize{$\pm 0.16$} &  &  \\
+		& 8  & \TODO {update} $94.25$ \scriptsize{$\pm 0.16$}    & \TODO {update} $94.09$ \scriptsize{$\pm 0.56$} & $89.77$ \scriptsize{$\pm 1.25$} & $90.85$ \scriptsize{$\pm 0.76$} & $88.8$ \scriptsize{$\pm 0.49$}  \\
+		\hline
+		& 128  & $94.25$ \scriptsize{$\pm 0.48$}    & $\boldsymbol{94.75}$ \scriptsize{$\pm 0.29$} & $93.05$ \scriptsize{$\pm 0.62$} &  &  \\
+		AAGMM  & 32  & $94.07$ \scriptsize{$\pm 0.76$}    & $94.42$ \scriptsize{$\pm 0.54$} & $93.89$ \scriptsize{$\pm 0.62$} &  &  \\
+		& 8  & $94.36$ \scriptsize{$\pm 0.40$}    & $94.42$ \scriptsize{$\pm 0.21$} & $92.97$ \scriptsize{$\pm 0.99$} & $93.87$ \scriptsize{$\pm 0.46$} & $93.29$ \scriptsize{$\pm 0.59$} \\
 	\end{tabularx}
 	\caption{Mean test accuracy \% for CIFAR-10 SSL benchmark comparing various configurations of our method. The FixMatch results in the table is our reproduction of the published results, using our training pipeline modifications, which verifies the original published results. For CIFAR-10 the WideResNet model used by FixMatch has an embedding size of 128 dimension. Due to exponential GPU memory requirements only the 8D embedding can operate with higher order MoM embedding constraints. Results for a given order of embedding constraint include all lower constraints.}
+	\TODO {Talk about gap between fixmatch published and our reproduction, which has lower accuracy, but only for the 40 label category.}
+	\TODO {Talk about which need grad clip for stabilization without which the loss goes to nan regularly.}
 	\label{table1}
-	
 \end{table*}
 
 
@@ -427,6 +435,29 @@ It can be informative to compare mean performance with max performance of $N$ ru
 
 \TODO {document hyper-parameters}
 
+\begin{table*}[ht!]
+	\begin{tabularx}{\textwidth}{c|c|XXXXXX}
+		\multicolumn{6}{c}{CIFAR-10} \\ \hline\hline
+		Last Layer &   Emb Dim   & \multicolumn{5}{c}{40 Labels (6 trials)}            \\ 
+		\hline
+		Embedding Constraint  &  & None & $1st$ Order & $2nd$ Order & $3rd$ Order & $4th$ Order  \\ 
+		\hline
+		& 128  & $89.89$   &  &  &  &   \\
+		FixMatch\cite{sohn2020fixmatch} & 32  & $87.62$     &  &  &  &   \\
+		(i.e. FullyConnected) & 8  & $xx.yy$    &  &  &  &   \\
+		\hline
+		& 128  & $91.72$    & $90.91$   & $74.88$  &  &  \\
+		KMeans & 32  & $93.51$     & $93.57$   & $81.80$   &  &  \\
+		& 8  & $92.69$    & $92.05$  & $73.34$  & $xx.yy$  & $xx.yy$  \\
+		\hline
+		& 128  & $94.10$    & $94.58$   & $88.43$   &  &  \\
+		AAGMM  & 32  & $90.63$    & $94.27$   & $88.65$   &  &  \\
+		& 8  & $91.30$    & $94.28$   & $87.13$   & $xx.yy$  & $xx.yy$  \\
+	\end{tabularx}
+	\caption{Max run accuracy \% for CIFAR-10 SSL benchmark with 40 labels comparing various configurations of our method. This table shows the best-case performance of our various methods; with the effect of poorly representative labels selected for each class. This demonstrates that for AAGMM high embedding dimensionality, the embedding constraints have no effect on the final accuracy, but with reduced embedding space dimensionality, adding a $1st Order$ penalty to the cluster centers improves model accuracy.}
+	\label{table1.5}
+\end{table*}
+
 \begin{table}[htbp]
 	\begin{tabular}{c|cc}
 		Method          & \multicolumn{2}{c}{CIFAR-10} \\ \hline
@@ -436,7 +467,8 @@ It can be informative to compare mean performance with max performance of $N$ ru
 		FlexMatch  & $5.29$ \scriptsize{$\pm0.29$}    & $4.97$ \scriptsize{$\pm0.07$}    \\
 		SimMatch   & $5.38$ \scriptsize{$\pm0.01$}    & $5.36$ \scriptsize{$\pm0.08$}    \\
 		SimMatchV2 & $4.90$ \scriptsize{$\pm0.16$}    & $5.04$ \scriptsize{$\pm0.09$}    \\ \hline
-		Ours (TBD)                            & $xx.yy$ \scriptsize{$\pm z.zz$}           & $xx.yy$ \scriptsize{$\pm z.zz$}           
+		Ours (KMeans)    & $8.42$ \scriptsize{$\pm 1.39$}           & $5.34$ \scriptsize{$\pm 0.27$}       \\    
+		Ours (AAGMM)    & $11.17$ \scriptsize{$\pm 4.83$}           & $5.25$ \scriptsize{$\pm 0.29$}           
 	\end{tabular}
 	\caption{Error rate \% for CIFAR-10 SSL benchmark comparing to state of the art results. Results are copied from USB \cite{wang2022usb} unless otherwise stated. Results are based on 3 runs for USB, 5 runs for FixMatch \cite{sohn2020fixmatch}, and 6 runs for ours.}
 	\label{table2}
@@ -459,7 +491,8 @@ It can be informative to compare mean performance with max performance of $N$ ru
 		FlexMatch   & $40.73$ \scriptsize{$\pm1.44$}   & $26.17$ \scriptsize{$\pm0.18$}   \\
 		SimMatch    & $39.32$ \scriptsize{$\pm0.72$}   & $26.21$ \scriptsize{$\pm0.37$}   \\
 		SimMatchV2    & $36.68$ \scriptsize{$\pm0.86$}   & $26.66$ \scriptsize{$\pm0.38$}   \\ \hline
-		Ours (TBD)                            & $xx.yy$ \scriptsize{$\pm z.zz$}           & $xx.yy$ \scriptsize{$\pm z.zz$}  
+		Ours (KMeans)    & $xx.yy$ \scriptsize{$\pm z.zz$}           & $xx.yy$ \scriptsize{$\pm z.zz$}  \\
+		Ours (AAGMM)    & $xx.yy$ \scriptsize{$\pm z.zz$}           & $xx.yy$ \scriptsize{$\pm z.zz$}  
 	\end{tabular}
 	\caption{Error rate \% for CIFAR-100 SSL benchmark comparing to state of the art results. Results are copied from USB \cite{wang2022usb} unless otherwise stated. Results are based on 3 runs for USB, 5 runs for FixMatch \cite{sohn2020fixmatch}, and 6 runs for ours.}
 	\label{table3}

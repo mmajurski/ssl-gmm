@@ -17,7 +17,7 @@ def gen_key(cdict):
 
 # folder to read files from
 post_fix = 'cifar10'
-# post_fix = 'pending'
+post_fix = 'cifar10-unused'
 # post_fix = 'cifar100'
 directory = 'models-{}'.format(post_fix)
 
@@ -56,7 +56,15 @@ for folder_name in folder_names:
         #     continue
         # if config_dict['last_layer'] == 'kmeans' and config_dict['embedding_constraint'] != 'mean_covar' and config_dict['clip_grad'] == True:
         #     continue
-        if config_dict['last_layer'] == 'kmeans' and config_dict['clip_grad'] == True:
+        if config_dict['last_layer'] == 'kmeans' and config_dict['embedding_constraint'] == 'none' and config_dict['clip_grad'] == True:
+            continue
+        if config_dict['last_layer'] == 'kmeans' and config_dict['embedding_constraint'] == 'l2' and config_dict['clip_grad'] == True:
+            continue
+        if config_dict['last_layer'] == 'kmeans' and config_dict['embedding_constraint'] == 'mean_covar' and config_dict['clip_grad'] == False:
+            continue
+        if config_dict['embedding_constraint'] == 'gauss_moment3' and config_dict['clip_grad'] == False:
+            continue
+        if config_dict['embedding_constraint'] == 'gauss_moment4' and config_dict['clip_grad'] == False:
             continue
         if config_dict['last_layer'] == 'aa_gmm' and config_dict['clip_grad'] == False:
             continue
@@ -95,43 +103,6 @@ for folder_name in folder_names:
             dict_of_df_lists[key] = list()
         dict_of_df_lists[key].append(combined_dict)
 
-last_layers_list = ['fc','kmeans','aa_gmm']
-emb_dim_list = [32, 128]
-embedding_constraint_list = ['none','l2','mean_covar']
-num_labeled_datapoints_list = [40, 250]
-clip_grad_values = [True, False]
-if post_fix == 'cifar100':
-    last_layers_list = ['fc','kmeans','aa_gmm']
-    emb_dim_list = [32, 128]
-    embedding_constraint_list = ['none','l2']
-    num_labeled_datapoints_list = [400, 2500]
-    clip_grad_values = [True, False]
-for ll in last_layers_list:
-    for emb in emb_dim_list:
-        for emb_c in embedding_constraint_list:
-            for n in num_labeled_datapoints_list:
-                for c in clip_grad_values:
-                    if ll == 'fc' and emb_c != 'none':
-                        continue
-                    if ll == 'fc' and c:
-                        continue
-                    if ll == 'aa_gmm' and not c:
-                        continue
-                    if ll == 'kmeans' and c:
-                        continue
-                    # if ll == 'kmeans' and emb_c == 'mean_covar' and not c:
-                    #     continue
-                    # if emb_c == 'mean_covar' and not c:
-                    #     continue
-                    # if emb_c == 'mean_covar' and n == 40:
-                    #     continue
-                    d = {'trainer': 'fixmatch', 'last_layer': ll, 'embedding_dim': emb, 'embedding_constraint': emb_c, 'num_labeled_datapoints': n, 'clip_grad': c}
-                    key = gen_key(d)
-                    if key not in dict_of_df_lists.keys():
-                        print("adding missing {}".format(d))
-                        dict_of_df_lists[key] = [d]
-
-
 
 df_list = list()
 for config_key in dict_of_df_lists.keys():
@@ -167,51 +138,53 @@ for config_key in dict_of_df_lists.keys():
     for i in range(len(dict_of_df_lists[config_key])):
         if idx[i]:
             d = dict_of_df_lists[config_key][i]
-            print("outlier: {}".format(d['model']))
+            # print("outlier: {}".format(d['model']))
+            print("mv {} ../models-cifar10-unused/".format(d['model']))
 
-    if len(ta) > 6:  # and '250' in config_key:
-        # pick just 6 at random
-        overage = len(ta) - 6
-
-        k = 0
-        thres = 0.01
-        while True:
-            k += 1
-            idx2 = set(np.random.choice(len(ta), overage, replace=False))
-            idx1 = set(np.asarray(list(range(len(ta)))))
-            idx1 = idx1 - idx2
-            idx1 = list(idx1)
-            idx2 = list(idx2)
-            full_mean = np.mean(ta)
-            subset_mean = np.mean(np.asarray(ta)[idx1])
-            if abs(subset_mean - full_mean) < thres:
-                break
-            if k > 1000:
-                if thres >= 0.2:
-                    raise RuntimeError("Could not find subset with equivalent mean")
-                thres += 0.01
-                k = 0
-
-        for i in idx2:
-            d = dict_of_df_lists[config_key][i]
-            print("unused: {}".format(d['model']))
-        idx[idx2] = True
-
-    # idx2 = np.asarray(ep) < 100
-    # for i in range(len(dict_of_df_lists[config_key])):
-    #     if idx2[i]:
+    # if len(ta) > 6:  # and '250' in config_key:
+    #     # pick just 6 at random
+    #     overage = len(ta) - 6
+    #
+    #     k = 0
+    #     thres = 0.01
+    #     while True:
+    #         k += 1
+    #         idx2 = set(np.random.choice(len(ta), overage, replace=False))
+    #         idx1 = set(np.asarray(list(range(len(ta)))))
+    #         idx1 = idx1 - idx2
+    #         idx1 = list(idx1)
+    #         idx2 = list(idx2)
+    #         full_mean = np.mean(ta)
+    #         full_std = np.std(ta)
+    #         subset_mean = np.mean(np.asarray(ta)[idx1])
+    #         subset_std = np.std(np.asarray(ta)[idx1])
+    #         std_delta = abs(subset_std - full_std)
+    #         if subset_std < full_std:
+    #             std_delta = 0.0
+    #         if abs(subset_mean - full_mean) < thres and std_delta < 4*thres:
+    #             break
+    #         if k > 1000:
+    #             if thres >= 0.2:
+    #                 print(config_key)
+    #                 raise RuntimeError("Could not find subset with equivalent mean/std")
+    #             thres += 0.01
+    #             k = 0
+    #
+    #     for i in idx2:
     #         d = dict_of_df_lists[config_key][i]
-    #         print("outlier: {}".format(d['model']))
-    # idx[idx2] = True
+    #         # print("unused: {}".format(d['model']))
+    #         print("mv {} ../models-cifar10-unused/".format(d['model']))
+    #     idx[idx2] = True
+
 
     removed_ta = np.asarray(ta)[idx].tolist()
     ta = np.asarray(ta)[np.logical_not(idx)].tolist()
     removed_mta = np.asarray(mta)[idx].tolist()
     mta = np.asarray(mta)[np.logical_not(idx)].tolist()
 
-    if len(ta) < 6:
-        print(config_key)
-        print("missing {}".format(6 - len(ta)))
+    # if len(ta) < 6:
+    #     print(config_key)
+    #     print("missing {}".format(6 - len(ta)))
 
 
     a = dict_of_df_lists[config_key][0]
