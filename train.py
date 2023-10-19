@@ -165,7 +165,7 @@ def train(args):
     best_model = model
     model.cuda()
 
-    # Move model to devic
+    # Move model to device
     gpu_count = torch.cuda.device_count()
     logging.info("Found {} gpus".format(gpu_count))
     if gpu_count > 1:

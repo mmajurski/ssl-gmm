@@ -48,13 +48,15 @@
 \backcite {caron2021emerging}{{2}{2.3}{subsection.2.3}}
 \backcite {fini2023semi}{{2}{2.3}{subsection.2.3}}
 \backcite {sohn2020fixmatch}{{2}{3}{section.3}}
-\backcite {sohn2020fixmatch}{{2}{3}{section.3}}
+\backcite {sohn2020fixmatch}{{3}{3}{section.3}}
 \backcite {caron2018deep}{{3}{3}{section.3}}
 \backcite {caron2020unsupervised}{{3}{3}{section.3}}
 \backcite {enguehard2019semi}{{3}{3}{section.3}}
 \backcite {cifar10}{{4}{4}{table.caption.2}}
 \backcite {zheng2022simmatch}{{4}{4}{table.caption.2}}
 \backcite {sohn2020fixmatch}{{4}{4}{table.caption.2}}
+\backcite {sohn2020fixmatch}{{5}{\caption@xref {??}{ on input line 407}}{table.caption.2}}
+\backcite {sohn2020fixmatch}{{5}{\caption@xref {??}{ on input line 407}}{table.caption.2}}
 \backcite {wang2022usb}{{5}{2}{table.caption.3}}
 \backcite {sohn2020fixmatch}{{5}{2}{table.caption.3}}
 \backcite {wang2022usb}{{5}{3}{table.caption.4}}

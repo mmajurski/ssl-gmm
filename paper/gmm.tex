@@ -63,6 +63,7 @@
 
 \author{Michael Majurski\\
 	Information Technology Lab, NIST\\
+	University of Maryland, Baltimore County\\
 	%	100 Bureau Dr. Gaithersburg MD, 20899\\
 	{\tt\small michael.majurski@nist.gov}
 	% For a paper whose authors are all at the same institution,
@@ -90,7 +91,7 @@ The novelty consists of 2 elements: first we replace the last linear layer with 
 These methods match published SOTA 250 label CIFAR-10 \cite{cifar10} results and come close to matching SOTA in the 40 label regime without the significant model complexity of methods like SimMatchV2 \cite{zheng2023simmatchv2}.
 Our method achieves 94.8\% and 94.2\% accuracy with 250 and 40 CIFAR-10 labels respectively.
 \TODO {cleanup the repo}
-Our code is available at: \url{https://github.com/mmajurski/ssl-gmm}
+Our code is available at: \url{https://github.com/*} \TODO {insert link for camera ready} % \url{https://github.com/mmajurski/ssl-gmm}
 \end{abstract}
 
 
@@ -100,9 +101,10 @@ Image classification has become a playground for exploring new SSL ideas.
 The early successes of deep learning based methods relied on large annotated datasets to enable models to learn the relevant features to perform the task, i.e. image classification build on top of ImageNet \cite{deng2009imagenet}.
 With data annotation becoming a significant bottleneck, especially in application domains outside of the standard benchmarks, another learning paradigm was needed.
 
+
 \begin{figure}[ht]
 	\centering
-	\includegraphics[width=0.9\columnwidth]{example-image-a}
+	\includegraphics[width=0.9\linewidth]{example-image-a}
 	\caption{High level overview of our method. \TODO {(majurski) Create this figure.}}
 	\label{fig:schema}
 \end{figure}
@@ -157,7 +159,7 @@ Finally, because the embedding constraint penalties are applied to all unlabeled
 
 % TODO compare our method to lee2022contrastive which uses explicit cluster centers, and draws both the valid and non valid PL to the cluster center, just like we do, we just don't have a contrastive element like they do
 
-Semi-Supervised learning has recently show great progress in learning high quality models, in some cases match fully supervised performance, for a number of benchmarks \cite{zhang2021flexmatch}.
+Semi-Supervised learning has recently shown great progress in learning high quality models, in some cases matching fully supervised performance for a number of benchmarks \cite{zhang2021flexmatch}.
 The goal of SSL is to produce a trained model of equivalent accuracy to fully supervised training, with vastly reduced data annotation requirements.
 
 \subsection{Pseudo-Labeling}
@@ -173,7 +175,7 @@ This refinement has a substantial impact on enhancing the convergence of the alg
 
 Consistency regularization operates on the premise that when augmenting an unlabeled sample, its label should remain consistent. 
 This approach implicitly enforces a smoothness assumption, promoting coherence between unlabeled samples and their basic augmentations \cite{xie2020unsupervised}. 
-In other words, the model should be able to predict the unlabeled sample x exactly the same way it predicts the class for Augmented(x) \cite{berthelot2019mixmatch,sohn2020fixmatch,berthelot2019remixmatch,mustafa2020transformation}. 
+In other words, the model should be able to predict the unlabeled sample $x$ exactly the same way it predicts the class for $Augmented(x)$ \cite{berthelot2019mixmatch,sohn2020fixmatch,berthelot2019remixmatch,mustafa2020transformation}. 
 In addition to evaluating image-wise augmentations, recent research has demonstrated that incorporating class-wise and instance-based consistencies yields superior performance outcomes \cite{zheng2022simmatch,li2021comatch}. 
 Similarly, using consistencies between augmentations, of the predictions and low-dimensional embeddings of the strong and weak augmentations of the unlabeled images in a graph based setup has shown improvement over class-wise and instance-based consistencies \cite{zheng2023simmatchv2}.
 Finally, pseudo-labeling filtering based on consistence between strongly augmented views, gaussian filtering and embedding based nearest neighbor filtering shows convergence improvement \cite{kim2022conmatch,menon2022semisupervised}.
@@ -182,7 +184,7 @@ Finally, pseudo-labeling filtering based on consistence between strongly augment
 
 % TODO talk about the paper which find linear layers end up being nearest neighbor assignment (with cone away from origin structure) in the embedding space (Majurski cannot find the citation, so anyone who remembers what this paper was titled please leave a comment here.
 
-Several papers have attempted to improve the quality of pseudo-labels to either improve the final model accuracy, improve the rate of convergence, or avoid confirmation bias \cite{arazo2020pseudo}.
+Several papers have attempted to enhance the quality of pseudo-labels to either improve the final model accuracy, improve the rate of convergence, or avoid confirmation bias \cite{arazo2020pseudo}.
 Rizve et al. \cite{rizve2021defense} explores how uncertainty aware pseudo-label selection/filtering can be used to reduce the label noise.
 Incorrect pseudo-labels can be viewed as a network calibration issue \cite{rizve2021defense} where better network logit calibration might improve results \cite{Xing2020DistanceBased}.
 Other work has attempted to improve the pseudo-labeling process by imposing curriculum \cite{zhang2021flexmatch} or by including a class-aware contrastive term \cite{yang2022class}.
@@ -195,19 +197,19 @@ Recent work has extended purely clustering based methods like DINO \cite{caron20
 
 \section{Methodology}
 
-In this section, we explore our proposed final layer replacements and embedding space constraints.
+In this section, we explore our proposed replacement final layers and our embedding space constraints.
 FixMatch \cite{sohn2020fixmatch} is a simple, well performing, SSL algorithm.
-As such it serves as a good comparison point for exploring the effect of our contributions.
+As such, it serves as a good comparison point for exploring the effect of our contributions.
 Our methodology is based upon the published FixMatch \cite{sohn2020fixmatch} algorithm, with identical hyper-parameters unless otherwise stated.
-We add to FixMatch an early-stopping condition when the model has not improved for 40 epochs (where epoch size is 1024 batches as in FixMatch), with 2 learning rate reductions by a factor of $0.2$ instead of configuring a fixed number of training epochs with a cosine learning rate decay.
+We extend FixMatch with an early-stopping condition when the model has not improved for 40 epochs (where epoch size is 1024 batches as in FixMatch), and with 2 learning rate reductions by a factor of $0.2$ instead of configuring a fixed number of training epochs with a cosine learning rate decay.
 Additionally, we employ a cyclic learning rate scheduler to vary the learning rate by a factor of $\pm2.0$ within each epoch to make training less dependent upon exact learning rate value.
 
-Both the linear layer replacements and the embedding constraints explored herein represent increasing levels of prescription about how the final embedding space should be arranged compared to a final linear layer.
+Both the linear layer replacements and the embedding constraints explored herein represent increasing levels of prescription about how the final embedding space should be arranged compared to a traditional linear layer.
 The idea of leveraging clusters in embedding space is not new \cite{caron2018deep,caron2020unsupervised,enguehard2019semi}, but we extend the core idea with a novel differentiable model of learned cluster centroids and GMMs.
 
 \subsection{Alternative Final Layers}
 
-A limitation of traditional final activation layers such as softmax is that they are fully discriminative; i.e. they estimate the posterior $p(Y|X)$, but do not attempt to model the sample distribution $p(X)$ or the joint probabilities $p(Y,X)$. 
+A limitation of traditional final activation layers such as linear+softmax is that they are fully discriminative; i.e. they estimate the posterior $p(Y|X)$, but do not attempt to model the sample distribution $p(X)$ or the joint probabilities $p(Y,X)$. 
 To overcome this limitation, we present two semi-parametric final activation layers (a) the Axis Aligned GMM (AAGMM) layer, and (b) an equal variance version of AAGMM that we henceforth call the KMeans activation layer due to the similarity of the objective function with a gradient based KMeans.
 
 These activation layers are fully differentiable and integrated into the neural network architecture as a module in the same way as a traditional final linear layer. 
@@ -280,9 +282,9 @@ This constraint yields spherical cluster centers similar to how the traditional 
 
 \subsection{Method of Moments Embedding Constraints}
 
-We introduce and evaluate a series of embedding constraints based on the Method of Moments (MoM). 
+We also introduce and evaluate a series of embedding constraints based on the Method of Moments (MoM). \TODO {(chapman) citation}
 %MoM constraints typically use the L2 norm to constrain the.  % TODO clarification for this sentence?
-As our goal is semi-supervised classification, the primary goal is to minimize the expected difference between $Y$ and $\hat{Y}$ through cross entropy loss. 
+Our task is semi-supervised classification, so the primary goal is to minimize the expected difference between $Y$ and $\hat{Y}$ through cross entropy loss. 
 However, if one were to train the model without any embedding constraints, then it is possible that the model could learn a good decision boundary for the posteriors $p(Y|X)$ but without actually modeling the probability of samples $p(X)$.
 The first four gaussian moments being identity/zero increasingly constrain the model latent embedding space.
 
@@ -331,39 +333,39 @@ Some moments are more important than others, and must be weighted more heavily. 
 %(Z^k, X^k, Y^k, \hat{Y}^k) = \{(Z_i, X_i, Y_i, \hat{Y}_i) \; \; | \; \;  \underset{\rm j}{\rm argmax} \; \hat{Y}_{i,j}=k \}
 %\end{equation}
 
-\subsubsection{Moment1}
-
-This constraint encourages the learned cluster means to have zero distance to the ovserved centroids. 
-Define $pred_k$ as the set of indices $i=1 \dots K$ such that are predicted to be of category $k$ as follows,
-
-\begin{equation}
-	pred_k = \{i \;\; | \;\; \underset{j}{argmax} \; \hat{Y}_{i,j} \; \text{is equal to} \; k\}
-\end{equation}
-
-This embedding constraint ensures that cluster centers $\mu_k$ approximate the sample distribution of latent points that are part of cluster $k$, $E(Z_i|\hat{Y}_{i,k}=1)$. 
-The $L2$ norm is used as a loss function to constrain cluster centers as follows,
-
-\begin{equation}
-	\begin{aligned}
-		\mathcal{L}_{L2} = \sum_{k=1}^K \Bigm\lvert\Bigm\lvert \mu_k - \bar{Z} \Bigm\lvert\Bigm\lvert_2 \\[5pt]
-		\textit{where} \quad \bar{Z} = E_{i \in pred_k}Z_i
-	\end{aligned}
-\end{equation}
-
-\subsubsection{Moment2}
-
-Additionally, the L2 norm was also used to constraint the cluster covariance terms to the identity matrix.
-Although the AAGMM assumes a diagonal covariance matrix $\Sigma_k$, the mini-batch sample estimate of the covariance may exhibit off-diagonal terms, which represent
-
-\subsubsection{Moments 3 and 4}
-
-Moment3 encourages clusters to have zero skew. 
-% TODO {fill in with math if required? Or just remove the subsubsections and talk about all the moments in a few paragraphs}
-
-Moment4 encourages cluster kurtosis to be the identity matrix. 
-% TODO {fill in with math if required? Or just remove the subsubsections and talk about all the moments in a few paragraphs}
-
-\TODO {figure out how to talk about the moments 3 and 4, since all of our testing indicates that the GPU memory requirement is horrifying, and they are unstable as hell. As such they are not useful but as a baseline to compare the feasibility.}
+%\subsubsection{Moment1}
+%
+%This constraint encourages the learned cluster means to have zero distance to the ovserved centroids. 
+%Define $pred_k$ as the set of indices $i=1 \dots K$ such that are predicted to be of category $k$ as follows,
+%
+%\begin{equation}
+%	pred_k = \{i \;\; | \;\; \underset{j}{argmax} \; \hat{Y}_{i,j} \; \text{is equal to} \; k\}
+%\end{equation}
+%
+%This embedding constraint ensures that cluster centers $\mu_k$ approximate the sample distribution of latent points that are part of cluster $k$, $E(Z_i|\hat{Y}_{i,k}=1)$. 
+%The $L2$ norm is used as a loss function to constrain cluster centers as follows,
+%
+%\begin{equation}
+%	\begin{aligned}
+%		\mathcal{L}_{L2} = \sum_{k=1}^K \Bigm\lvert\Bigm\lvert \mu_k - \bar{Z} \Bigm\lvert\Bigm\lvert_2 \\[5pt]
+%		\textit{where} \quad \bar{Z} = E_{i \in pred_k}Z_i
+%	\end{aligned}
+%\end{equation}
+%
+%\subsubsection{Moment2}
+%
+%Additionally, the L2 norm was also used to constraint the cluster covariance terms to the identity matrix.
+%Although the AAGMM assumes a diagonal covariance matrix $\Sigma_k$, the mini-batch sample estimate of the covariance may exhibit off-diagonal terms, which represent
+%
+%\subsubsection{Moments 3 and 4}
+%
+%Moment3 encourages clusters to have zero skew. 
+%% TODO {fill in with math if required? Or just remove the subsubsections and talk about all the moments in a few paragraphs}
+%
+%Moment4 encourages cluster kurtosis to be the identity matrix. 
+%% TODO {fill in with math if required? Or just remove the subsubsections and talk about all the moments in a few paragraphs}
+%
+%\TODO {figure out how to talk about the moments 3 and 4, since all of our testing indicates that the GPU memory requirement is horrifying, and they are unstable as hell. As such they are not useful but as a baseline to compare the feasibility.}
 
 
 
@@ -371,52 +373,53 @@ Moment4 encourages cluster kurtosis to be the identity matrix.
 
 \section{Experiments}
 
-\TODO {(majurski) add rows for embedding size}
 \begin{table*}[ht!]
 	\begin{tabularx}{\textwidth}{c|c|XXXXXX}
 		        \multicolumn{6}{c}{CIFAR-10} \\ \hline\hline
-		 Last Layer &   Emb Dim   & \multicolumn{5}{c}{40 Labels}            \\ \hline
-		Embedding Constraint  &  & None & Moment1 & Moment12 & Moment123 & Moment1234  \\ \hline
-		 & 128  & $xx.yy$ \scriptsize{$\pm z.zz$}   & $xx.yy$ \scriptsize{$\pm z.zz$} & $xx.yy$ \scriptsize{$\pm z.zz$} & $xx.yy$ \scriptsize{$\pm z.zz$} & $xx.yy$ \scriptsize{$\pm z.zz$}  \\
-		 FullyConnected & 32  & $xx.yy$ \scriptsize{$\pm z.zz$}   & $xx.yy$ \scriptsize{$\pm z.zz$} & $xx.yy$ \scriptsize{$\pm z.zz$} & $xx.yy$ \scriptsize{$\pm z.zz$} & $xx.yy$ \scriptsize{$\pm z.zz$}  \\
-		  & 8  & $xx.yy$ \scriptsize{$\pm z.zz$}   & $xx.yy$ \scriptsize{$\pm z.zz$} & $xx.yy$ \scriptsize{$\pm z.zz$} & $xx.yy$ \scriptsize{$\pm z.zz$} & $xx.yy$ \scriptsize{$\pm z.zz$}  \\
+		 Last Layer &   Emb Dim   & \multicolumn{5}{c}{40 Labels (6 trials)}            \\ \hline
+		Embedding Constraint  &  & None & $1st$ Order & $2nd$ Order & $3rd$ Order & $4th$ Order  \\ \hline
+		& 128  & $xx.yy$ \scriptsize{$\pm z.zz$}  &  &  &  &   \\
+		FixMatch\cite{sohn2020fixmatch} & 32  & $xx.yy$ \scriptsize{$\pm z.zz$}    &  &  &  &   \\
+		(i.e. FullyConnected) & 8  & $xx.yy$ \scriptsize{$\pm z.zz$}      &  &  &  &   \\
 		\hline
-		 & 128  & $xx.yy$ \scriptsize{$\pm z.zz$}    & $xx.yy$ \scriptsize{$\pm z.zz$} & $xx.yy$ \scriptsize{$\pm z.zz$} & $xx.yy$ \scriptsize{$\pm z.zz$} & $xx.yy$ \scriptsize{$\pm z.zz$}  \\
-		KMeans & 32  & $xx.yy$ \scriptsize{$\pm z.zz$}    & $xx.yy$ \scriptsize{$\pm z.zz$} & $xx.yy$ \scriptsize{$\pm z.zz$} & $xx.yy$ \scriptsize{$\pm z.zz$} & $xx.yy$ \scriptsize{$\pm z.zz$}  \\
+		 & 128  & $xx.yy$ \scriptsize{$\pm z.zz$}    & $xx.yy$ \scriptsize{$\pm z.zz$} & $xx.yy$ \scriptsize{$\pm z.zz$} &  &  \\
+		KMeans & 32  & $xx.yy$ \scriptsize{$\pm z.zz$}    & $xx.yy$ \scriptsize{$\pm z.zz$} & $xx.yy$ \scriptsize{$\pm z.zz$} &  &  \\
 		 & 8  & $xx.yy$ \scriptsize{$\pm z.zz$}    & $xx.yy$ \scriptsize{$\pm z.zz$} & $xx.yy$ \scriptsize{$\pm z.zz$} & $xx.yy$ \scriptsize{$\pm z.zz$} & $xx.yy$ \scriptsize{$\pm z.zz$}  \\
 		\hline
-		  & 128  & $xx.yy$ \scriptsize{$\pm z.zz$}    & $xx.yy$ \scriptsize{$\pm z.zz$} & $xx.yy$ \scriptsize{$\pm z.zz$} & $xx.yy$ \scriptsize{$\pm z.zz$} & $xx.yy$ \scriptsize{$\pm z.zz$} \\
-		AAGMM  & 32  & $xx.yy$ \scriptsize{$\pm z.zz$}    & $xx.yy$ \scriptsize{$\pm z.zz$} & $xx.yy$ \scriptsize{$\pm z.zz$} & $xx.yy$ \scriptsize{$\pm z.zz$} & $xx.yy$ \scriptsize{$\pm z.zz$} \\
+		  & 128  & $xx.yy$ \scriptsize{$\pm z.zz$}    & $xx.yy$ \scriptsize{$\pm z.zz$} & $xx.yy$ \scriptsize{$\pm z.zz$} &  &  \\
+		AAGMM  & 32  & $xx.yy$ \scriptsize{$\pm z.zz$}    & $xx.yy$ \scriptsize{$\pm z.zz$} & $xx.yy$ \scriptsize{$\pm z.zz$} &  &  \\
 		  & 8  & $xx.yy$ \scriptsize{$\pm z.zz$}    & $xx.yy$ \scriptsize{$\pm z.zz$} & $xx.yy$ \scriptsize{$\pm z.zz$} & $xx.yy$ \scriptsize{$\pm z.zz$} & $xx.yy$ \scriptsize{$\pm z.zz$} \\
+		  
 		\hline\hline
-		 Last Layer  &   Emb Dim  & \multicolumn{5}{c}{250 Labels}            \\ \hline
-		\multicolumn{1}{c|}{Embedding Constraint} &  & None & Moment1 & Moment12 & Moment123 & Moment1234  \\ \hline
-		 & ???   & $xx.yy$ \scriptsize{$\pm z.zz$}   & $xx.yy$ \scriptsize{$\pm z.zz$} & $xx.yy$ \scriptsize{$\pm z.zz$} & $xx.yy$ \scriptsize{$\pm z.zz$} & $xx.yy$ \scriptsize{$\pm z.zz$}  \\
-		FullyConnected & ???   & $xx.yy$ \scriptsize{$\pm z.zz$}   & $xx.yy$ \scriptsize{$\pm z.zz$} & $xx.yy$ \scriptsize{$\pm z.zz$} & $xx.yy$ \scriptsize{$\pm z.zz$} & $xx.yy$ \scriptsize{$\pm z.zz$}  \\
-		 & ???   & $xx.yy$ \scriptsize{$\pm z.zz$}   & $xx.yy$ \scriptsize{$\pm z.zz$} & $xx.yy$ \scriptsize{$\pm z.zz$} & $xx.yy$ \scriptsize{$\pm z.zz$} & $xx.yy$ \scriptsize{$\pm z.zz$}  \\
-		 \hline
-		  & ??? & $xx.yy$ \scriptsize{$\pm z.zz$}    & $xx.yy$ \scriptsize{$\pm z.zz$} & $xx.yy$ \scriptsize{$\pm z.zz$} & $xx.yy$ \scriptsize{$\pm z.zz$} & $xx.yy$ \scriptsize{$\pm z.zz$}  \\
-		KMeans  & ??? & $xx.yy$ \scriptsize{$\pm z.zz$}    & $xx.yy$ \scriptsize{$\pm z.zz$} & $xx.yy$ \scriptsize{$\pm z.zz$} & $xx.yy$ \scriptsize{$\pm z.zz$} & $xx.yy$ \scriptsize{$\pm z.zz$}  \\
-		  & ??? & $xx.yy$ \scriptsize{$\pm z.zz$}    & $xx.yy$ \scriptsize{$\pm z.zz$} & $xx.yy$ \scriptsize{$\pm z.zz$} & $xx.yy$ \scriptsize{$\pm z.zz$} & $xx.yy$ \scriptsize{$\pm z.zz$}  \\
+		 Last Layer  &   Emb Dim  & \multicolumn{5}{c}{250 Labels (6 trials)}            \\ \hline
+		\multicolumn{1}{c|}{Embedding Constraint} &  & None & $1st$ Order & $2nd$ Order & $3rd$ Order & $4th$ Order  \\ \hline
+		& 128  & $xx.yy$ \scriptsize{$\pm z.zz$}   &  &  &  &   \\
+		FixMatch\cite{sohn2020fixmatch} & 32  & $xx.yy$ \scriptsize{$\pm z.zz$}    &  &  &  &   \\
+		(i.e. FullyConnected) & 8  & $xx.yy$ \scriptsize{$\pm z.zz$}      &  &  &  &   \\
+		\hline
+		  & 128 & $xx.yy$ \scriptsize{$\pm z.zz$}    & $xx.yy$ \scriptsize{$\pm z.zz$} & $xx.yy$ \scriptsize{$\pm z.zz$} &  &  \\
+		KMeans  & 32 & $xx.yy$ \scriptsize{$\pm z.zz$}    & $xx.yy$ \scriptsize{$\pm z.zz$} & $xx.yy$ \scriptsize{$\pm z.zz$} &  &  \\
+		  & 8 & $xx.yy$ \scriptsize{$\pm z.zz$}    & $xx.yy$ \scriptsize{$\pm z.zz$} & $xx.yy$ \scriptsize{$\pm z.zz$} & $xx.yy$ \scriptsize{$\pm z.zz$} & $xx.yy$ \scriptsize{$\pm z.zz$}  \\
 		  \hline
-		 & ???   & $xx.yy$ \scriptsize{$\pm z.zz$}    & $xx.yy$ \scriptsize{$\pm z.zz$}& $xx.yy$ \scriptsize{$\pm z.zz$} & $xx.yy$ \scriptsize{$\pm z.zz$} & $xx.yy$ \scriptsize{$\pm z.zz$}  \\
-		AAGMM & ???   & $xx.yy$ \scriptsize{$\pm z.zz$}    & $xx.yy$ \scriptsize{$\pm z.zz$}& $xx.yy$ \scriptsize{$\pm z.zz$} & $xx.yy$ \scriptsize{$\pm z.zz$} & $xx.yy$ \scriptsize{$\pm z.zz$}  \\
-		 & ???   & $xx.yy$ \scriptsize{$\pm z.zz$}    & $xx.yy$ \scriptsize{$\pm z.zz$}& $xx.yy$ \scriptsize{$\pm z.zz$} & $xx.yy$ \scriptsize{$\pm z.zz$} & $xx.yy$ \scriptsize{$\pm z.zz$}  \\
+		 & 128   & $xx.yy$ \scriptsize{$\pm z.zz$}    & $xx.yy$ \scriptsize{$\pm z.zz$} & $xx.yy$ \scriptsize{$\pm z.zz$} &  &  \\
+		AAGMM & 32   & $xx.yy$ \scriptsize{$\pm z.zz$} & $xx.yy$ \scriptsize{$\pm z.zz$} & \scriptsize{$\pm z.zz$} &  &  \\
+		 & 8   & $xx.yy$ \scriptsize{$\pm z.zz$} & $xx.yy$ \scriptsize{$\pm z.zz$} & $xx.yy$ \scriptsize{$\pm z.zz$} & $xx.yy$ \scriptsize{$\pm z.zz$} & $xx.yy$ \scriptsize{$\pm z.zz$}  \\
 	\end{tabularx}
-	\caption{Error rate \% for CIFAR-10 SSL benchmark comparing various configurations of our method. Results are based on 6 runs.}
+	\caption{Mean test accuracy \% for CIFAR-10 SSL benchmark comparing various configurations of our method. The FixMatch results in the table is our reproduction of the published results, using our training pipeline modifications, which verifies the original published results. For CIFAR-10 the WideResNet model used by FixMatch has an embedding size of 128 dimension. Due to exponential GPU memory requirements only the 8D embedding can operate with higher order MoM embedding constraints. Results for a given order of embedding constraint include all lower constraints.}
 	\label{table1}
 	
 \end{table*}
 
 
-We evaluate enhancements replacements on common SSL datasets CIFAR-10/100 \cite{cifar10} under various label scarcities. 
+We evaluate our linear layer replacement and embedding space constraints using our modified FixMatch on common SSL datasets CIFAR-10/100 \cite{cifar10} under various label scarcities. 
 % FixMatch \cite{sohn2020fixmatch}, CoMatch \cite{li2021comatch}, and SimMatch \cite{zheng2022simmatch} serve as our primary comparisons.
-When comparing against other CIFAR-10/100 SSl benchmark results (like SimMatch \cite{zheng2022simmatch}) it is unclear how the labeled sampled were selected. 
+When comparing against other CIFAR-10/100 SSl benchmark results (like SimMatch \cite{zheng2022simmatch}) it is unclear how the labeled samples were selected from the fully labeled dataset. 
 For our evaluation, for each model training run, the required number of labeled samples are drawn without replacement from the training population of the dataset.
-All data not in this labeled subset is used as unlabeled data (i.e. labels are not used).
+All data not in this labeled subset is used as unlabeled data (i.e. labels are discarded).
 We evaluate our method against CIFAR-10 at 250 and 40 labeled data points, and CIFAR-100 at 400 and 2500 labels. 
 This corresponds to 4 or 25 samples per class.
 As prior work \cite{sohn2020fixmatch} has noted, resulting model quality is highly variable when only 4 samples are selected per class, as the quality and usefulness of the specific 4 samples can vary drastically. 
+It can be informative to compare mean performance with max performance of $N$ runs to see how well a method can be expected to do on average with random label sampling, vs how well it can potentially do with the more representative subset of labeled data.
 
 
 
@@ -435,7 +438,7 @@ As prior work \cite{sohn2020fixmatch} has noted, resulting model quality is high
 		SimMatchV2 & $4.90$ \scriptsize{$\pm0.16$}    & $5.04$ \scriptsize{$\pm0.09$}    \\ \hline
 		Ours (TBD)                            & $xx.yy$ \scriptsize{$\pm z.zz$}           & $xx.yy$ \scriptsize{$\pm z.zz$}           
 	\end{tabular}
-	\caption{Error rate \% for CIFAR-10 SSL benchmark comparing to state of the art results. Results are copied from USB \cite{wang2022usb} unless otherwise stated. USB results are based on 3 runs. FixMatch \cite{sohn2020fixmatch} results are based on 5 runs.}
+	\caption{Error rate \% for CIFAR-10 SSL benchmark comparing to state of the art results. Results are copied from USB \cite{wang2022usb} unless otherwise stated. Results are based on 3 runs for USB, 5 runs for FixMatch \cite{sohn2020fixmatch}, and 6 runs for ours.}
 	\label{table2}
 \end{table}
 
@@ -458,7 +461,7 @@ As prior work \cite{sohn2020fixmatch} has noted, resulting model quality is high
 		SimMatchV2    & $36.68$ \scriptsize{$\pm0.86$}   & $26.66$ \scriptsize{$\pm0.38$}   \\ \hline
 		Ours (TBD)                            & $xx.yy$ \scriptsize{$\pm z.zz$}           & $xx.yy$ \scriptsize{$\pm z.zz$}  
 	\end{tabular}
-	\caption{Error rate \% for CIFAR-100 SSL benchmark comparing to state of the art results. Results are copied from USB \cite{wang2022usb} unless otherwise stated. USB results are based on 3 runs. FixMatch \cite{sohn2020fixmatch} results are based on 5 runs.}
+	\caption{Error rate \% for CIFAR-100 SSL benchmark comparing to state of the art results. Results are copied from USB \cite{wang2022usb} unless otherwise stated. Results are based on 3 runs for USB, 5 runs for FixMatch \cite{sohn2020fixmatch}, and 6 runs for ours.}
 	\label{table3}
 \end{table}
 
@@ -467,20 +470,24 @@ As prior work \cite{sohn2020fixmatch} has noted, resulting model quality is high
 \begin{table}[htbp]
 	% TODO include a histogram showing the bi-modal behavior of the final accuracy numbers
 	\begin{tabular}{c|c}
-		Run Number            & Our method on CIFAR-10 \\ 
+		\multicolumn{2}{c}{Our Results on CIFAR-10 (40 Labels)}\\
 		\hline
-		Label Count           & 40                     \\
+		Run Number            & Test Accuracy \\ 
+		 
 		\hline
-		Run 1   & $xx.yy$ \scriptsize{$\pm z.zz$}     \\ 
-		Run 2      & $xx.yy$ \scriptsize{$\pm z.zz$}    \\
-		Run 3   & $xx.yy$ \scriptsize{$\pm z.zz$}   \\
-		Run 4    & $xx.yy$ \scriptsize{$\pm z.zz$}   \\
-		Run 5    & $xx.yy$ \scriptsize{$\pm z.zz$}     \\ 
-		Run 6    & $xx.yy$ \scriptsize{$\pm z.zz$}     \\ 
-		Run 7    & $xx.yy$ \scriptsize{$\pm z.zz$}     \\ 
-		Run 8    & $xx.yy$ \scriptsize{$\pm z.zz$}     \\ 
-		Run 9    & $xx.yy$ \scriptsize{$\pm z.zz$}     \\ 
-		Run 10    & $xx.yy$ \scriptsize{$\pm z.zz$}     \\ 
+		Run 1   & $xx.yy$     \\ 
+		Run 2      & $xx.yy$    \\
+		Run 3   & $xx.yy$ \\
+		Run 4    & $xx.yy$ \\
+		Run 5    & $xx.yy$ \\ 
+		Run 6    & $xx.yy$ \\ 
+		Run 7    & $xx.yy$ \\ 
+		Run 8    & $xx.yy$ \\ 
+		Run 9    & $xx.yy$  \\ 
+		Run 10    & $xx.yy$ \\ 
+		Run 11   & $xx.yy$ \\ 
+		Run 12    & $xx.yy$ \\ 
+		
 	\end{tabular}
 	\caption{Error rate \% for CIFAR-10 SSL benchmark showing the run-to-run variance depending on the quality of the 40 labels selected from the full population.}
 	\label{table4}
