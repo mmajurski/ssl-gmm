@@ -14,6 +14,7 @@
 \backcite {sohn2020fixmatch}{{1}{1}{figure.caption.1}}
 \backcite {wei2022mitigating}{{1}{1}{figure.caption.1}}
 \backcite {dwibedi2021little}{{1}{1}{Item.1}}
+\backcite {pearson1936method}{{2}{3}{Item.3}}
 \backcite {cifar10}{{2}{1}{Item.3}}
 \backcite {sohn2020fixmatch}{{2}{1}{Item.3}}
 \backcite {zhang2021flexmatch}{{2}{2}{section.2}}
@@ -47,18 +48,22 @@
 \backcite {zheng2022simmatch}{{2}{2.3}{subsection.2.3}}
 \backcite {caron2021emerging}{{2}{2.3}{subsection.2.3}}
 \backcite {fini2023semi}{{2}{2.3}{subsection.2.3}}
-\backcite {sohn2020fixmatch}{{2}{3}{section.3}}
+\backcite {sohn2020fixmatch}{{3}{3}{section.3}}
 \backcite {sohn2020fixmatch}{{3}{3}{section.3}}
 \backcite {caron2018deep}{{3}{3}{section.3}}
 \backcite {caron2020unsupervised}{{3}{3}{section.3}}
 \backcite {enguehard2019semi}{{3}{3}{section.3}}
+\backcite {pearson1936method}{{3}{3.2}{subsection.3.2}}
 \backcite {cifar10}{{4}{4}{table.caption.2}}
 \backcite {zheng2022simmatch}{{4}{4}{table.caption.2}}
 \backcite {sohn2020fixmatch}{{4}{4}{table.caption.2}}
-\backcite {sohn2020fixmatch}{{5}{\caption@xref {??}{ on input line 414}}{table.caption.2}}
-\backcite {sohn2020fixmatch}{{5}{\caption@xref {??}{ on input line 414}}{table.caption.2}}
-\backcite {sohn2020fixmatch}{{5}{\caption@xref {??}{ on input line 456}}{table.caption.3}}
-\backcite {wang2022usb}{{6}{3}{table.caption.4}}
-\backcite {sohn2020fixmatch}{{6}{3}{table.caption.4}}
-\backcite {wang2022usb}{{6}{4}{table.caption.5}}
-\backcite {sohn2020fixmatch}{{6}{4}{table.caption.5}}
+\backcite {zagoruyko2016wide}{{4}{4.1}{subsection.4.1}}
+\backcite {sohn2020fixmatch}{{5}{\caption@xref {??}{ on input line 427}}{table.caption.2}}
+\backcite {sohn2020fixmatch}{{5}{\caption@xref {??}{ on input line 427}}{table.caption.2}}
+\backcite {sohn2020fixmatch}{{5}{4.1}{subsection.4.1}}
+\backcite {sohn2020fixmatch}{{6}{4.2}{subsection.4.2}}
+\backcite {sohn2020fixmatch}{{7}{\caption@xref {??}{ on input line 502}}{table.caption.3}}
+\backcite {wang2022usb}{{7}{3}{table.caption.4}}
+\backcite {sohn2020fixmatch}{{7}{3}{table.caption.4}}
+\backcite {wang2022usb}{{7}{4}{table.caption.5}}
+\backcite {sohn2020fixmatch}{{7}{4}{table.caption.5}}
