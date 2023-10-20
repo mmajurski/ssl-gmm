@@ -57,11 +57,12 @@ class Cifar10(torch.utils.data.Dataset):
 
     TRANSFORM_FIXMATCH = fixmatch_augmentation.TransformFixMatch(mean=cifar10_mean, std=cifar10_std)
 
-    def __init__(self, transform=None, train:bool=True, subset=False, lcl_fldr:str='./data'):
+    def __init__(self, transform=None, train:bool=True, subset=False, lcl_fldr:str='./data', num_classes=10):
 
         self.lcl_fldr = lcl_fldr
         self.transform = transform
         self.numel = None
+        self.num_classes = num_classes
 
         self.data = list()
         self.targets = list()
@@ -75,15 +76,20 @@ class Cifar10(torch.utils.data.Dataset):
             _dataset = torchvision.datasets.CIFAR10(self.lcl_fldr, train=False, download=True)
 
         self.targets = _dataset.targets
+        valid_idx = np.asarray(self.targets) < self.num_classes
+        self.targets = np.asarray(self.targets)[valid_idx].tolist()
         # break the data up into a list instead of a single numpy block to allow deleting and addition
         self.data = list()
-        data_len = _dataset.data.shape[0]
+        for i in range(len(valid_idx)):
+            if valid_idx[i]:
+                self.data.append(_dataset.data[i, :, :, :])
+
         if self.subset:
             # for debugging, keep just 10% of the data to accelerate things
+            data_len = len(self.targets)
             data_len = int(0.1 * data_len)
-
-        for i in range(data_len):
-            self.data.append(_dataset.data[i, :, :, :])
+            self.targets = self.targets[0:data_len]
+            self.data = self.data[0:data_len]
 
         # cleanup the tmp CIFAR object
         del _dataset
