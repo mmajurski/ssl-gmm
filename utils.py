@@ -111,3 +111,38 @@ def interleave(x, size):
 def de_interleave(x, size):
     s = list(x.shape)
     return x.reshape([size, -1] + s[1:]).transpose(0, 1).reshape([-1] + s[1:])
+    
+    
+def multiconcat_numpy(L):
+
+    # is it 1D
+    is1d = (len(L[0].shape)==1)
+
+    nRows = 0
+    nCols = 1 if is1d else L[0].shape[1]
+    dtype = L[0].dtype
+    #dtype = np.float32
+    
+    # count the rows, and double check the columns
+    for x in L:
+        rows = x.shape[0]
+        cols = 1 if is1d else x.shape[1]
+        nRows += rows
+        if (cols!=nCols):
+            raise RuntimeError("ERROR: concat_numpy cols do not match:  cols %d nCols %d" % (cols, nCols) )
+    logging.info("multiconcat_numpy nRows %d nCols %d" % (nRows,nCols))
+    
+    # concatenate all of the numpy arrays
+    if is1d:
+        A = np.zeros((nRows), dtype=dtype)
+    else:
+        A = np.zeros((nRows,nCols), dtype=dtype)
+    sidx=0
+    eidx=0
+    for x in L:
+        sidx = eidx
+        eidx += x.shape[0]
+        A[sidx:eidx] = x
+    
+    return A
+    
