@@ -448,7 +448,7 @@ Its worth noting for the record that these models, drawn from prior SSL work lik
 Somewhere along the paper chain, an additional convolutional block was added, making the models perform better than the originally published version would.
 
 Matching the FixMatch \cite{sohn2020fixmatch} hyper-parameters, we use SGD with Nesterov momentum and $\lambda_u = 1$, $\beta = 0.9$, $\tau = 0.95$, $\mu = 7$, $B = 64$, and epoch size = $1024$ regardless of the number of images in the labeled dataset.
-Our $learning\_rate (\eta) = 0.01$.
+Our $learning\_rate (\eta) = 0.01$ and we use an exponential moving average of the model weights with a decay $=0.999$.
 The replacement of a fixed number of training steps with an early stopping criteria, where the model does not improve by $1e-3$ for $40$ epochs, prevents the use of a cosine decay schedule.
 Therefore, we replaced that with a plateau learning rate scheduler which multiplies the learning rate by $0.2$ every time the early stopping criteria is met (before being reset) for a max of 2 reductions.
 Finally, out cyclic learning rate schedule within each epoch varies the learning rate by a factor of $\pm2.0$.
@@ -581,6 +581,7 @@ However, higher order constraints, which enforce ever stricter controls on what 
 
 The exponential GPU memory requirement for the $3rd$ and $4th$ order MoM embedding constraints limits their practical application, though memory optimization is likely possible.
 
+\TODO{(majurski) talk about CMM and how that didn't work at all}.
 
 
 \section{Acknowledgment}

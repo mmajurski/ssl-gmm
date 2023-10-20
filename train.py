@@ -102,11 +102,17 @@ def train(args):
     fh.setFormatter(logging.Formatter("%(asctime)s [%(levelname)s] [%(filename)s:%(lineno)d] %(message)s"))
     logging.getLogger().addHandler(fh)
 
-    # if args.embedding_constraint == 'mean_covar':
-    #     logging.info("Enabling clip_grad for mean_covar constraint.")
-    #     args.clip_grad = True
     if args.last_layer == 'aa_gmm':
         logging.info("Enabling clip_grad for aa_gmm.")
+        args.clip_grad = True
+    if args.embedding_constraint == 'mean_covar':
+        logging.info("Enabling clip_grad for mean_covar constraint.")
+        args.clip_grad = True
+    if args.embedding_constraint == 'gauss_moment3':
+        logging.info("Enabling clip_grad for gauss_moment3 constraint.")
+        args.clip_grad = True
+    if args.embedding_constraint == 'gauss_moment4':
+        logging.info("Enabling clip_grad for gauss_moment4 constraint.")
         args.clip_grad = True
 
     logging.info(args)
