@@ -61,8 +61,6 @@ def main():
     parser.add_argument('--seed', type=int, default=None, help='seed for the random number generator')
     parser.add_argument('--ood_p', type=float, default='0.0', help='percentage of unlabeled data drawn from cifar100 which is ood for cifar10')
 
-    parser.add_argument('--save-embedding', action='store_true', default=False)
-
     args = parser.parse_args()
 
     if args.seed is None or args.seed <= 0:

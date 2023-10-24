@@ -335,7 +335,7 @@ class FixMatchTrainer(trainer.SupervisedTrainer):
 
 
 
-    def eval_model(self, model, pytorch_dataset, criterion, train_stats, split_name, emb_constraint, epoch, args, output_dirpath="./model"):
+    def eval_model(self, model, pytorch_dataset, criterion, train_stats, split_name, emb_constraint, epoch, args, return_embedding=False):
         if pytorch_dataset is None or len(pytorch_dataset) == 0:
             return
 
@@ -347,8 +347,8 @@ class FixMatchTrainer(trainer.SupervisedTrainer):
 
         embedding_criterion = torch.nn.MSELoss()
         
-        embedding_output_test = []
-        labels_output_test    = []
+        embedding_output_test = list()
+        labels_output_test    = list()
 
         acc_per_class = list()
         for i in range(self.args.num_classes):
@@ -387,30 +387,15 @@ class FixMatchTrainer(trainer.SupervisedTrainer):
                     gpu_mem_percent_used = [np.round(100 * x, 1) for x in gpu_mem_percent_used]
                     logging.info('  batch {}/{}  loss: {:8.8g}  cpu_mem: {:2.1f}%  gpu_mem: {}% of {}MiB'.format(batch_idx, batch_count, loss.item(), cpu_mem_percent_used, gpu_mem_percent_used, memory_total_info))
                 
-                if args.save_embedding:
+                if return_embedding:
                     embedding_output_test.append( embedding.detach().cpu().numpy() )
                     labels_output_test.append(  labels.detach().cpu().numpy() )
-        
-        
 
         train_stats.close_accumulate(epoch, '{}_loss'.format(split_name), method='avg')
         if emb_constraint is not None:
             train_stats.close_accumulate(epoch, '{}_logit_loss'.format(split_name), method='avg')
             train_stats.close_accumulate(epoch, '{}_emb_constraint_loss'.format(split_name), method='avg')
         train_stats.close_accumulate(epoch, '{}_accuracy'.format(split_name), method='avg')
-        
-        
-        if args.save_embedding:
-            embedding_output_test = utils.multiconcat_numpy(embedding_output_test)
-            outpath = output_dirpath + "/test_embedding.npy"
-            logging.info("save " + outpath)
-            np.save(outpath, embedding_output_test)
-            
-            labels_output_test    = utils.multiconcat_numpy(labels_output_test)
-            outpath = output_dirpath + "/test_labels.npy"
-            logging.info("save " + outpath)
-            np.save(outpath, labels_output_test)
-
 
         for c in range(len(acc_per_class)):
             acc_per_class[c] = float(np.mean(acc_per_class[c]))
@@ -419,3 +404,9 @@ class FixMatchTrainer(trainer.SupervisedTrainer):
 
         wall_time = time.time() - start_time
         train_stats.add(epoch, '{}_wall_time'.format(split_name), wall_time)
+
+        if return_embedding:
+            # merge embeddings together
+            embedding_output_test = utils.multiconcat_numpy(embedding_output_test)
+            labels_output_test = utils.multiconcat_numpy(labels_output_test)
+            return embedding_output_test, labels_output_test
