@@ -23,7 +23,7 @@ class SupervisedTrainer:
     def __init__(self, args):
         self.args = args
 
-    def train_epoch(self, model, pytorch_dataset, optimizer, criterion, emb_constraint, epoch, train_stats, unlabeled_dataset=None, ema_model=None, save_embedding=False, output_dirpath="./model"):
+    def train_epoch(self, model, pytorch_dataset, optimizer, criterion, emb_constraint, epoch, train_stats, unlabeled_dataset=None, ema_model=None):
 
         model.train()
 
@@ -99,10 +99,6 @@ class SupervisedTrainer:
                 gpu_mem_percent_used = [np.round(100 * x, 1) for x in gpu_mem_percent_used]
                 logging.info('  batch {}/{}  loss: {:8.8g}  lr: {:4.4g}  cpu_mem: {:2.1f}%  gpu_mem: {}% of {}MiB'.format(batch_idx, batch_count, batch_loss.item(), optimizer.param_groups[0]['lr'], cpu_mem_percent_used, gpu_mem_percent_used, memory_total_info))
 
-            if save_embedding:
-                embedding_output.append( embedding.detach().cpu().numpy() )
-                labels_output.append(  labels.detach().cpu().numpy() )
-
         wall_time = time.time() - start_time
 
         if loss_nan_count > 0:
@@ -119,18 +115,9 @@ class SupervisedTrainer:
             for param_group in optimizer.param_groups:
                 param_group['lr'] = epoch_init_lr
 
-        if save_embedding:
-            embedding_output = utils.multiconcat_numpy(embedding_output)
-            labels_output    = utils.multiconcat_numpy(labels_output)
-            outpath = output_dirpath + "/train_embedding.npy"
-            logging.info("save " + outpath)
-            np.save(outpath, embedding_output)
-            outpath = output_dirpath + "/train_labels.npy"
-            logging.info("save " + outpath)
-            np.save(outpath, labels_output)
 
 
-    def eval_model(self, model, pytorch_dataset, criterion, train_stats, split_name, emb_constraint, epoch, args):
+    def eval_model(self, model, pytorch_dataset, criterion, train_stats, split_name, emb_constraint, epoch, args, return_embedding=False):
         if pytorch_dataset is None or len(pytorch_dataset) == 0:
             return
 
@@ -142,8 +129,8 @@ class SupervisedTrainer:
 
         embedding_criterion = torch.nn.MSELoss()
         
-        embedding_output_test = []
-        labels_output_test    = []
+        embedding_output_test = list()
+        labels_output_test    = list()
 
         with torch.no_grad():
             for batch_idx, tensor_dict in enumerate(dataloader):
@@ -175,7 +162,7 @@ class SupervisedTrainer:
                     gpu_mem_percent_used = [np.round(100 * x, 1) for x in gpu_mem_percent_used]
                     logging.info('  batch {}/{}  loss: {:8.8g}  cpu_mem: {:2.1f}%  gpu_mem: {}% of {}MiB'.format(batch_idx, batch_count, batch_loss.item(), cpu_mem_percent_used, gpu_mem_percent_used, memory_total_info))
                     
-                if args.save_embedding:
+                if return_embedding:
                     embedding_output_test.append( embedding.detach().cpu().numpy() )
                     labels_output_test.append(  labels.detach().cpu().numpy() )
 
@@ -187,17 +174,22 @@ class SupervisedTrainer:
             train_stats.close_accumulate(epoch, '{}_emb_constraint_loss'.format(split_name), method='avg')
         train_stats.close_accumulate(epoch, '{}_loss'.format(split_name), method='avg')
         train_stats.close_accumulate(epoch, '{}_accuracy'.format(split_name), method='avg')
-        
-        
-        if args.save_embedding:
+
+        if return_embedding:
+            # merge embeddings together
             embedding_output_test = utils.multiconcat_numpy(embedding_output_test)
+            labels_output_test = utils.multiconcat_numpy(labels_output_test)
+
+            return embedding_output_test, labels_output_test
+
+        if args.save_embedding:
             outpath = args.output_dirpath + "/test_embedding.npy"
             logging.info("save " + outpath)
             np.save(outpath, embedding_output_test)
-            
+
             labels_output_test    = utils.multiconcat_numpy(labels_output_test)
             outpath = args.output_dirpath + "/test_labels.npy"
             logging.info("save " + outpath)
             np.save(outpath, labels_output_test)
-            
-            
+
+

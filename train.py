@@ -244,7 +244,7 @@ def train(args):
         print('args.output_dirpath', args.output_dirpath)
 
         train_stats.plot_all_metrics(output_dirpath=args.output_dirpath)
-        model_trainer.train_epoch(model, train_dataset_labeled, optimizer, criterion, emb_constraint, epoch, train_stats, unlabeled_dataset=train_dataset_unlabeled, ema_model=ema_model, save_embedding=args.save_embedding, output_dirpath=args.output_dirpath)
+        model_trainer.train_epoch(model, train_dataset_labeled, optimizer, criterion, emb_constraint, epoch, train_stats, unlabeled_dataset=train_dataset_unlabeled, ema_model=ema_model)
 
         if args.use_ema:
             test_model = ema_model.ema

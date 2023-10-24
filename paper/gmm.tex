@@ -59,39 +59,45 @@
 
 \begin{document}
 	
-\title{Beyond the Final Linear Layer: Enhancing Decision Boundaries}
-
-\author{Michael Majurski\\
-	Information Technology Lab, NIST\\
-	University of Maryland, Baltimore County\\
-	%	100 Bureau Dr. Gaithersburg MD, 20899\\
-	{\tt\small michael.majurski@nist.gov}
-	% For a paper whose authors are all at the same institution,
-	% omit the following lines up until the closing ``}''.
-% Additional authors and addresses can be added with ``\and'',
-% just like the second author.
-% To save space, use either the email address or home page, not both
-\and
-Sumeet Menon\\
-University of Maryland, Baltimore County\\
-\and
-David Chapman\\
-University of Miami\\
+	\title{Beyond the Final Linear Layer: Enhancing Decision Boundaries}
+	
+	\author{Michael Majurski\\
+		Information Technology Lab, NIST\\
+		University of Maryland, Baltimore County\\
+		%	100 Bureau Dr. Gaithersburg MD, 20899\\
+		{\tt\small michael.majurski@nist.gov}
+		% For a paper whose authors are all at the same institution,
+		% omit the following lines up until the closing ``}''.
+	% Additional authors and addresses can be added with ``\and'',
+	% just like the second author.
+	% To save space, use either the email address or home page, not both
+	\and
+	Sumeet Menon\\
+	University of  Miami\\
+	{\tt\small sumeet1@umbc.edu}
+	\and
+	Parniyan Farvardin\\
+	University of Miami\\
+	{\tt\small pxf291@miami.edu}
+	\and
+	David Chapman\\
+	University of Miami\\
+	{\tt\small dchapman.cs@miami.edu}
 }
 
 \maketitle
 
 
 \begin{abstract}
-\TODO {(majurski) rewrite abstract once paper is done to fill in details}
-SSL leverages an abundance of unlabeled data to improve deep learning based model performance under limited training data regimes.
-This paper presents a novel extension to any image classification architecture which improves accuracy in low-label regimes. 
-We extend the FixMatch \cite{sohn2020fixmatch} training scheme with our novel last layers and demonstrate test accuracy improvement. 
-The novelty consists of 2 elements: first we replace the last linear layer with a GMM trained via backprop, and second, we impose class-wise constraints on the embedding space the GMM operates on.
-These methods match published SOTA 250 label CIFAR-10 \cite{cifar10} results and come close to matching SOTA in the 40 label regime without the significant model complexity of methods like SimMatchV2 \cite{zheng2023simmatchv2}.
-Our method achieves 94.8\% and 94.2\% accuracy with 250 and 40 CIFAR-10 labels respectively.
-\TODO {cleanup the repo}
-Our code is available at: \url{https://github.com/*} \TODO {insert link for camera ready} % \url{https://github.com/mmajurski/ssl-gmm}
+	\TODO {(majurski) rewrite abstract once paper is done to fill in details}
+	SSL leverages an abundance of unlabeled data to improve deep learning based model performance under limited training data regimes.
+	This paper presents a novel extension to any image classification architecture which improves accuracy in low-label regimes. 
+	We extend the FixMatch \cite{sohn2020fixmatch} training scheme with our novel last layers and demonstrate test accuracy improvement. 
+	The novelty consists of 2 elements: first we replace the last linear layer with a GMM trained via backprop, and second, we impose class-wise constraints on the embedding space the GMM operates on.
+	These methods match published SOTA 250 label CIFAR-10 \cite{cifar10} results and come close to matching SOTA in the 40 label regime without the significant model complexity of methods like SimMatchV2 \cite{zheng2023simmatchv2}.
+	Our method achieves 94.8\% and 94.2\% accuracy with 250 and 40 CIFAR-10 labels respectively.
+	\TODO {cleanup the repo}
+	Our code is available at: \url{https://github.com/*} \TODO {insert link for camera ready} % \url{https://github.com/mmajurski/ssl-gmm}
 \end{abstract}
 
 
@@ -102,12 +108,16 @@ The early successes of deep learning based methods relied on large annotated dat
 With data annotation becoming a significant bottleneck, especially in application domains outside of the standard benchmarks, another learning paradigm was needed.
 
 
-\begin{figure}[ht]
+\begin{figure*}[ht]
 	\centering
-	\includegraphics[width=0.9\linewidth]{example-image-a}
-	\caption{High level overview of our method. \TODO {(majurski) Create this figure.}}
+	%\includegraphics[width=0.9\linewidth]{example-image-a}
+	%\includegraphics[width=0.612\linewidth]{figures/tsne.png}
+	\includegraphics[width=1.0\linewidth]{figures/tsne_horiz_v2.png}
+	%\caption{High level overview of our method. \TODO {(majurski) Create this figure.}}
+	\caption{t-SNE plots of embedding space using AA-GMM layer (a,b) and k-means layer (c,d).  (b) and (d) also exhibit 1st order Moment embedding constraint.  }
+	
 	\label{fig:schema}
-\end{figure}
+\end{figure*}
 
 There are several flavors of SSL.
 Contrastive learning methods leverage the intuition that similar instances should be close in the representation space, while different instances are farther apart \cite{yang2022class,li2021comatch}.
@@ -163,7 +173,7 @@ The goal of SSL is to produce a trained model of equivalent accuracy to fully su
 
 \subsection{Pseudo-Labeling}
 Self-supervised learning was among the initial approaches employed in the context of semi-supervised learning to annotate unlabeled images. 
-This technique involves the initial training of a classifier with a limited set of labeled samples and incorporates pseudo-labels into the gradient descent process, exceeding a predefined threshold \cite{yarowsky1995unsupervised, mcclosky2006reranking, olivier2006semi,zhai2019s4l,livieris2019predicting,rosenberg2005semi,menon2020deep}. 
+This technique involves the initial training of a classifier with a limited set of labeled samples and incorporates pseudo-labels into the gradient descent process, exceeding a predefined threshold \cite{yarowsky1995unsupervised, mcclosky2006reranking, olivier2006semi,zhai2019s4l,livieris2019predicting,rosenberg2005semi,menon2020deep,10.1117/12.2549655, app13063752}. 
 A closely related method to self-training is co-training, where a given dataset is represented as two distinct feature sets \cite{blum1998combining}. 
 These independent sample sets are subsequently trained separately using two distinct models, and the sample predictions surpassing predetermined thresholds are utilized in the final model training process \cite{blum1998combining,prakash2014survey}.
 A notably advanced approach to pseudo-labeling is the Mean Teacher algorithm \cite{tarvainen2017mean}, which leverages exponential moving averages of model parameters to acquire a notably more stable target prediction. 
@@ -190,7 +200,7 @@ Other work has attempted to improve the pseudo-labeling process by imposing curr
 Previous work has leveraged the concept of explicit class cluster centers for conditioning semantic similarity \cite{zheng2022simmatch}.
 Recent work has extended purely clustering based methods like DINO \cite{caron2021emerging} into semi-supervised methods \cite{fini2023semi}.
 
-\TODO {(chapman) find and include citations you were reading about embedding constraints. You mentioned this in the meeting on the 17th.}
+%\TODO {(chapman) find and include citations you were reading about embedding constraints. You mentioned this in the meeting on the 17th.}
 
 % TODO talk about SimMatch embedding constraint via semantic seimilarity?
 
@@ -580,6 +590,7 @@ However, higher order constraints, which enforce ever stricter controls on what 
 \section{Conclusion}
 
 The exponential GPU memory requirement for the $3rd$ and $4th$ order MoM embedding constraints limits their practical application, though memory optimization is likely possible.
+
 
 \TODO{(majurski) talk about CMM and how that didn't work at all}.
 
