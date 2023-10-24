@@ -130,7 +130,7 @@ class SupervisedTrainer:
             np.save(outpath, labels_output)
 
 
-    def eval_model(self, model, pytorch_dataset, criterion, train_stats, split_name, emb_constraint, epoch, args, output_dirpath="./model"):
+    def eval_model(self, model, pytorch_dataset, criterion, train_stats, split_name, emb_constraint, epoch, args):
         if pytorch_dataset is None or len(pytorch_dataset) == 0:
             return
 
@@ -191,12 +191,12 @@ class SupervisedTrainer:
         
         if args.save_embedding:
             embedding_output_test = utils.multiconcat_numpy(embedding_output_test)
-            outpath = output_dirpath + "/test_embedding.npy"
+            outpath = args.output_dirpath + "/test_embedding.npy"
             logging.info("save " + outpath)
             np.save(outpath, embedding_output_test)
             
             labels_output_test    = utils.multiconcat_numpy(labels_output_test)
-            outpath = output_dirpath + "/test_labels.npy"
+            outpath = args.output_dirpath + "/test_labels.npy"
             logging.info("save " + outpath)
             np.save(outpath, labels_output_test)
             

@@ -42,6 +42,33 @@ def setup(args):
 
     logging.info("Total Model params: {:.2f}M".format(sum(p.numel() for p in model.parameters()) / 1e6))
 
+    if args.load_model is not None:
+        
+        # load the model
+        model2 = torch.load(args.load_model)
+        
+        # adjust the state dictionary (to remove parallel)
+        old_dict = model2.state_dict()
+        new_dict = {}
+        for key in old_dict.keys():
+            val = old_dict[key]
+            new_key = key.replace('module.', '')
+            new_dict[new_key] = val
+            print('key', key, 'new_key', new_key)
+
+        # load the state dictionary
+        model.load_state_dict( new_dict )
+        
+        logging.info("After Load Total Model params: {:.2f}M".format(sum(p.numel() for p in model.parameters()) / 1e6))
+        #input('enter')
+        
+        #print('last_layer.centers')
+        #print(new_dict['last_layer.centers'])
+        #input('enter')
+        
+        
+
+
     # setup and load CIFAR10
     if args.num_classes == 10:
         if args.ood_p > 0:
@@ -213,6 +240,8 @@ def train(args):
     while not plateau_scheduler.is_done() and epoch <= trainer.MAX_EPOCHS:
         epoch += 1
         logging.info("Epoch: {}".format(epoch))
+
+        print('args.output_dirpath', args.output_dirpath)
 
         train_stats.plot_all_metrics(output_dirpath=args.output_dirpath)
         model_trainer.train_epoch(model, train_dataset_labeled, optimizer, criterion, emb_constraint, epoch, train_stats, unlabeled_dataset=train_dataset_unlabeled, ema_model=ema_model, save_embedding=args.save_embedding, output_dirpath=args.output_dirpath)

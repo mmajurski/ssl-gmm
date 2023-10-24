@@ -25,6 +25,7 @@ class FixMatchTrainer(trainer.SupervisedTrainer):
 
     def train_epoch(self, model, pytorch_dataset, optimizer, criterion, emb_constraint, epoch, train_stats, unlabeled_dataset=None, ema_model=None, save_embedding=False,output_dirpath = "./model" ):
 
+
         if unlabeled_dataset is None:
             raise RuntimeError("Unlabeled dataset missing. Cannot use FixMatch train_epoch function without an unlabeled_dataset.")
 
@@ -335,7 +336,7 @@ class FixMatchTrainer(trainer.SupervisedTrainer):
 
 
 
-    def eval_model(self, model, pytorch_dataset, criterion, train_stats, split_name, emb_constraint, epoch, args, output_dirpath="./model"):
+    def eval_model(self, model, pytorch_dataset, criterion, train_stats, split_name, emb_constraint, epoch, args):
         if pytorch_dataset is None or len(pytorch_dataset) == 0:
             return
 
@@ -402,12 +403,12 @@ class FixMatchTrainer(trainer.SupervisedTrainer):
         
         if args.save_embedding:
             embedding_output_test = utils.multiconcat_numpy(embedding_output_test)
-            outpath = output_dirpath + "/test_embedding.npy"
+            outpath = args.output_dirpath + "/test_embedding.npy"
             logging.info("save " + outpath)
             np.save(outpath, embedding_output_test)
             
             labels_output_test    = utils.multiconcat_numpy(labels_output_test)
-            outpath = output_dirpath + "/test_labels.npy"
+            outpath = args.output_dirpath + "/test_labels.npy"
             logging.info("save " + outpath)
             np.save(outpath, labels_output_test)
 
