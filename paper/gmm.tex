@@ -59,45 +59,71 @@
 
 \begin{document}
 	
-	\title{Beyond the Final Linear Layer: Enhancing Decision Boundaries}
-	
-	\author{Michael Majurski\\
-		Information Technology Lab, NIST\\
-		University of Maryland, Baltimore County\\
-		%	100 Bureau Dr. Gaithersburg MD, 20899\\
-		{\tt\small michael.majurski@nist.gov}
-		% For a paper whose authors are all at the same institution,
-		% omit the following lines up until the closing ``}''.
-	% Additional authors and addresses can be added with ``\and'',
-	% just like the second author.
-	% To save space, use either the email address or home page, not both
-	\and
-	Sumeet Menon\\
-	University of  Miami\\
-	{\tt\small sumeet1@umbc.edu}
-	\and
-	Parniyan Farvardin\\
-	University of Miami\\
-	{\tt\small pxf291@miami.edu}
-	\and
-	David Chapman\\
-	University of Miami\\
-	{\tt\small dchapman.cs@miami.edu}
+\title{Beyond the Final Linear Layer: Enhancing Decision Boundaries}
+
+\author{Michael Majurski\\
+	Information Technology Lab, NIST\\
+	University of Maryland, Baltimore County\\
+	%	100 Bureau Dr. Gaithersburg MD, 20899\\
+	{\tt\small michael.majurski@nist.gov}
+	% For a paper whose authors are all at the same institution,
+	% omit the following lines up until the closing ``}''.
+% Additional authors and addresses can be added with ``\and'',
+% just like the second author.
+% To save space, use either the email address or home page, not both
+\and
+Sumeet Menon\\
+University of Maryland, Baltimore County\\
+\and
+David Chapman\\
+University of Miami\\
 }
 
 \maketitle
 
 
+
+
+% SCOPE paper review notes that I need to make sure i also address
+% 1- The novelty of the proposed method is very limited. Many previous works have explored pseudo-labeling approaches based on local neighborhood density such as TSSDL [3], LPD [4], DASO [5].
+%2- The paper is not well-written, the method sections lacks clarity, the experiments section is badly organized and lacks important details.
+%3- The experimental evaluation is not convincing due to:
+%3.1- Lack of comparison with important baselines such as: Smooth Neighbors on Teacher Graphs [1], Interpolation Consistency Training [2], FlexMatch [7], TSSDL [3], LPD [4], DASO [5], Dash[6].
+%3.2- The performance gains obtained with 250 labels and 4000 labels on cifar10 are not significant. A similar case of very limited performance gains on CIFAR100 with 2500 and 4000 labels.
+%3.3- The ablation study findings show that dropping the Gaussian filter or KNN filter do not cause a drop in performance of the proposed method.
+%This raises the issue of the need for using both filters as the performance of SCOPE does not degrade when either component/filter is dropped.
+%
+%[1] Smooth neighbors on teacher graphs for semi-supervised learning, CVPR 2018.
+%[2] Interpolation consistency training for semi-supervised learning, Neural Networks 2022.
+%[3] Transductive semi-supervised deep learning using min-max features, ECCV 2018.
+%[4] Label propagation for deep semi-supervised learning, CVPR 2019.
+%[5] Distribution- aware semantics-oriented pseudo-label for imbalanced semi-supervised learning, CVPR 2022.
+%[6] Dash: Semi-supervised learning with dynamic thresholding, ICML 2021.
+%[7] Boosting semi-supervised learning with curriculum pseudo labeling, NeurIPS 2021.
+
+%1. The results are reported only on Cifar-10 and Cifar-100 datasets. Considering that the initial training only is performed for 1024 epochs, is it scalable for larger datasets?
+%2. The paper seems to have been rushed and has several writing issues:
+%* The beginning of the related work section is repetitive with the introduction. Where as experts in this area probably know what they refer to, non-experts are left to wonder.
+%* The variables X and Y in Section 1.1 are not defined
+%* "After the model is m_1 and m_2" is grammatically incorrect... I think it is meant to say "After the models m_1 and m_2..."
+%* X_L, Y_L in equation 1 are not defined. Are they supposed to be X_S and Y_S
+%* In Section 4.1, it states "One must further assume that sample independence". This assumption is not justified and I might think likely wrong (despite the authors claiming its is "common".)
+%
+%Please compare with more recent approaches in this area. For example:
+%[1] FlexMatch: Boosting Semi-supervised Learning with Curriculum Pseudo Labeling, NeurIPS 2021
+%[2] FreeMatch: Self-adaptive Thresholding for Semi-supervised Learning, ICLR 2023
+
+
 \begin{abstract}
-	\TODO {(majurski) rewrite abstract once paper is done to fill in details}
-	SSL leverages an abundance of unlabeled data to improve deep learning based model performance under limited training data regimes.
-	This paper presents a novel extension to any image classification architecture which improves accuracy in low-label regimes. 
-	We extend the FixMatch \cite{sohn2020fixmatch} training scheme with our novel last layers and demonstrate test accuracy improvement. 
-	The novelty consists of 2 elements: first we replace the last linear layer with a GMM trained via backprop, and second, we impose class-wise constraints on the embedding space the GMM operates on.
-	These methods match published SOTA 250 label CIFAR-10 \cite{cifar10} results and come close to matching SOTA in the 40 label regime without the significant model complexity of methods like SimMatchV2 \cite{zheng2023simmatchv2}.
-	Our method achieves 94.8\% and 94.2\% accuracy with 250 and 40 CIFAR-10 labels respectively.
-	\TODO {cleanup the repo}
-	Our code is available at: \url{https://github.com/*} \TODO {insert link for camera ready} % \url{https://github.com/mmajurski/ssl-gmm}
+\TODO {(majurski) rewrite abstract once paper is done to fill in details}
+SSL leverages an abundance of unlabeled data to improve deep learning based model performance under limited training data regimes.
+This paper presents a novel extension to any image classification architecture which improves accuracy in low-label regimes. 
+We extend the FixMatch \cite{sohn2020fixmatch} training scheme with our novel last layers and demonstrate test accuracy improvement. 
+The novelty consists of 2 elements: first we replace the last linear layer with a GMM trained via backprop, and second, we impose class-wise constraints on the embedding space the GMM operates on.
+These methods match published SOTA 250 label CIFAR-10 \cite{cifar10} results and come close to matching SOTA in the 40 label regime without the significant model complexity of methods like SimMatchV2 \cite{zheng2023simmatchv2}.
+Our method achieves 94.8\% and 94.2\% accuracy with 250 and 40 CIFAR-10 labels respectively.
+\TODO {cleanup the repo}
+Our code is available at: \url{https://github.com/*} \TODO {insert link for camera ready} % \url{https://github.com/mmajurski/ssl-gmm}
 \end{abstract}
 
 
@@ -108,16 +134,12 @@ The early successes of deep learning based methods relied on large annotated dat
 With data annotation becoming a significant bottleneck, especially in application domains outside of the standard benchmarks, another learning paradigm was needed.
 
 
-\begin{figure*}[ht]
+\begin{figure}[ht]
 	\centering
-	%\includegraphics[width=0.9\linewidth]{example-image-a}
-	%\includegraphics[width=0.612\linewidth]{figures/tsne.png}
-	\includegraphics[width=1.0\linewidth]{figures/tsne_horiz_v2.png}
-	%\caption{High level overview of our method. \TODO {(majurski) Create this figure.}}
-	\caption{t-SNE plots of embedding space using AA-GMM layer (a,b) and k-means layer (c,d).  (b) and (d) also exhibit 1st order Moment embedding constraint.  }
-	
+	\includegraphics[width=0.9\linewidth]{example-image-a}
+	\caption{High level overview of our method. \TODO {(majurski) Create this figure.}}
 	\label{fig:schema}
-\end{figure*}
+\end{figure}
 
 There are several flavors of SSL.
 Contrastive learning methods leverage the intuition that similar instances should be close in the representation space, while different instances are farther apart \cite{yang2022class,li2021comatch}.
@@ -165,6 +187,7 @@ Finally, because the embedding constraint penalties are applied to all unlabeled
 
 \section{Related Work}
 
+% TODO cite and compare against xu2021dash and zhang2021flexmatch and wang2022freematch for curiculum pseudo-labeling and how that can orthogonally improve SSL
 
 % TODO compare our method to lee2022contrastive which uses explicit cluster centers, and draws both the valid and non valid PL to the cluster center, just like we do, we just don't have a contrastive element like they do
 
@@ -173,11 +196,13 @@ The goal of SSL is to produce a trained model of equivalent accuracy to fully su
 
 \subsection{Pseudo-Labeling}
 Self-supervised learning was among the initial approaches employed in the context of semi-supervised learning to annotate unlabeled images. 
-This technique involves the initial training of a classifier with a limited set of labeled samples and incorporates pseudo-labels into the gradient descent process, exceeding a predefined threshold \cite{yarowsky1995unsupervised, mcclosky2006reranking, olivier2006semi,zhai2019s4l,livieris2019predicting,rosenberg2005semi,menon2020deep,10.1117/12.2549655, app13063752}. 
+This technique involves the initial training of a classifier with a limited set of labeled samples and incorporates pseudo-labels into the gradient descent process, exceeding a predefined threshold \cite{yarowsky1995unsupervised, mcclosky2006reranking, olivier2006semi,zhai2019s4l,livieris2019predicting,rosenberg2005semi,menon2020deep}. 
 A closely related method to self-training is co-training, where a given dataset is represented as two distinct feature sets \cite{blum1998combining}. 
 These independent sample sets are subsequently trained separately using two distinct models, and the sample predictions surpassing predetermined thresholds are utilized in the final model training process \cite{blum1998combining,prakash2014survey}.
 A notably advanced approach to pseudo-labeling is the Mean Teacher algorithm \cite{tarvainen2017mean}, which leverages exponential moving averages of model parameters to acquire a notably more stable target prediction. 
 This refinement has a substantial impact on enhancing the convergence of the algorithm.
+
+% TODO update related works with some of the ideas from the FREEMATCH papers related works on enhancing the single tau threshold
 
 
 \subsection{Consistency Regularization}
@@ -200,7 +225,7 @@ Other work has attempted to improve the pseudo-labeling process by imposing curr
 Previous work has leveraged the concept of explicit class cluster centers for conditioning semantic similarity \cite{zheng2022simmatch}.
 Recent work has extended purely clustering based methods like DINO \cite{caron2021emerging} into semi-supervised methods \cite{fini2023semi}.
 
-%\TODO {(chapman) find and include citations you were reading about embedding constraints. You mentioned this in the meeting on the 17th.}
+\TODO {(chapman) find and include citations you were reading about embedding constraints. You mentioned this in the meeting on the 17th.}
 
 % TODO talk about SimMatch embedding constraint via semantic seimilarity?
 
@@ -454,8 +479,8 @@ It can be informative to compare mean performance with max performance over $N$ 
 
 Our training configuration for both CIFAR-10 and CIFAR-100 is identical with the exception of the model architecture.
 For CIFAR-10 we a WideResNet28-2, whereas the CIFAR-100 models use WideResNet28-8.
-Its worth noting for the record that these models, drawn from prior SSL work like FixMatch, do not match the original publication definition \cite{zagoruyko2016wide}.
-Somewhere along the paper chain, an additional convolutional block was added, making the models perform better than the originally published version would.
+%Its worth noting for the record that these models, drawn from prior SSL work like FixMatch, do not match the original publication definition \cite{zagoruyko2016wide}.
+%Somewhere along the paper chain, an additional convolutional block was added, making the models perform better than the originally published version would.
 
 Matching the FixMatch \cite{sohn2020fixmatch} hyper-parameters, we use SGD with Nesterov momentum and $\lambda_u = 1$, $\beta = 0.9$, $\tau = 0.95$, $\mu = 7$, $B = 64$, and epoch size = $1024$ regardless of the number of images in the labeled dataset.
 Our $learning\_rate (\eta) = 0.01$ and we use an exponential moving average of the model weights with a decay $=0.999$.
@@ -472,6 +497,7 @@ Finally, due to the complexity in computing the the AAGMM layer, as well as any 
 We did notice during our experimentation that when gradient clipping was not necessary to ensure the loss didn't go to $NaN$, it reduced the final model accuracy.
 Despite computing the AAGMM and embedding constraints as numerically stable as we could, they are still less stable during backprop than a simple linear layer.
 
+% TODO update the langauge about runs to mimic the DASH paper: "All top-1 testing error rates are averaged over 5 independent random trails with their standard deviations using the same random seeds as baselines used."
 
 
 %\FloatBarrier
@@ -490,7 +516,7 @@ The FixMatch rows in table \ref{table1} also represent the baseline fully connec
 For 250 labels both the KMeans and AAGMM last layer perform approximately equivalent to base FixMatch when using $None$, or just the $1st$ Order MoM embedding constraint.
 However, higher order constraints, which enforce ever stricter controls on what the embedding space should look like, produce worse overall model accuracy.
 
-
+\TODO {(majurski) include DASH, FlexMatch, and FreeMatch results in this table}
 \begin{table*}[ht!]
 	\begin{tabularx}{\textwidth}{c|c|XXXXXX}
 		\multicolumn{6}{c}{CIFAR-10 Max Test Accuracy} \\ \hline\hline
@@ -590,7 +616,6 @@ However, higher order constraints, which enforce ever stricter controls on what 
 \section{Conclusion}
 
 The exponential GPU memory requirement for the $3rd$ and $4th$ order MoM embedding constraints limits their practical application, though memory optimization is likely possible.
-
 
 \TODO{(majurski) talk about CMM and how that didn't work at all}.
 

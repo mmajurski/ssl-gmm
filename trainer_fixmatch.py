@@ -236,9 +236,13 @@ class FixMatchTrainer(trainer.SupervisedTrainer):
                 batch_loss += emb_constraint_loss_ul
 
             batch_loss.backward()
-            if self.args.clip_grad:
+            if batch_loss > 1.0:
+                # logging.info("Loss {} is high clipping grad norm 1.0".format(batch_loss))
                 torch.nn.utils.clip_grad_norm_(model.parameters(), 1.0)
-                # torch.nn.utils.clip_grad_value_(model.parameters(), 1.0)
+
+            # if self.args.clip_grad:
+            #     torch.nn.utils.clip_grad_norm_(model.parameters(), 1.0)
+            #     # torch.nn.utils.clip_grad_value_(model.parameters(), 1.0)
             optimizer.step()
 
             optimizer.zero_grad()  # set_to_none=True)

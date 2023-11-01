@@ -11,7 +11,8 @@ post_fix = 'ingest'
 directory = 'models-{}'.format(post_fix)
 
 # columns to extract from file name
-config_columns = ['trainer', 'last_layer', 'use_ema', 'embedding_dim', 'num_labeled_datapoints', 'embedding_constraint', 'clip_grad', 'patience', 'seed']
+# config_columns = ['trainer', 'last_layer', 'use_ema', 'embedding_dim', 'num_labeled_datapoints', 'embedding_constraint', 'clip_grad', 'patience', 'seed']
+config_columns = ['last_layer', 'use_ema', 'embedding_dim', 'learning_rate', 'num_labeled_datapoints', 'embedding_constraint', 'clip_grad', 'seed']
 # columns to extract from result file (stats.json)
 result_columns = ['test_accuracy', 'epoch']
 results_df = None

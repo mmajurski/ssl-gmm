@@ -6,11 +6,11 @@
 #SBATCH --exclude=p100,quebec
 #SBATCH --nodes=1
 #SBATCH --oversubscribe
-#SBATCH --cpus-per-task=10
-#SBATCH --gres=gpu:1
-#SBATCH --job-name=g-fill
+#SBATCH --cpus-per-task=20
+#SBATCH --gres=gpu:2
+#SBATCH --job-name=cf100
 #SBATCH -o log-%N.%j.out
-#SBATCH --time=196:0:0
+#SBATCH --time=256:0:0
 
 # NIST-developed software is provided by NIST as a public service. You may use, copy and distribute copies of the software in any medium, provided that you keep intact this entire notice. You may improve, modify and create derivative works of the software or any portion of the software, and you may copy and distribute such modifications or works. Modified works should carry a notice stating that you changed the software and should note the date and nature of any such change. Please explicitly acknowledge the National Institute of Standards and Technology as the source of the software.
 
@@ -23,7 +23,7 @@ source /mnt/isgnas/home/mmajursk/miniconda3/etc/profile.d/conda.sh
 conda activate gmm
 
 #SBATCH --exclude=p100,quebec,papa,oscar
-#SBATCH --nodelist=oscar
+#SBATCH --nodelist=sierra
 
 
 LAST_LAYER=$1
@@ -32,8 +32,7 @@ START_RUN=$3
 EMBD_CONSTRAINT=$4
 NLABELS=$5
 MODELS_PER_JOB=$6
-OOD_PERC=$7
-CLIP_GRAD=$8
+SEED=$7
 
 
 
@@ -42,29 +41,29 @@ CLIP_GRAD=$8
 echo "Model Number Starting PointCount = $START_RUN"
 echo "Requested Model Count = $MODELS_PER_JOB"
 
-root_output_directory="./models"
+root_output_directory="./models-cf10"
 if ! [ -d ${root_output_directory} ]; then
     mkdir ${root_output_directory}
 fi
 
+# 3474173998
+# 273230791
+# 3586106167
+# 1325645050
+# 2564231920
+
 
 INDEX=$START_RUN
 SUCCESS_COUNT=0
-let N=4*${MODELS_PER_JOB}
+let N=10*${MODELS_PER_JOB}
 for i in $(seq $N); do
 
   MODEL_FP="${root_output_directory}/id-$(printf "%08d" ${INDEX})"
-  if [ $CLIP_GRAD -eq 0 ]; then
-    python main.py --output-dirpath=${MODEL_FP} --last-layer=${LAST_LAYER} --embedding_dim=${EMBD_DIM} --embedding-constraint=${EMBD_CONSTRAINT} --num-labeled-datapoints=${NLABELS} --ood_p=${OOD_PERC}
+  
+    python main.py --output-dirpath=${MODEL_FP} --last-layer=${LAST_LAYER} --embedding_dim=${EMBD_DIM} --embedding-constraint=${EMBD_CONSTRAINT} --num-labeled-datapoints=${NLABELS} --seed=${SEED}
+    # python main.py --output-dirpath=${MODEL_FP} --last-layer=${LAST_LAYER} --embedding_dim=${EMBD_DIM} --embedding-constraint=${EMBD_CONSTRAINT} --num-labeled-datapoints=${NLABELS} --arch="wide_resnet28-8" --num-classes=100
     sc=$? # get status code from main
-  else
-    python main.py --output-dirpath=${MODEL_FP} --last-layer=${LAST_LAYER} --embedding_dim=${EMBD_DIM} --embedding-constraint=${EMBD_CONSTRAINT} --num-labeled-datapoints=${NLABELS} --ood_p=${OOD_PERC} --clip-grad
-    sc=$? # get status code from main
-  fi
-
-
-  #python main.py --output-dirpath=${MODEL_FP} --last-layer=${LAST_LAYER} --embedding_dim=${EMBD_DIM} --embedding-constraint=${EMBD_CONSTRAINT} --num-labeled-datapoints=${NLABELS} --ood_p=${OOD_PERC}
-  # sc=$? # get status code from main
+ 
 
   if [ $sc -eq 0 ]; then
      SUCCESS_COUNT=$((SUCCESS_COUNT+1))
@@ -75,7 +74,6 @@ for i in $(seq $N); do
    fi
 
   INDEX=$((INDEX+1))
-
 done
 
 
