@@ -49,7 +49,7 @@ def setup(args):
         
         # adjust the state dictionary (to remove parallel)
         old_dict = model2.state_dict()
-        new_dict = {}
+        new_dict = model.state_dict()
         for key in old_dict.keys():
             val = old_dict[key]
             new_key = key.replace('module.', '')
@@ -244,7 +244,7 @@ def train(args):
         print('args.output_dirpath', args.output_dirpath)
 
         train_stats.plot_all_metrics(output_dirpath=args.output_dirpath)
-        model_trainer.train_epoch(model, train_dataset_labeled, optimizer, criterion, emb_constraint, epoch, train_stats, unlabeled_dataset=train_dataset_unlabeled, ema_model=ema_model)
+        model_trainer.train_epoch(model, train_dataset_labeled, optimizer, criterion, emb_constraint, epoch, train_stats, unlabeled_dataset=train_dataset_unlabeled, ema_model=ema_model, save_embedding=args.save_embedding, output_dirpath=args.output_dirpath)
 
         if args.use_ema:
             test_model = ema_model.ema
@@ -287,3 +287,5 @@ def train(args):
     torch.save(best_model, os.path.join(args.output_dirpath, 'model.pt'))
 
     return train_stats
+    
+

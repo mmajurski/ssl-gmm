@@ -46,6 +46,7 @@ def main():
     parser.add_argument('--epoch-size', default=1024, help='the number of batches in an epoch', type=int)
     parser.add_argument('--lr-reduction-factor', default=0.2, type=float)
     parser.add_argument('--use-ema', action='store_true', default=True)
+    parser.add_argument('--no-use-ema', action='store_false', dest='use-ema', help='Set use-ema to False')
     parser.add_argument('--ema-decay', default=0.999, type=float)
     parser.add_argument('--pseudo-label-threshold', default=0.95, type=float, help='Threshold logits when filtering pseudo-labeling.')
     parser.add_argument('--pseudo-label-negative-threshold', default=0.1, type=float, help='Threshold logits when filtering negative pseudo-labeling. I.e. PL with logits < this will be included as negative examples.')
