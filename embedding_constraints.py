@@ -1,7 +1,7 @@
 import torch
 import gauss_moments
 import time
-
+import random
 
 class L2ClusterCentroid(torch.nn.Module):
     def __init__(self):
@@ -358,7 +358,17 @@ class GaussianMoments3(torch.nn.Module):
 
         return mom_penalty
 
-
+def print2d(A):
+    sY = A.shape[0]
+    sX = A.shape[1]
+    if (len(A.shape)!=2):
+        raise RuntimeException('print2d not a 2d tensor shape:' + str(A.shape))
+    print('shape %d %d\n' % (sY, sX))
+    for y in range(sY):
+        for x in range(sX):
+            print('% 0.3f' % A[y][x], end='\t')
+        print('')
+            
 
 class MeanCovar(torch.nn.Module):
     def __init__(self):
@@ -367,6 +377,9 @@ class MeanCovar(torch.nn.Module):
     def forward(self, embedding, centers, logits):
         if centers is None:
             return 0.0
+
+        #is_debug = (random.randint(0,100)==0)
+        is_debug = False
 
         num_classes = logits.shape[-1]
         dim = embedding.shape[-1]
@@ -379,11 +392,47 @@ class MeanCovar(torch.nn.Module):
         cluster_assignment = torch.argmax(logits, dim=-1)
         cluster_assignment_onehot = torch.nn.functional.one_hot(cluster_assignment, logits.shape[1])
 
+        #print('cluster_assignment', cluster_assignment)
+        #input('enter')
+
         # Upsample the x-data to [batch, num_classes, dim]
         centers_rep = centers.unsqueeze(0).repeat(batch, 1, 1)
 
+        #print2d(centers)
+        #print('centers')
+        #input('enter')
+
+        #print2d(embedding)
+        #print('embedding')
+        #input('enter')
+
         # Subtract to get diff of [batch, dim, dim]
         x_mu_rep = embedding_rep - centers_rep
+
+        # ----------------------------------------
+        # Calculate the mean / stdev of the whole sample
+        # ----------------------------------------
+
+        
+        #embedding_mean = torch.mean(embedding, axis=0)
+        
+        #embedding_stdev = torch.reshape(embedding_mean, (1, dim)).repeat(batch,1)
+        #embedding_stdev = embedding - embedding_stdev
+        embedding_stdev = embedding
+        embedding_stdev = embedding_stdev*embedding_stdev
+        embedding_stdev = torch.mean(embedding_stdev, axis=0)
+        
+        embedding_stdev_target = 10.0
+        embedding_stdev_penalty = embedding_stdev_target - embedding_stdev
+        embedding_stdev_penalty = torch.mean(embedding_stdev_penalty * embedding_stdev_penalty)
+    
+        if (is_debug):
+            print('embedding.shape', embedding.shape)
+            #print('embedding_mean', embedding_mean)
+            print('embedding_stdev', embedding_stdev)
+            print('embedding_stdev_penalty', embedding_stdev_penalty)
+        
+        #input('enter')
 
         # ----------------------------------------
         # Calculate the empirical cluster mean / covariance
@@ -399,12 +448,27 @@ class MeanCovar(torch.nn.Module):
 
         diff_onehot = x_mu_rep * cluster_assignment_onehot_rep
 
+        #print('diff_onehot', diff_onehot.shape)
+        #input('enter')
+
+        #for i in range(64):
+        #   print2d(torch.reshape(diff_onehot[:,i,:], (diff_onehot.shape[0], diff_onehot.shape[2])))
+        #   print('diff_onehot[:,',i,',:]')
+        #   input('enter')
+
         #
         # Calculate the empirical mean
         #
         empirical_total = torch.sum(diff_onehot, dim=0)
         empirical_count = cluster_weight.unsqueeze(1).repeat(1, dim)
         moment1 = empirical_total / (empirical_count + 1e-8)
+
+        #print('moment1', moment1.shape)
+        #input('enter')
+
+        #print2d(moment1)
+        #print('moment1')
+        #input('enter')
 
         #
         # Calculate the empirical covariance
@@ -418,16 +482,38 @@ class MeanCovar(torch.nn.Module):
         moment2_count = empirical_count.unsqueeze(2).repeat((1, 1, dim))
         moment2 = moment2 / (moment2_count + 1e-8)
 
+        #print('moment2', moment2.shape)
+        #input('enter')
+
         # repeat the moment targets per class
         moment1_target = torch.zeros_like(moment1, requires_grad=False)
         moment1_weight = torch.ones_like(moment1, requires_grad=False) * (1.0 / dim)
         moment2_target = torch.eye(dim, dtype=moment2.dtype, requires_grad=False, device=moment2.device)
         moment2_target = moment2_target.repeat(num_classes, 1, 1)
 
+        diag_terms     = moment2_target
+        off_diag_terms = 1.0 - diag_terms
+
         a = 1.0 / float(2 * dim)
         b = 1.0 / float(2 * dim * (dim - 1))
         moment2_weight = (a - b) * torch.eye(dim, dtype=moment2.dtype, requires_grad=False, device=moment2.device)
         moment2_weight = moment2_weight + b
+
+        #print('moment1_target', moment1_target.shape)
+        #print('moment1_weight', moment1_weight.shape)
+        #print('moment2_target', moment2_target.shape)
+        #print('moment2_weight', moment2_weight.shape)
+        #input('enter')
+
+        #print2d(moment2_weight)
+        #print('moment2_weight')
+        #input('enter')
+
+        if (is_debug):
+            for c in range(10):
+                print('-----------------------------------')
+                print2d(moment2[c])
+                print('moment2[',c,']')
 
         # normalize the moments with the "magic formula"
         #  that keeps the values from growing at the rate
@@ -441,7 +527,18 @@ class MeanCovar(torch.nn.Module):
         #  precomputed values
         #	moment 1   no formula required, it's perfectly linear
         #	moment 2   a = 1/2  c = 0.25		   b = 0.5
-        moment2 = torch.sign(torch.sign(moment2) + 0.1) * (torch.pow(torch.abs(moment2) + 0.25, 0.5) - 0.5)
+#        moment2        = torch.sign(torch.sign(moment2) + 0.1) * (torch.pow(torch.abs(moment2) + 0.25, 0.5) - 0.5)
+#        moment2_target = torch.sign(torch.sign(moment2_target) + 0.1) * (torch.pow(torch.abs(moment2_target) + 0.25, 0.5) - 0.5)
+
+        #for c in range(10):
+        #    
+        #    print('-----------------------------------')
+        #    print2d(moment2[c])
+        #    print('moment2[',c,']')
+        #    print('------')
+        #    print2d(moment2_target[c])
+        #    print('moment2_target[',c,']')
+        #    input('enter')
 
         # repeat the moment penalty weights perclass
         cluster_weight_norm = cluster_weight / torch.sum(cluster_weight)
@@ -454,11 +551,64 @@ class MeanCovar(torch.nn.Module):
 
         # calculate the penalty loss function
         moment_penalty1 = torch.sum(moment1_weight * torch.pow((moment1 - moment1_target), 2))
-        moment_penalty2 = torch.sum(moment2_weight * torch.pow((moment2 - moment2_target), 2))
+#        moment_penalty2 = torch.sum(moment2_weight * torch.pow((moment2 - moment2_target), 2))
+
+        # use cosine similarity
+        #moment_penalty2_ab = torch.sum(moment2_weight * moment2 * moment2_target)
+        #moment_penalty2_a  = torch.sqrt(torch.sum(moment2_weight * moment2 * moment2) + 0.000001)
+        #moment_penalty2_b  = torch.sqrt(torch.sum(moment2_weight * moment2_target * moment2_target) + 0.000001)
+        #moment_penalty2    = moment_penalty2_ab / (moment_penalty2_a * moment_penalty2_b + 0.000001)
+
+        # use cosine similarity
+        moment_similarity2_ab = moment2_weight * moment2 * moment2_target
+        moment_similarity2_a  = moment2_weight * moment2 * moment2
+        moment_similarity2_b  = moment2_weight * moment2_target * moment2_target
+        moment_similarity2_ab =            torch.sum(torch.sum(moment_similarity2_ab, axis=2), axis=1)
+        moment_similarity2_a  = torch.sqrt(torch.sum(torch.sum(moment_similarity2_a,  axis=2), axis=1) + 0.000001)
+        moment_similarity2_b  = torch.sqrt(torch.sum(torch.sum(moment_similarity2_b,  axis=2), axis=1) + 0.000001)
+
+        #print('mpab', moment_similarity2_ab.shape)
+        #print('mpa', moment_similarity2_a.shape)
+        #print('mpb', moment_similarity2_b.shape)
+        #input('enter')
+
+        #print('mpab', moment_similarity2_ab)
+        #print('mpa', moment_similarity2_a)
+        #print('mpb', moment_similarity2_b)
+        #input('enter')
+
+        moment_similarity2    = moment_similarity2_ab / (moment_similarity2_a * moment_similarity2_b + 0.000001)
+
+        #print('moment_similarity2', moment_similarity2)
+        #input('enter')
+
+        moment_penalty2 = 1 - moment_similarity2
+
+        #print('moment_penalty2', moment_penalty2)
+        #input('enter')
+
+        moment_penalty2 = torch.mean(moment_penalty2)
+
+        #print('moment_penalty2', moment_penalty2)
+        #input('enter')
+
+        # separate into diagonal and off-diagonal terms
+        moment_penalty2_diag     = torch.sum(    diag_terms * (moment2_weight * torch.pow((moment2 - moment2_target), 2)))
+        moment_penalty2_off_diag = torch.sum(off_diag_terms * (moment2_weight * torch.pow((moment2 - moment2_target), 2)))
 
         # MoM loss
+        #mom_penalty = 1.0 * moment_penalty1 + \
+        #              0.5 * moment_penalty2
+        # MoM loss
         mom_penalty = 1.0 * moment_penalty1 + \
-                      0.5 * moment_penalty2
+                      0.05 * moment_penalty2
+                      #0.5 * moment_penalty2
+
+        if (is_debug):
+            #print('moment_penalty1 % 0.4f moment_penalty2 % 0.4f (diag % 0.4f off-diag % 0.4f) stdev_penalty % 0.4f mom_penalty % 0.4f' % (moment_penalty1.detach().cpu().numpy(), moment_penalty2.detach().cpu().numpy(), moment_penalty2_diag.detach().cpu().numpy(), moment_penalty2_off_diag.detach().cpu().numpy(), embedding_stdev_penalty.detach().cpu().numpy(), mom_penalty.detach().cpu().numpy()))
+            print('moment_penalty1 % 0.4f moment_penalty2 % 0.4f mom_penalty % 0.4f' % (moment_penalty1.detach().cpu().numpy(), moment_penalty2.detach().cpu().numpy(), mom_penalty.detach().cpu().numpy()))
+        #print('moment_penalty1', moment_penalty1.detach().cpu().numpy(), 'moment_penalty2', moment_penalty2.detach().cpu().numpy(), 'mom_penalty', mom_penalty.detach().cpu().numpy())
+        #input('enter')
 
         return mom_penalty
 

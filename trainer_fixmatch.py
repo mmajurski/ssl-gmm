@@ -68,8 +68,7 @@ class FixMatchTrainer(trainer.SupervisedTrainer):
         #     model.last_layer.centers = model.last_layer.centers.cuda()
         # if hasattr(model, 'module') and hasattr(model.module.last_layer, 'centers'):
         #     model.module.last_layer.centers = model.module.last_layer.centers.cuda()
-        
-        
+
         embedding_l_list = []
         labels_l    = []
         embedding_ul_weak_list = []
@@ -93,7 +92,7 @@ class FixMatchTrainer(trainer.SupervisedTrainer):
 
             # interleave not required for single GPU training
             inputs = utils.interleave(inputs, 2 * self.args.mu + 1)
-            embedding, logits = model(inputs)
+            embedding, logits, latent_ce = model(inputs)
 
             logits = utils.de_interleave(logits, 2 * self.args.mu + 1)
             embedding = utils.de_interleave(embedding, 2 * self.args.mu + 1)
@@ -111,7 +110,7 @@ class FixMatchTrainer(trainer.SupervisedTrainer):
             embedding_l = embedding[:inputs_l.shape[0]]
             embedding_ul = embedding[inputs_l.shape[0]:]
             embedding_ul_weak = embedding_ul[:inputs_ul_weak.shape[0]]
-            embedding_ul_strong = embedding_ul[inputs_ul_weak.shape[0]:]        
+            embedding_ul_strong = embedding_ul[inputs_ul_weak.shape[0]:]
 
 
             softmax_ul_weak = torch.nn.functional.softmax(logits_ul_weak, dim=-1)
@@ -194,11 +193,13 @@ class FixMatchTrainer(trainer.SupervisedTrainer):
                 train_stats.append_accumulate('train_invalid_pl_loss', loss_invalid_pl.item())
 
             if emb_constraint is not None:
-                if hasattr(model, 'module'):
-                    emb_constraint_l = emb_constraint(embedding_l, model.module.last_layer.centers, logits_l)
-                else:
-                    emb_constraint_l = emb_constraint(embedding_l, model.last_layer.centers, logits_l)
-                emb_constraint_loss_l = embedding_criterion(emb_constraint_l, torch.zeros_like(emb_constraint_l))
+                #if hasattr(model, 'module'):
+                #    emb_constraint_l = emb_constraint(embedding_l, model.module.last_layer.centers, logits_l)
+                #else:
+                #    emb_constraint_l = emb_constraint(embedding_l, model.last_layer.centers, logits_l)
+                #emb_constraint_loss_l = embedding_criterion(emb_constraint_l, torch.zeros_like(emb_constraint_l))
+                emb_constraint_loss_l = 0.01 * latent_ce
+                print('emb_constraint_loss_l', emb_constraint_loss_l.detach().cpu().numpy(), 'loss_l', loss_l)
                 train_stats.append_accumulate('train_embedding_constraint_loss', emb_constraint_loss_l.item())
                 loss_l += emb_constraint_loss_l
 
@@ -360,7 +361,7 @@ class FixMatchTrainer(trainer.SupervisedTrainer):
                 inputs = tensor_dict[0].cuda()
                 labels = tensor_dict[1].cuda()
 
-                embedding, logits = model(inputs)
+                embedding, logits, latent_ce = model(inputs)
                 loss = criterion(logits, labels)
                 if emb_constraint is not None:
                     # only include a "logit" loss, when there are other terms
@@ -369,7 +370,8 @@ class FixMatchTrainer(trainer.SupervisedTrainer):
                         emb_constraint_l = emb_constraint(embedding, model.module.last_layer.centers, logits)
                     else:
                         emb_constraint_l = emb_constraint(embedding, model.last_layer.centers, logits)
-                    emb_constraint_loss = embedding_criterion(emb_constraint_l, torch.zeros_like(emb_constraint_l))
+                    #emb_constraint_loss = embedding_criterion(emb_constraint_l, torch.zeros_like(emb_constraint_l))
+                    emb_constraint_loss = latent_ce
                     train_stats.append_accumulate('{}_emb_constraint_loss'.format(split_name), emb_constraint_loss.item())
                     loss += emb_constraint_loss
 
@@ -388,7 +390,7 @@ class FixMatchTrainer(trainer.SupervisedTrainer):
                     gpu_mem_percent_used = [np.round(100 * x, 1) for x in gpu_mem_percent_used]
                     logging.info('  batch {}/{}  loss: {:8.8g}  cpu_mem: {:2.1f}%  gpu_mem: {}% of {}MiB'.format(batch_idx, batch_count, loss.item(), cpu_mem_percent_used, gpu_mem_percent_used, memory_total_info))
                 
-                if return_embedding:
+                if return_embedding or args.save_embedding:
                     embedding_output_test.append( embedding.detach().cpu().numpy() )
                     labels_output_test.append(  labels.detach().cpu().numpy() )
 

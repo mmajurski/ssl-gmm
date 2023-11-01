@@ -1,5 +1,6 @@
 import logging
 import os
+import random
 
 import torch
 import torch.nn as nn
@@ -101,6 +102,17 @@ class WideResNet(nn.Module):
         return out
 
 
+def print2d(A):
+    sY = A.shape[0]
+    sX = A.shape[1]
+    if (len(A.shape)!=2):
+        raise RuntimeException('print2d not a 2d tensor shape:' + str(A.shape))
+    print('shape %d %d\n' % (sY, sX))
+    for y in range(sY):
+        for x in range(sX):
+            print('% 0.3f' % A[y][x], end='\t')
+        print('')
+            
 
 class WideResNetMajurski(nn.Module):
     def __init__(self, num_classes, last_layer:str='aa_gmm_d1', depth=28, width=2, embedding_dim=None, output_folder=None):
@@ -137,6 +149,8 @@ class WideResNetMajurski(nn.Module):
         # self.relu = nn.ReLU(inplace=True)  # published wideresnet network
         self.relu = nn.LeakyReLU(negative_slope=0.1, inplace=True)
 
+        self.scaling = nn.Parameter(torch.tensor([10],requires_grad=True,dtype=torch.float32))
+
         self.count = 0
 
         # self.fc1 = nn.Linear(channels[3], channels[3])
@@ -171,14 +185,42 @@ class WideResNetMajurski(nn.Module):
         out = F.adaptive_avg_pool2d(out, 1)
         embedding = out.view(-1, self.channels)
 
+        #print('embedding_dim', self.embedding_dim)
+        #print('self.emb_linear', self.emb_linear)
+
         # embedding = self.relu(self.fc1(embedding))
         # embedding = self.relu(self.fc2(embedding))
         # embedding = self.relu(self.fc3(embedding))
 
         if self.emb_linear is not None:
             embedding = self.emb_linear(embedding)
+        embedding = self.scaling * embedding
 
-        logits = self.last_layer(embedding)
+        #print('after linear')
+        #print('embedding', embedding.shape)
+        #is_debug = (random.randint(0,100)==0)
+        is_debug = False
+        #is_debug = True
+
+        if (is_debug):
+            print('emb_linear weight')
+            print2d(torch.transpose(self.emb_linear.weight,0,1))
+            print(self.emb_linear.weight.shape)
+            print('emb_linear sum squares', torch.sum(self.emb_linear.weight * self.emb_linear.weight))
+            print('emb_linear bias')
+            print(self.emb_linear.bias)
+            print(self.emb_linear.bias.shape)
+            print('emb_linear')
+            print('self.scaling', self.scaling)
+
+        #input('enter')
+
+        logits,latent_cross_entropy = self.last_layer(embedding)
+
+        #print2d(embedding)
+        #print('embedding')
+
+        #input('enter')
 
         # if self.output_folder is not None and not self.training and self.embedding_dim == 2:
         #     from matplotlib import pyplot as plt
@@ -205,4 +247,5 @@ class WideResNetMajurski(nn.Module):
         #     self.count += 1
         #     plt.close()
 
-        return embedding, logits
+        return embedding, logits, latent_cross_entropy
+

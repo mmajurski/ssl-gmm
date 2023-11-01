@@ -1,7 +1,9 @@
+import math
 import copy
 import os
 import numpy as np
 import torch.nn
+import torch.nn.functional as F
 import torchvision.models
 from matplotlib import pyplot as plt
 import gauss_moments
@@ -57,7 +59,7 @@ class kmeans(torch.nn.Module):
         resp_kmeans = torch.clip(resp_kmeans, min=1e-8)
         resp_kmeans = torch.log(resp_kmeans)
 
-        return resp_kmeans
+        return resp_kmeans, 0.0
 
 
 class Identity(torch.nn.Module):
@@ -110,6 +112,8 @@ class axis_aligned_gmm_cmm_layer(torch.nn.Module):
 
             # Safe version of Determinant
             log_det[k] = torch.sum(torch.log(D), dim=0)
+
+        print('D', D)
 
         # Safe det version
         det_scale_factor = -0.5 * log_det
@@ -177,6 +181,23 @@ class axis_aligned_gmm_cmm_layer(torch.nn.Module):
         resp_gmm = torch.log(resp_gmm)
         resp_cmm = torch.log(resp_cmm)
 
+        # Which cluster to assign ?
+        assign_gmm = torch.argmax(resp_gmm,dim=1)
+        assign_gmm_onehot = F.one_hot(assign_gmm, self.num_classes)
+
+        # Calculate the cross-entroy embedding constraint H(p(Y,Z)||Q)
+        #class_contrib = math.log(1.0/self.num_classes)
+        ln_2pi = 1.83787706641
+        log_det_rep = torch.reshape(log_det, (1,self.num_classes)).repeat((batch,1))
+        cross_entropy_embed = -0.5*self.dim*ln_2pi + log_det_rep + expo_gmm
+        cross_entropy_embed *= assign_gmm_onehot
+        #print('cross_entropy_embed', cross_entropy_embed)
+        #input('enter')
+        cross_entropy_embed = (-1.0 / batch) * torch.sum(assign_gmm_onehot * cross_entropy_embed)
+
+        #print('cross_entropy_embed', cross_entropy_embed)
+        #input('enter')
+
         if self.return_gmm and self.return_cmm:
             a = torch.nn.functional.softmax(resp_gmm, dim=-1)
             b = torch.nn.functional.softmax(resp_cmm, dim=-1)
@@ -187,7 +208,7 @@ class axis_aligned_gmm_cmm_layer(torch.nn.Module):
             else:
                 resp = resp_cmm
 
-        return resp
+        return resp, cross_entropy_embed
 
 
 class axis_aligned_gmm_cmm_D1_layer(torch.nn.Module):
@@ -289,5 +310,5 @@ class axis_aligned_gmm_cmm_D1_layer(torch.nn.Module):
             else:
                 resp = resp_cmm
 
-        return resp
+        return resp, 0.0
 
