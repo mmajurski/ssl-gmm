@@ -46,19 +46,7 @@ def compute_test_embedding(model_fp):
     train_stats = metadata.TrainingStats()
     criterion = torch.nn.CrossEntropyLoss()
 
-    if args.embedding_constraint is None or args.embedding_constraint.lower() == 'none':
-        emb_constraint = None
-    elif args.embedding_constraint == 'mean_covar':
-        emb_constraint = embedding_constraints.MeanCovar()
-    elif args.embedding_constraint == 'l2':
-        emb_constraint = embedding_constraints.Mean()
-    elif args.embedding_constraint == 'gauss_moment3':
-        emb_constraint = embedding_constraints.GaussianMoments3(embedding_dim=args.embedding_dim, num_classes=args.num_classes)
-    elif args.embedding_constraint == 'gauss_moment4':
-        emb_constraint = embedding_constraints.GaussianMoments4(embedding_dim=args.embedding_dim, num_classes=args.num_classes)
-    else:
-        raise RuntimeError("Invalid embedding constraint type: {}".format(args.embedding_constraint))
-
+    emb_constraint = None  # no need to use an embedding constraint for this
     epoch = 0
     embedding_output_test, labels_output_test = model_trainer.eval_model(model, test_dataset, criterion, train_stats, "test", emb_constraint, epoch, args, return_embedding=True)
 
@@ -71,13 +59,17 @@ def compute_test_embedding(model_fp):
 
 
 
-def build_tsne_figure_cifar10(model_fp):
+def build_tsne_figure_cifar10(model_fp, epoch=None):
     model_fn = os.path.basename(model_fp)
-    ofp = "./{}-tsne.jpg".format(model_fn)
+    if epoch is not None:
+        ofp = os.path.join(model_fp, "{}-tsne-{}.jpg".format(model_fn, epoch))
+    else:
+        ofp = os.path.join(model_fp, "{}-tsne.jpg".format(model_fn, epoch))
     if os.path.exists(ofp):
         return
     print(model_fn)
 
+    print("Building test embedding")
     embedding_output_test, labels_output_test = compute_test_embedding(model_fp)
 
     # load model
@@ -166,14 +158,17 @@ def build_tsne_figure_cifar10(model_fp):
     plt.title("tSNE: {} + {}".format(ll, emb_c))
 
     plt.savefig(ofp)
+    plt.cla()
+    plt.clf()
     plt.close()
 
     print(' Success!')
 
 
-ifp = './models-tsne'
-fns = [fn for fn in os.listdir(ifp) if fn.startswith('id-')]
-fns.sort()
+if __name__ == '__main__':
+    ifp = './models-tsne'
+    fns = [fn for fn in os.listdir(ifp) if fn.startswith('id-')]
+    fns.sort()
 
-for fn in fns:
-    build_tsne_figure_cifar10(os.path.join(ifp, fn))
+    for fn in fns:
+        build_tsne_figure_cifar10(os.path.join(ifp, fn))

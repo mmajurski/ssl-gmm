@@ -92,7 +92,7 @@ class SupervisedTrainer:
             if ema_model is not None:
                 ema_model.update(model)
 
-            if batch_idx % 100 == 0:
+            if batch_idx % self.args.log_interval == 0:
                 # log loss and current GPU utilization
                 cpu_mem_percent_used = psutil.virtual_memory().percent
                 gpu_mem_percent_used, memory_total_info = utils.get_gpu_memory()
@@ -155,7 +155,7 @@ class SupervisedTrainer:
                     emb_constraint_loss = embedding_criterion(emb_constraint_l, torch.zeros_like(emb_constraint_l))
                     batch_loss += emb_constraint_loss
 
-                if batch_idx % 100 == 0:
+                if batch_idx % self.args.log_interval == 0:
                     # log loss and current GPU utilization
                     cpu_mem_percent_used = psutil.virtual_memory().percent
                     gpu_mem_percent_used, memory_total_info = utils.get_gpu_memory()

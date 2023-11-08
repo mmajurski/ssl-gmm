@@ -10,6 +10,7 @@ def gen_key(cdict):
     key = ""
     keys = list(cdict.keys())
     keys = [k for k in keys if k != 'model']
+    keys = [k for k in keys if k != 'seed']
     keys.sort()
     for col in keys:
         key += str(col)[0:4] + ':' + str(cdict[col]) + '-'
@@ -17,15 +18,17 @@ def gen_key(cdict):
 
 # folder to read files from
 post_fix = 'cifar10'
-post_fix = 'cifar10-unused'
+# post_fix = 'cifar10-unused'
 # post_fix = 'cifar100'
 directory = 'models-{}'.format(post_fix)
 
 # columns to extract from file name
 # config_columns = ['trainer', 'last_layer', 'use_ema', 'embedding_dim', 'num_labeled_datapoints', 'embedding_constraint', 'clip_grad', 'patience', 'nesterov']
-config_columns = ['model', 'trainer', 'last_layer', 'embedding_dim', 'num_labeled_datapoints', 'embedding_constraint', 'clip_grad']
+config_columns = ['model', 'last_layer', 'seed', 'embedding_dim', 'num_labeled_datapoints', 'embedding_constraint']
 # columns to extract from result file (stats.json)
 result_columns = ['test_accuracy', 'epoch', 'test_accuracy_per_class']
+
+seeds = [3474173998, 273230791, 3586106167, 1325645050, 2564231920]
 results_df = None
 
 # iterating over folders in the given directory
@@ -46,8 +49,8 @@ for folder_name in folder_names:
 
         config_dict['model'] = folder_name
 
-        if config_dict['patience'] == 20:
-            continue
+        # if config_dict['patience'] == 20:
+        #     continue
         # if config_dict['embedding_constraint'] != 'mean_covar' and config_dict['clip_grad'] == True:
         #     continue
         # if config_dict['embedding_dim'] == 8:
@@ -56,22 +59,22 @@ for folder_name in folder_names:
         #     continue
         # if config_dict['last_layer'] == 'kmeans' and config_dict['embedding_constraint'] != 'mean_covar' and config_dict['clip_grad'] == True:
         #     continue
-        if config_dict['last_layer'] == 'kmeans' and config_dict['embedding_constraint'] == 'none' and config_dict['clip_grad'] == True:
-            continue
-        if config_dict['last_layer'] == 'kmeans' and config_dict['embedding_constraint'] == 'l2' and config_dict['clip_grad'] == True:
-            continue
-        if config_dict['last_layer'] == 'kmeans' and config_dict['embedding_constraint'] == 'mean_covar' and config_dict['clip_grad'] == False:
-            continue
-        if config_dict['embedding_constraint'] == 'gauss_moment3' and config_dict['clip_grad'] == False:
-            continue
-        if config_dict['embedding_constraint'] == 'gauss_moment4' and config_dict['clip_grad'] == False:
-            continue
-        if config_dict['last_layer'] == 'aa_gmm' and config_dict['clip_grad'] == False:
-            continue
-        if config_dict['last_layer'] == 'fc' and config_dict['embedding_constraint'] != 'none':
-            continue
-        if config_dict['last_layer'] == 'fc' and config_dict['clip_grad'] == True:
-            continue
+        # if config_dict['last_layer'] == 'kmeans' and config_dict['embedding_constraint'] == 'none' and config_dict['clip_grad'] == True:
+        #     continue
+        # if config_dict['last_layer'] == 'kmeans' and config_dict['embedding_constraint'] == 'l2' and config_dict['clip_grad'] == True:
+        #     continue
+        # if config_dict['last_layer'] == 'kmeans' and config_dict['embedding_constraint'] == 'mean_covar' and config_dict['clip_grad'] == False:
+        #     continue
+        # if config_dict['embedding_constraint'] == 'gauss_moment3' and config_dict['clip_grad'] == False:
+        #     continue
+        # if config_dict['embedding_constraint'] == 'gauss_moment4' and config_dict['clip_grad'] == False:
+        #     continue
+        # if config_dict['last_layer'] == 'aa_gmm' and config_dict['clip_grad'] == False:
+        #     continue
+        # if config_dict['last_layer'] == 'fc' and config_dict['embedding_constraint'] != 'none':
+        #     continue
+        # if config_dict['last_layer'] == 'fc' and config_dict['clip_grad'] == True:
+        #     continue
         # if config_dict['embedding_constraint'] == 'mean_covar' and config_dict['clip_grad'] == False:
         #     continue
 
@@ -106,6 +109,8 @@ for folder_name in folder_names:
 
 df_list = list()
 for config_key in dict_of_df_lists.keys():
+
+    lcl_seeds = copy.deepcopy(seeds)
     # compute the average test_accuracy for all json dicts in this list
     ta = list()
     ep = list()
@@ -115,6 +120,20 @@ for config_key in dict_of_df_lists.keys():
             ta.append(100 * d['test_accuracy'])
             ep.append(d['epoch'])
             mta.append(100 * d['min_test_accuracy_per_class'])
+            if d['seed'] not in lcl_seeds:
+                print("Invalid seed for {}".format(d['model']))
+                print(config_key)
+                raise RuntimeError("Invalid seed")
+            if d['seed'] not in lcl_seeds and d['seed'] in seeds:
+                print("Duplicate seed for {}".format(d['model']))
+                print(config_key)
+                raise RuntimeError("Duplicate seed")
+            if d['seed'] in lcl_seeds:
+                lcl_seeds.remove(d['seed'])
+
+    if len(lcl_seeds):
+        print("Missing seeds for: {}".format(config_key))
+        print(lcl_seeds)
 
 
     if len(ta) == 0:
@@ -192,6 +211,8 @@ for config_key in dict_of_df_lists.keys():
     del a['epoch']
     if 'model' in a.keys():
         del a['model']
+    if 'seed' in a.keys():
+        del a['seed']
     del a['test_accuracy_per_class']
     del a['min_test_accuracy_per_class']
     a['mean_test_accuracy'] = float(np.mean(ta))

@@ -129,19 +129,6 @@ def train(args):
     fh.setFormatter(logging.Formatter("%(asctime)s [%(levelname)s] [%(filename)s:%(lineno)d] %(message)s"))
     logging.getLogger().addHandler(fh)
 
-    if args.last_layer == 'aa_gmm':
-        logging.info("Enabling clip_grad for aa_gmm.")
-        args.clip_grad = True
-    if args.embedding_constraint == 'mean_covar':
-        logging.info("Enabling clip_grad for mean_covar constraint.")
-        args.clip_grad = True
-    if args.embedding_constraint == 'gauss_moment3':
-        logging.info("Enabling clip_grad for gauss_moment3 constraint.")
-        args.clip_grad = True
-    if args.embedding_constraint == 'gauss_moment4':
-        logging.info("Enabling clip_grad for gauss_moment4 constraint.")
-        args.clip_grad = True
-
     logging.info(args)
 
     try:
@@ -227,13 +214,17 @@ def train(args):
     if args.embedding_constraint is None or args.embedding_constraint.lower() == 'none':
         emb_constraint = None
     elif args.embedding_constraint == 'mean_covar':
-        emb_constraint = embedding_constraints.MeanCovar()
+        # emb_constraint = embedding_constraints.MeanCovar()
+        emb_constraint = embedding_constraints.GaussianMoments(embedding_dim=args.embedding_dim, num_classes=args.num_classes, moment_order=2)
     elif args.embedding_constraint == 'l2':
-        emb_constraint = embedding_constraints.Mean()
+        # emb_constraint = embedding_constraints.Mean()
+        emb_constraint = embedding_constraints.GaussianMoments(embedding_dim=args.embedding_dim, num_classes=args.num_classes, moment_order=1)
     elif args.embedding_constraint == 'gauss_moment3':
-        emb_constraint = embedding_constraints.GaussianMoments3(embedding_dim=args.embedding_dim, num_classes=args.num_classes)
+        # emb_constraint = embedding_constraints.GaussianMoments3(embedding_dim=args.embedding_dim, num_classes=args.num_classes)
+        emb_constraint = embedding_constraints.GaussianMoments(embedding_dim=args.embedding_dim, num_classes=args.num_classes, moment_order=3)
     elif args.embedding_constraint == 'gauss_moment4':
-        emb_constraint = embedding_constraints.GaussianMoments4(embedding_dim=args.embedding_dim, num_classes=args.num_classes)
+        # emb_constraint = embedding_constraints.GaussianMoments4(embedding_dim=args.embedding_dim, num_classes=args.num_classes)
+        emb_constraint = embedding_constraints.GaussianMoments(embedding_dim=args.embedding_dim, num_classes=args.num_classes, moment_order=4)
     else:
         raise RuntimeError("Invalid embedding constraint type: {}".format(args.embedding_constraint))
 
@@ -241,10 +232,10 @@ def train(args):
         epoch += 1
         logging.info("Epoch: {}".format(epoch))
 
-        print('args.output_dirpath', args.output_dirpath)
+        #print('args.output_dirpath', args.output_dirpath)
 
         train_stats.plot_all_metrics(output_dirpath=args.output_dirpath)
-        model_trainer.train_epoch(model, train_dataset_labeled, optimizer, criterion, emb_constraint, epoch, train_stats, unlabeled_dataset=train_dataset_unlabeled, ema_model=ema_model, save_embedding=args.save_embedding, output_dirpath=args.output_dirpath)
+        model_trainer.train_epoch(model, train_dataset_labeled, optimizer, criterion, emb_constraint, epoch, train_stats, unlabeled_dataset=train_dataset_unlabeled, ema_model=ema_model)
 
         if args.use_ema:
             test_model = ema_model.ema
@@ -277,6 +268,10 @@ def train(args):
 
             # update the global metrics with the best epoch
             train_stats.update_global(epoch)
+            best_model.cpu()  # move to cpu before saving to simplify loading the model
+            torch.save(best_model, os.path.join(args.output_dirpath, 'model.pt'))
+            import tsne
+            tsne.build_tsne_figure_cifar10(args.output_dirpath, epoch=epoch)
 
     wall_time = time.time() - train_start_time
     train_stats.add_global('wall_time', wall_time)

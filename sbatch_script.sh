@@ -3,12 +3,12 @@
 # MODIFY THESE OPTIONS
 
 #SBATCH --partition=isg
-#SBATCH --exclude=p100,quebec
+#SBATCH --exclude=p100,quebec,pn116125
 #SBATCH --nodes=1
 #SBATCH --oversubscribe
-#SBATCH --cpus-per-task=20
-#SBATCH --gres=gpu:2
-#SBATCH --job-name=cf100
+#SBATCH --cpus-per-task=10
+#SBATCH --gres=gpu:1
+#SBATCH --job-name=cf10
 #SBATCH -o log-%N.%j.out
 #SBATCH --time=256:0:0
 
@@ -31,8 +31,7 @@ EMBD_DIM=$2
 START_RUN=$3
 EMBD_CONSTRAINT=$4
 NLABELS=$5
-MODELS_PER_JOB=$6
-SEED=$7
+SEED=$6
 
 
 
@@ -46,17 +45,9 @@ if ! [ -d ${root_output_directory} ]; then
     mkdir ${root_output_directory}
 fi
 
-# 3474173998
-# 273230791
-# 3586106167
-# 1325645050
-# 2564231920
-
 
 INDEX=$START_RUN
-SUCCESS_COUNT=0
-let N=10*${MODELS_PER_JOB}
-for i in $(seq $N); do
+for i in $(seq 10); do
 
   MODEL_FP="${root_output_directory}/id-$(printf "%08d" ${INDEX})"
   
@@ -66,13 +57,10 @@ for i in $(seq $N); do
  
 
   if [ $sc -eq 0 ]; then
-     SUCCESS_COUNT=$((SUCCESS_COUNT+1))
-     echo "Successfully built $SUCCESS_COUNT models"
-   fi
-   if [ $SUCCESS_COUNT -ge $MODELS_PER_JOB ]; then
+     echo "Successfully built model"
      exit 0
    fi
-
+   
   INDEX=$((INDEX+1))
 done
 

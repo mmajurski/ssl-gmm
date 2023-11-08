@@ -17,6 +17,9 @@ class kmeans(torch.nn.Module):
         self.dim = embeddign_dim
         self.num_classes = num_classes
         self.centers = torch.nn.Parameter(torch.rand(size=(self.num_classes, self.dim), requires_grad=True))
+        # TODO remove if not being used later
+        # TODO need to scale this by the variance per cluster
+        # self.D = torch.nn.Parameter(torch.ones(size=(self.num_classes, self.dim), requires_grad=True))
 
     def forward(self, x):
         batch = x.size()[0]  # batch size
@@ -113,8 +116,6 @@ class axis_aligned_gmm_cmm_layer(torch.nn.Module):
             # Safe version of Determinant
             log_det[k] = torch.sum(torch.log(D), dim=0)
 
-        print('D', D)
-
         # Safe det version
         det_scale_factor = -0.5 * log_det
         det_scale_factor_safe = det_scale_factor - torch.max(det_scale_factor)
@@ -191,12 +192,7 @@ class axis_aligned_gmm_cmm_layer(torch.nn.Module):
         log_det_rep = torch.reshape(log_det, (1,self.num_classes)).repeat((batch,1))
         cross_entropy_embed = -0.5*self.dim*ln_2pi + log_det_rep + expo_gmm
         cross_entropy_embed *= assign_gmm_onehot
-        #print('cross_entropy_embed', cross_entropy_embed)
-        #input('enter')
         cross_entropy_embed = (-1.0 / batch) * torch.sum(assign_gmm_onehot * cross_entropy_embed)
-
-        #print('cross_entropy_embed', cross_entropy_embed)
-        #input('enter')
 
         if self.return_gmm and self.return_cmm:
             a = torch.nn.functional.softmax(resp_gmm, dim=-1)

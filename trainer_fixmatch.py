@@ -23,8 +23,7 @@ def sharpen_mixmatch(x:torch.Tensor, T:float):
 
 class FixMatchTrainer(trainer.SupervisedTrainer):
 
-    def train_epoch(self, model, pytorch_dataset, optimizer, criterion, emb_constraint, epoch, train_stats, unlabeled_dataset=None, ema_model=None, save_embedding=False,output_dirpath = "./model" ):
-
+    def train_epoch(self, model, pytorch_dataset, optimizer, criterion, emb_constraint, epoch, train_stats, unlabeled_dataset=None, ema_model=None):
 
         if unlabeled_dataset is None:
             raise RuntimeError("Unlabeled dataset missing. Cannot use FixMatch train_epoch function without an unlabeled_dataset.")
@@ -61,6 +60,7 @@ class FixMatchTrainer(trainer.SupervisedTrainer):
             l_acc_per_class.append(list())
             pl_count_per_class.append(0)
             pl_gt_count_per_class.append(0)
+        nb_high_loss = 0
 
         embedding_criterion = torch.nn.MSELoss()
 
@@ -68,13 +68,6 @@ class FixMatchTrainer(trainer.SupervisedTrainer):
         #     model.last_layer.centers = model.last_layer.centers.cuda()
         # if hasattr(model, 'module') and hasattr(model.module.last_layer, 'centers'):
         #     model.module.last_layer.centers = model.module.last_layer.centers.cuda()
-
-        embedding_l_list = []
-        labels_l    = []
-        embedding_ul_weak_list = []
-        labels_ul    = []
-        embedding_ul_strong_list = []
-
 
         for batch_idx, tensor_dict_l in enumerate(dataloader):
             inputs_l = tensor_dict_l[0]
@@ -193,13 +186,15 @@ class FixMatchTrainer(trainer.SupervisedTrainer):
                 train_stats.append_accumulate('train_invalid_pl_loss', loss_invalid_pl.item())
 
             if emb_constraint is not None:
-                #if hasattr(model, 'module'):
-                #    emb_constraint_l = emb_constraint(embedding_l, model.module.last_layer.centers, logits_l)
-                #else:
-                #    emb_constraint_l = emb_constraint(embedding_l, model.last_layer.centers, logits_l)
-                #emb_constraint_loss_l = embedding_criterion(emb_constraint_l, torch.zeros_like(emb_constraint_l))
-                emb_constraint_loss_l = 0.01 * latent_ce
-                print('emb_constraint_loss_l', emb_constraint_loss_l.detach().cpu().numpy(), 'loss_l', loss_l)
+                if hasattr(model, 'module'):
+                   emb_constraint_l = emb_constraint(embedding_l, model.module.last_layer.centers, model.module.last_layer.D, logits_l)
+                else:
+                   emb_constraint_l = emb_constraint(embedding_l, model.last_layer.centers, model.last_layer.D, logits_l)
+                emb_constraint_loss_l = embedding_criterion(emb_constraint_l, torch.zeros_like(emb_constraint_l))
+
+                # emb_constraint_loss_l = 0.01 * latent_ce
+
+                #print('emb_constraint_loss_l', emb_constraint_loss_l.detach().cpu().numpy(), 'loss_l', loss_l)
                 train_stats.append_accumulate('train_embedding_constraint_loss', emb_constraint_loss_l.item())
                 loss_l += emb_constraint_loss_l
 
@@ -219,11 +214,11 @@ class FixMatchTrainer(trainer.SupervisedTrainer):
 
                 if emb_constraint is not None:
                     if hasattr(model, 'module'):
-                        emb_constraint_ul_strong = emb_constraint(embedding_ul_strong, model.module.last_layer.centers, logits_ul_weak)
-                        emb_constraint_ul_weak = emb_constraint(embedding_ul_weak, model.module.last_layer.centers, logits_ul_weak)
+                        emb_constraint_ul_strong = emb_constraint(embedding_ul_strong, model.module.last_layer.centers, model.module.last_layer.D, logits_ul_weak)
+                        emb_constraint_ul_weak = emb_constraint(embedding_ul_weak, model.module.last_layer.centers, model.module.last_layer.D, logits_ul_weak)
                     else:
-                        emb_constraint_ul_strong = emb_constraint(embedding_ul_strong, model.last_layer.centers, logits_ul_weak)
-                        emb_constraint_ul_weak = emb_constraint(embedding_ul_weak, model.last_layer.centers, logits_ul_weak)
+                        emb_constraint_ul_strong = emb_constraint(embedding_ul_strong, model.last_layer.centers, model.last_layer.D, logits_ul_weak)
+                        emb_constraint_ul_weak = emb_constraint(embedding_ul_weak, model.last_layer.centers, model.last_layer.D, logits_ul_weak)
 
                     emb_constraint_loss_ul_strong = embedding_criterion(emb_constraint_ul_strong, torch.zeros_like(emb_constraint_ul_strong))
                     emb_constraint_loss_ul_weak = embedding_criterion(emb_constraint_ul_weak, torch.zeros_like(emb_constraint_ul_weak))
@@ -238,6 +233,7 @@ class FixMatchTrainer(trainer.SupervisedTrainer):
 
             batch_loss.backward()
             if batch_loss > 1.0:
+                nb_high_loss += 1
                 # logging.info("Loss {} is high clipping grad norm 1.0".format(batch_loss))
                 torch.nn.utils.clip_grad_norm_(model.parameters(), 1.0)
 
@@ -264,23 +260,12 @@ class FixMatchTrainer(trainer.SupervisedTrainer):
                 if loss_nan_count > int(0.5 * batch_count):
                     raise RuntimeError("Loss is consistently nan (>50% of epoch), terminating train.")
 
-            if batch_idx % 100 == 0:
+            if batch_idx % self.args.log_interval == 0:
                 # log loss and current GPU utilization
                 cpu_mem_percent_used = psutil.virtual_memory().percent
                 gpu_mem_percent_used, memory_total_info = utils.get_gpu_memory()
                 gpu_mem_percent_used = [np.round(100 * x, 1) for x in gpu_mem_percent_used]
                 logging.info('  batch {}/{}  loss: {:8.8g}  lr: {:4.4g}  cpu_mem: {:2.1f}%  gpu_mem: {}% of {}MiB'.format(batch_idx, batch_count, batch_loss.item(), optimizer.param_groups[0]['lr'], cpu_mem_percent_used, gpu_mem_percent_used, memory_total_info))
-           
-            if save_embedding:
-            
-                embedding_l_list.append( embedding_l.detach().cpu().numpy())
-                labels_l.append(  targets_l.detach().cpu().numpy() )
-                
-                embedding_ul_weak_list.append( embedding_ul_weak.detach().cpu().numpy() )
-                labels_ul.append(  targets_ul.detach().cpu().numpy() )
-                
-                embedding_ul_strong_list.append( embedding_ul_strong.detach().cpu().numpy() )
-          
 
         if loss_nan_count > 0:
             logging.info("epoch has {} batches with nan loss.".format(loss_nan_count))
@@ -291,6 +276,9 @@ class FixMatchTrainer(trainer.SupervisedTrainer):
         train_stats.close_accumulate(epoch, 'train_pseudo_label_ood_count', method='sum', default_value=0.0)
         # close the rest with avg
         train_stats.close_all_accumulate(epoch, method='avg', default_value=0.0)
+
+        nb_high_loss = nb_high_loss / len(dataloader)
+        train_stats.add(epoch, 'train_grad_clip_rate', nb_high_loss)
 
         for c in range(len(pl_acc_per_class)):
             pl_acc_per_class[c] = float(np.mean(pl_acc_per_class[c]))
@@ -311,34 +299,6 @@ class FixMatchTrainer(trainer.SupervisedTrainer):
             # reset any leftover changes to the learning rate
             for param_group in optimizer.param_groups:
                 param_group['lr'] = epoch_init_lr
-        
-        
-        if save_embedding:
-            embedding_l_list = utils.multiconcat_numpy(embedding_l_list)
-            outpath = output_dirpath + "/train_embedding_l.npy"
-            logging.info("save " + outpath)
-            np.save(outpath, embedding_l_list)
-            
-            labels_l    = utils.multiconcat_numpy(labels_l)
-            outpath = output_dirpath + "/train_labels_l.npy"
-            logging.info("save " + outpath)
-            np.save(outpath, labels_l)
-            
-            embedding_ul_weak_list = utils.multiconcat_numpy(embedding_ul_weak_list)
-            outpath = output_dirpath + "/train_embedding_ul_weak.npy"
-            logging.info("save " + outpath)
-            np.save(outpath, embedding_ul_weak_list)
-            
-            labels_ul    = utils.multiconcat_numpy(labels_ul)
-            outpath = output_dirpath + "/train_labels_ul.npy"
-            logging.info("save " + outpath)
-            np.save(outpath, labels_ul)
-            
-            embedding_ul_strong_list = utils.multiconcat_numpy(embedding_ul_strong_list)
-            outpath = output_dirpath + "/train_embedding_ul_strong.npy"
-            logging.info("save " + outpath)
-            np.save(outpath, embedding_ul_strong_list)
-
 
 
     def eval_model(self, model, pytorch_dataset, criterion, train_stats, split_name, emb_constraint, epoch, args, return_embedding=False):
@@ -371,11 +331,13 @@ class FixMatchTrainer(trainer.SupervisedTrainer):
                     # only include a "logit" loss, when there are other terms
                     train_stats.append_accumulate('{}_logit_loss'.format(split_name), loss.item())
                     if hasattr(model, 'module'):
-                        emb_constraint_l = emb_constraint(embedding, model.module.last_layer.centers, logits)
+                        emb_constraint_l = emb_constraint(embedding, model.module.last_layer.centers, model.module.last_layer.D, logits)
                     else:
-                        emb_constraint_l = emb_constraint(embedding, model.last_layer.centers, logits)
-                    #emb_constraint_loss = embedding_criterion(emb_constraint_l, torch.zeros_like(emb_constraint_l))
-                    emb_constraint_loss = latent_ce
+                        emb_constraint_l = emb_constraint(embedding, model.last_layer.centers, model.last_layer.D, logits)
+                    emb_constraint_loss = embedding_criterion(emb_constraint_l, torch.zeros_like(emb_constraint_l))
+
+                    # emb_constraint_loss = latent_ce
+
                     train_stats.append_accumulate('{}_emb_constraint_loss'.format(split_name), emb_constraint_loss.item())
                     loss += emb_constraint_loss
 
@@ -387,7 +349,7 @@ class FixMatchTrainer(trainer.SupervisedTrainer):
                 for c in range(self.args.num_classes):
                     acc_per_class[c].extend(acc[labels == c].detach().cpu().tolist())
 
-                if batch_idx % 100 == 0:
+                if batch_idx % self.args.log_interval == 0:
                     # log loss and current GPU utilization
                     cpu_mem_percent_used = psutil.virtual_memory().percent
                     gpu_mem_percent_used, memory_total_info = utils.get_gpu_memory()
