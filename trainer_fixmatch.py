@@ -43,7 +43,11 @@ class FixMatchTrainer(trainer.SupervisedTrainer):
             train_stats.add(epoch, 'learning_rate', epoch_init_lr)
             cyclic_lr_scheduler = torch.optim.lr_scheduler.CyclicLR(optimizer, base_lr=(epoch_init_lr / self.args.cycle_factor), max_lr=(epoch_init_lr * self.args.cycle_factor), step_size_up=int(batch_count / 2), cycle_momentum=False)
 
-        unlabeled_dataset.set_transforms(cifar_datasets.Cifar10.TRANSFORM_FIXMATCH)
+        if self.args.dataset.upper() == 'CIFAR10':
+            unlabeled_dataset.set_transforms(cifar_datasets.Cifar10.TRANSFORM_FIXMATCH)
+        elif self.args.dataset.upper() == 'STL10':
+            unlabeled_dataset.set_transforms(cifar_datasets.STL10.TRANSFORM_FIXMATCH)
+
         dataloader_ul = torch.utils.data.DataLoader(unlabeled_dataset, batch_size=self.args.mu*self.args.batch_size, shuffle=True, num_workers=self.args.num_workers, drop_last=True)
 
         if len(dataloader) != len(dataloader_ul):
@@ -136,11 +140,6 @@ class FixMatchTrainer(trainer.SupervisedTrainer):
             pl_count = torch.sum(valid_pl).item()
             train_stats.append_accumulate('train_pseudo_label_count', pl_count)
             train_stats.append_accumulate('train_pseudo_label_mask_rate', (pl_count / (self.args.batch_size * self.args.mu)) )
-            targets_ul_valid = targets_ul[valid_pl]
-            ood_pl_count = torch.sum(targets_ul_valid > 100).item()
-            train_stats.append_accumulate('train_pseudo_label_ood_count', ood_pl_count)
-            # TODO record the ood selected vs ood available ratio
-            train_stats.append_accumulate('train_pseudo_label_ood_mask_rate', (ood_pl_count / (self.args.batch_size * self.args.mu)))
 
             if pl_count > 0:
                 # capture the confusion matrix of the PL
@@ -162,34 +161,34 @@ class FixMatchTrainer(trainer.SupervisedTrainer):
             for c in range(self.args.num_classes):
                 l_acc_per_class[c].extend(acc_vec[targets_l == c].detach().cpu().tolist())
 
-            # handle negative samples (any logit < 0.1) has its CE calculated and added to the loss
-            invalid_pl_logits_mask = softmax_ul_weak < torch.tensor(self.args.pseudo_label_negative_threshold)
-            if torch.any(invalid_pl_logits_mask):
-                # calculate y and yhat, subsetting to only those logits which are invalid PL
-                y = torch.nn.functional.one_hot(targets_weak_ul, self.args.num_classes)[invalid_pl_logits_mask]
-                softmax_ul_strong = torch.nn.functional.softmax(logits_ul_strong, dim=-1)
-                yhat = softmax_ul_strong[invalid_pl_logits_mask]
-
-                # if there are any true class predictions among the invalid PL, return that as impurity.
-                train_stats.append_accumulate('train_invalid_pl_impurity', torch.mean(y>0, dtype=yhat.dtype).item())
-
-                # implement log_loss by hand
-                minus_one_over_N = (-1.0 / torch.numel(yhat))
-
-                log_yhat = torch.log(torch.clamp(yhat, min=0.0001))
-                log_one_minus_yhat = torch.log(torch.clamp(1.0 - yhat, min=0.0001))
-                presum = (y * log_yhat + (1.0 - y) * log_one_minus_yhat) * minus_one_over_N
-                loss_invalid_pl = torch.sum(presum)
-                # scale the loss to equal the contribution of the valid PL
-                loss_invalid_pl = loss_invalid_pl * (1.0 / self.args.num_classes)
-                loss_l += loss_invalid_pl
-                train_stats.append_accumulate('train_invalid_pl_loss', loss_invalid_pl.item())
+            # # handle negative samples (any logit < 0.1) has its CE calculated and added to the loss
+            # invalid_pl_logits_mask = softmax_ul_weak < torch.tensor(self.args.pseudo_label_negative_threshold)
+            # if torch.any(invalid_pl_logits_mask):
+            #     # calculate y and yhat, subsetting to only those logits which are invalid PL
+            #     y = torch.nn.functional.one_hot(targets_weak_ul, self.args.num_classes)[invalid_pl_logits_mask]
+            #     softmax_ul_strong = torch.nn.functional.softmax(logits_ul_strong, dim=-1)
+            #     yhat = softmax_ul_strong[invalid_pl_logits_mask]
+            #
+            #     # if there are any true class predictions among the invalid PL, return that as impurity.
+            #     train_stats.append_accumulate('train_invalid_pl_impurity', torch.mean(y>0, dtype=yhat.dtype).item())
+            #
+            #     # implement log_loss by hand
+            #     minus_one_over_N = (-1.0 / torch.numel(yhat))
+            #
+            #     log_yhat = torch.log(torch.clamp(yhat, min=0.0001))
+            #     log_one_minus_yhat = torch.log(torch.clamp(1.0 - yhat, min=0.0001))
+            #     presum = (y * log_yhat + (1.0 - y) * log_one_minus_yhat) * minus_one_over_N
+            #     loss_invalid_pl = torch.sum(presum)
+            #     # scale the loss to equal the contribution of the valid PL
+            #     loss_invalid_pl = loss_invalid_pl * (1.0 / self.args.num_classes)
+            #     loss_l += loss_invalid_pl
+            #     train_stats.append_accumulate('train_invalid_pl_loss', loss_invalid_pl.item())
 
             if emb_constraint is not None:
                 if hasattr(model, 'module'):
-                   emb_constraint_l = emb_constraint(embedding_l, model.module.last_layer.centers, model.module.last_layer.D, logits_l)
+                   emb_constraint_l = emb_constraint(embedding_l, model.module.last_layer.centers, logits_l)
                 else:
-                   emb_constraint_l = emb_constraint(embedding_l, model.last_layer.centers, model.last_layer.D, logits_l)
+                   emb_constraint_l = emb_constraint(embedding_l, model.last_layer.centers, logits_l)
                 emb_constraint_loss_l = embedding_criterion(emb_constraint_l, torch.zeros_like(emb_constraint_l))
 
                 # emb_constraint_loss_l = 0.01 * latent_ce
@@ -214,11 +213,11 @@ class FixMatchTrainer(trainer.SupervisedTrainer):
 
                 if emb_constraint is not None:
                     if hasattr(model, 'module'):
-                        emb_constraint_ul_strong = emb_constraint(embedding_ul_strong, model.module.last_layer.centers, model.module.last_layer.D, logits_ul_weak)
-                        emb_constraint_ul_weak = emb_constraint(embedding_ul_weak, model.module.last_layer.centers, model.module.last_layer.D, logits_ul_weak)
+                        emb_constraint_ul_strong = emb_constraint(embedding_ul_strong, model.module.last_layer.centers, logits_ul_weak)
+                        emb_constraint_ul_weak = emb_constraint(embedding_ul_weak, model.module.last_layer.centers, logits_ul_weak)
                     else:
-                        emb_constraint_ul_strong = emb_constraint(embedding_ul_strong, model.last_layer.centers, model.last_layer.D, logits_ul_weak)
-                        emb_constraint_ul_weak = emb_constraint(embedding_ul_weak, model.last_layer.centers, model.last_layer.D, logits_ul_weak)
+                        emb_constraint_ul_strong = emb_constraint(embedding_ul_strong, model.last_layer.centers, logits_ul_weak)
+                        emb_constraint_ul_weak = emb_constraint(embedding_ul_weak, model.last_layer.centers, logits_ul_weak)
 
                     emb_constraint_loss_ul_strong = embedding_criterion(emb_constraint_ul_strong, torch.zeros_like(emb_constraint_ul_strong))
                     emb_constraint_loss_ul_weak = embedding_criterion(emb_constraint_ul_weak, torch.zeros_like(emb_constraint_ul_weak))
@@ -331,9 +330,9 @@ class FixMatchTrainer(trainer.SupervisedTrainer):
                     # only include a "logit" loss, when there are other terms
                     train_stats.append_accumulate('{}_logit_loss'.format(split_name), loss.item())
                     if hasattr(model, 'module'):
-                        emb_constraint_l = emb_constraint(embedding, model.module.last_layer.centers, model.module.last_layer.D, logits)
+                        emb_constraint_l = emb_constraint(embedding, model.module.last_layer.centers, logits)
                     else:
-                        emb_constraint_l = emb_constraint(embedding, model.last_layer.centers, model.last_layer.D, logits)
+                        emb_constraint_l = emb_constraint(embedding, model.last_layer.centers, logits)
                     emb_constraint_loss = embedding_criterion(emb_constraint_l, torch.zeros_like(emb_constraint_l))
 
                     # emb_constraint_loss = latent_ce

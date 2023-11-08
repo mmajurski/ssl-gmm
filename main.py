@@ -30,6 +30,7 @@ import train
 def main():
     parser = argparse.ArgumentParser(description='PyTorch Training')
     parser.add_argument('--arch', default='wide_resnet', type=str, help='Name of the image classification architecture to train')
+    parser.add_argument('--dataset', default='cifar10', type=str, help='Name of the image classification dataset to use. {CIFAR10, CIFAR100, STL10')
     parser.add_argument('--num-workers', type=int, default=10, help='number of workers')
     parser.add_argument('--log-interval', type=int, default=100, help='number of workers')
     parser.add_argument('--output-dirpath', default='./model', type=str, help='filepath to where the outputs will be saved.')
@@ -49,7 +50,7 @@ def main():
     parser.add_argument('--use-ema', action='store_true', default=True)
     parser.add_argument('--ema-decay', default=0.999, type=float)
     parser.add_argument('--pseudo-label-threshold', default=0.95, type=float, help='Threshold logits when filtering pseudo-labeling.')
-    parser.add_argument('--pseudo-label-negative-threshold', default=0.1, type=float, help='Threshold logits when filtering negative pseudo-labeling. I.e. PL with logits < this will be included as negative examples.')
+    parser.add_argument('--pseudo-label-negative-threshold', default=0.0, type=float, help='Threshold logits when filtering negative pseudo-labeling. I.e. PL with logits < this will be included as negative examples.')
     parser.add_argument('--cosine-sim-pl-threshold', default=0.0, type=float, help='Threshold when filtering pseudo-labeling using cosine similarity. Only PL with a min CosineSim to the labeled embedding > x are used. Set to 0 to disable.')
     parser.add_argument('--cosine-sim-topk', default=6, type=float, help='Nearest N neighbors to consider when using cosine similarity to select psudo-labels.')
 
@@ -65,7 +66,7 @@ def main():
     parser.add_argument('--embedding-constraint', type=str, default=None, help='embedding constraint to enforce (currently supported None, l2, mean_covar, gauss_moment)')
 
     parser.add_argument('--seed', type=int, default=None, help='seed for the random number generator')
-    parser.add_argument('--ood_p', type=float, default='0.0', help='percentage of unlabeled data drawn from cifar100 which is ood for cifar10')
+
 
     parser.add_argument('--save-embedding', action='store_true', default=False)
 

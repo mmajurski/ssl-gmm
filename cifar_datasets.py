@@ -264,32 +264,147 @@ class Cifar100(Cifar10):
         del _dataset
 
 
-class Cifar10plus100(Cifar10):
 
-    def __init__(self, transform=None, train:bool=True, subset=False, lcl_fldr:str='./data'):
-        super(Cifar10plus100, self).__init__(transform, train, subset, lcl_fldr)
 
-    def add_cifar100_ood_data(self, p=0.1):
-        assert p >= 0 and p <= 1.0
-        # get some classes from the cifar100 training dataset
-        # this will only be used to contaminate the unlabeled data
-        _dataset = torchvision.datasets.CIFAR100(self.lcl_fldr, train=True, download=True)
 
+class STL10(torch.utils.data.Dataset):
+    stl10_mean = [x / 255 for x in [112.4, 109.1, 98.6]]
+    stl10_std = [x / 255 for x in [68.4, 66.6, 68.5]]
+    img_size = 96
+
+    TRANSFORM_TRAIN = torchvision.transforms.Compose([
+        torchvision.transforms.RandomHorizontalFlip(),
+        torchvision.transforms.Resize(img_size),
+        torchvision.transforms.RandomCrop(img_size),
+        torchvision.transforms.ToTensor(),
+        torchvision.transforms.Normalize(stl10_mean, stl10_std)])
+
+    TRANSFORM_TEST = torchvision.transforms.Compose([
+        torchvision.transforms.Resize(img_size),
+        torchvision.transforms.ToTensor(),
+        torchvision.transforms.Normalize(stl10_mean, stl10_std)])
+
+
+    TRANSFORM_FIXMATCH = fixmatch_augmentation.TransformFixMatchSTL(mean=stl10_mean, std=stl10_std)
+
+    def __init__(self, transform=None, split:str='train', lcl_fldr:str='./data', num_classes=10):
+
+        self.lcl_fldr = lcl_fldr
+        self.transform = transform
+        self.numel = None
+        self.num_classes = num_classes
+
+        self.data = list()
+        self.targets = list()
+        self.split = split
+
+    def load_data(self):
+        _dataset = torchvision.datasets.STL10(self.lcl_fldr, split=self.split, download=True)
+
+        self.targets = _dataset.labels
+        valid_idx = np.asarray(self.targets) < self.num_classes
+        self.targets = np.asarray(self.targets)[valid_idx].tolist()
         # break the data up into a list instead of a single numpy block to allow deleting and addition
-        data_len = _dataset.data.shape[0]
-        idx = torch.randperm(data_len).detach().cpu().numpy().tolist()
-        idx = idx[0:int(p * len(self.data))]
-        logging.info("Replacing {} ({}%) unlabeled Cifar10 samples with Cifar100 data".format(len(idx), 100 * p))
+        self.data = list()
+        for i in range(len(valid_idx)):
+            if valid_idx[i]:
+                img = _dataset.data[i, :, :, :]
+                img = np.transpose(img, (1, 2, 0))
+                self.data.append(img)
 
-        replacement_idx = torch.randperm(len(self.data)).detach().cpu().numpy().tolist()
-        replacement_idx = replacement_idx[0:len(idx)]
-
-        for i in range(len(idx)):
-            data = _dataset.data[idx[i], :, :, :]
-            # offset by 100 to indicate its coming from cifar100
-            target = _dataset.targets[idx[i]] + 100
-            self.data[replacement_idx[i]] = data
-            self.targets[replacement_idx[i]] = target
-
-        # cleanup the tmp CIFAR object
+        # cleanup the tmp STL10 object
         del _dataset
+
+    def set_epoch_size(self, epoch_size):
+        self.numel = epoch_size
+        if epoch_size < len(self.data):
+            logging.warning("Requested dataset length = {} is less than actual data length = {}, some elements will be unused.".format(epoch_size, len(self.data)))
+
+    def __len__(self) -> int:
+        if self.numel is not None:
+            return self.numel
+        else:
+            return len(self.data)
+
+    def __getitem__(self, index: int) -> Tuple[Any, Any, int]:
+        """
+        Args:
+            index (int): Index
+
+        Returns:
+            tuple: (image, target) where target is index of the target class.
+        """
+        # account for nb_reps
+        index = index % len(self.data)
+        img, target = self.data[index], self.targets[index]
+
+        # doing this so that it is consistent with all other datasets
+        # to return a PIL Image
+        img = PIL.Image.fromarray(img)
+
+        if self.transform is not None:
+            img = self.transform(img)
+
+        return img, target#, index
+
+    def get(self, index:int) -> Tuple[Any, Any]:
+        """
+        Args:
+            index (int): Index
+
+        Returns:
+            tuple: (image, target) where target is index of the target class.
+        """
+        img, target = self.data[index], self.targets[index]
+        return img, target
+
+    def get_raw_datapoint(self, index):
+        img = copy.deepcopy(self.data[index])
+        target = copy.deepcopy(self.targets[index])
+        return img, target
+
+    def set_transforms(self, transforms):
+        self.transform = transforms
+
+    def data_split_class_balanced(self, subset_count: int = 400):
+
+        idx = torch.randperm(len(self.data)).detach().cpu().numpy()
+
+        subset_dataset = copy.deepcopy(self)
+        remainder_dataset = copy.deepcopy(self)
+        subset_dataset.data = list()
+        subset_dataset.targets = list()
+        remainder_dataset.data = list()
+        remainder_dataset.targets = list()
+
+        nb_classes = len(set(self.targets))
+        per_class_subset_count = subset_count / nb_classes
+        # if per_class_subset_count - int(per_class_subset_count) != 0:
+        #     raise RuntimeError("Invalid subset_count = {}, resulted in a non-integer number of examples per class={}".format(subset_count, per_class_subset_count))
+        per_class_subset_count = int(per_class_subset_count)
+
+        a_class_instance_count = np.zeros(nb_classes)
+        for i in idx:
+            t = self.targets[i]
+            d = self.data[i]
+            if a_class_instance_count[t] < per_class_subset_count:
+                subset_dataset.data.append(d)
+                subset_dataset.targets.append(t)
+                a_class_instance_count[t] += 1
+            else:
+                remainder_dataset.data.append(d)
+                remainder_dataset.targets.append(t)
+
+        return subset_dataset, remainder_dataset
+
+    def append_dataset(self, pytorch_dataset):
+        for i in range(len(pytorch_dataset)):
+            data = pytorch_dataset.data[i]
+            target = pytorch_dataset.targets[i]
+
+            self.data.append(data)
+            self.targets.append(target)
+
+    def add(self, data, target):
+        self.data.append(data)
+        self.targets.append(target)

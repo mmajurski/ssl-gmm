@@ -31,7 +31,7 @@ class GaussianMoments(torch.nn.Module):
             self.gauss_moments4 = torch.tensor(moment_4.joint_gauss_moments, requires_grad=False)
 
 
-    def forward(self, embedding, centers, D, logits):
+    def forward(self, embedding, centers, logits):
         if centers is None:
             return 0.0
 
@@ -199,7 +199,6 @@ class GaussianMoments(torch.nn.Module):
             moment4_weight[mask > 0] = 0.0
 
             moment_penalty4 = torch.sum(moment4_weight * torch.pow((moment4 - moment4_target), 2))
-
 
         mom_penalty = 1.0 * moment_penalty1
         if self.moment_order >= 2:

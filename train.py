@@ -31,6 +31,11 @@ def setup(args):
         model = flavored_wideresnet.WideResNetMajurski(num_classes=args.num_classes, last_layer=args.last_layer, embedding_dim=args.embedding_dim, depth=28, width=8)
         # ensure the args has the right embedding dim (if None or 0 was supplied)
         args.embedding_dim = model.embedding_dim
+    elif args.arch == 'wide_resnet37-2':
+        # This is how you get a wrn37-2... because this makes sense
+        model = flavored_wideresnet.WideResNetVarMajurski(num_classes=args.num_classes, last_layer=args.last_layer, embedding_dim=args.embedding_dim, depth=28, width=2)
+        # ensure the args has the right embedding dim (if None or 0 was supplied)
+        args.embedding_dim = model.embedding_dim
 
     elif args.arch == 'resnet18':
         model = torchvision.models.resnet18(pretrained=False, num_classes=args.num_classes)
@@ -67,49 +72,66 @@ def setup(args):
         #input('enter')
         
         
-
-
-    # setup and load CIFAR10
-    if args.num_classes == 10:
-        if args.ood_p > 0:
-            train_dataset = cifar_datasets.Cifar10plus100(transform=cifar_datasets.Cifar10.TRANSFORM_TRAIN, train=True, subset=args.debug)
-        else:
+    if args.dataset.upper() == 'CIFAR10':
+        if args.num_classes == 10:
             train_dataset = cifar_datasets.Cifar10(transform=cifar_datasets.Cifar10.TRANSFORM_TRAIN, train=True, subset=args.debug)
-    elif args.num_classes == 100:
-        train_dataset = cifar_datasets.Cifar100(transform=cifar_datasets.Cifar100.TRANSFORM_TRAIN, train=True, subset=args.debug)
-    else:
-        if args.num_classes < 10:
+            test_dataset = cifar_datasets.Cifar10(transform=cifar_datasets.Cifar10.TRANSFORM_TEST, train=False)
+        elif args.num_classes < 10:
             train_dataset = cifar_datasets.Cifar10(transform=cifar_datasets.Cifar10.TRANSFORM_TRAIN, train=True, subset=args.debug, num_classes=args.num_classes)
+            test_dataset = cifar_datasets.Cifar10(transform=cifar_datasets.Cifar10.TRANSFORM_TEST, train=False, num_classes=args.num_classes)
         else:
-            raise RuntimeError("unsupported CIFAR class count: {}".format(args.num_classes))
+            raise RuntimeError("unsupported CIFAR10 class count: {}".format(args.num_classes))
 
-    train_dataset.load_data()
+        train_dataset.load_data()
+        test_dataset.load_data()
 
-    if args.num_labeled_datapoints > 0:
-        train_dataset_labeled, train_dataset_unlabeled = train_dataset.data_split_class_balanced(subset_count=args.num_labeled_datapoints)
-        if len(train_dataset_labeled) == 0:
-            raise RuntimeError("Invalid configuration: len(train_dataset_labeled) == 0")
-        if len(train_dataset_unlabeled) == 0:
-            raise RuntimeError("Invalid configuration: len(train_dataset_unlabeled) == 0")
-    else:
-        train_dataset_labeled = train_dataset
-        train_dataset_unlabeled = None
-
-    if args.ood_p > 0:
-        logging.info("adding in CIFAR100 OOD data")
-        train_dataset_unlabeled.add_cifar100_ood_data(p=args.ood_p)
-
-    if args.num_classes == 10:
-        test_dataset = cifar_datasets.Cifar10(transform=cifar_datasets.Cifar10.TRANSFORM_TEST, train=False)
-    elif args.num_classes == 100:
+    elif args.dataset.upper() == 'CIFAR100':
+        if args.num_classes != 100:
+            raise RuntimeError("unsupported CIFAR100 class count: {}".format(args.num_classes))
+        train_dataset = cifar_datasets.Cifar100(transform=cifar_datasets.Cifar100.TRANSFORM_TRAIN, train=True, subset=args.debug)
         test_dataset = cifar_datasets.Cifar100(transform=cifar_datasets.Cifar100.TRANSFORM_TEST, train=False)
-    else:
-        if args.num_classes < 10:
-            test_dataset = cifar_datasets.Cifar10(transform=cifar_datasets.Cifar10.TRANSFORM_TEST, train=False, subset=args.debug, num_classes=args.num_classes)
-        else:
-            raise RuntimeError("unsupported CIFAR class count: {}".format(args.num_classes))
 
-    test_dataset.load_data()
+        train_dataset.load_data()
+        test_dataset.load_data()
+
+    elif args.dataset.upper() == "STL10":
+        train_dataset_labeled = cifar_datasets.STL10(transform=cifar_datasets.STL10.TRANSFORM_TRAIN, split='train')
+        train_dataset_unlabeled = cifar_datasets.STL10(transform=cifar_datasets.STL10.TRANSFORM_TRAIN, split='unlabeled')
+        test_dataset = cifar_datasets.STL10(transform=cifar_datasets.STL10.TRANSFORM_TEST, split='test')
+
+        train_dataset_labeled.load_data()
+        train_dataset_unlabeled.load_data()
+        test_dataset.load_data()
+    else:
+        raise RuntimeError("Invalid dataset: {}".format(args.dataset))
+
+
+    if args.dataset.upper().startswith('CIFAR'):
+        if args.num_labeled_datapoints > 0:
+            train_dataset_labeled, train_dataset_unlabeled = train_dataset.data_split_class_balanced(subset_count=args.num_labeled_datapoints)
+            if len(train_dataset_labeled) == 0:
+                raise RuntimeError("Invalid configuration: len(train_dataset_labeled) == 0")
+            if len(train_dataset_unlabeled) == 0:
+                raise RuntimeError("Invalid configuration: len(train_dataset_unlabeled) == 0")
+        else:
+            train_dataset_labeled = train_dataset
+            train_dataset_unlabeled = None
+
+    elif args.dataset.upper() == 'STL10':
+        if args.num_labeled_datapoints > 0:
+            train_dataset_labeled, b = train_dataset_labeled.data_split_class_balanced(subset_count=args.num_labeled_datapoints)
+            b.targets = [-1 for t in b.targets]
+            # add the newly unlabeled data points to the unlabeled dataset
+            train_dataset_unlabeled.append_dataset(b)
+
+            if len(train_dataset_labeled) == 0:
+                raise RuntimeError("Invalid configuration: len(train_dataset_labeled) == 0")
+            if len(train_dataset_unlabeled) == 0:
+                raise RuntimeError("Invalid configuration: len(train_dataset_unlabeled) == 0")
+        else:
+            train_dataset_labeled = train_dataset_labeled
+            train_dataset_unlabeled = None
+
 
     # adjust the len of the dataset to implement the nb_reps
     train_dataset_labeled.set_epoch_size(args.epoch_size * args.batch_size)
