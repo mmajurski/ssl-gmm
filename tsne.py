@@ -23,9 +23,12 @@ def compute_test_embedding(model_fp):
     a = os.path.join(model_fp, 'test_embedding.npy')
     b = os.path.join(model_fp, 'test_labels.npy')
     if os.path.exists(a) and os.path.exists(b):
+        print("Using pre-computed and saved test embedding")
         embedding_output_test = np.load(a)
         labels_output_test = np.load(b)
         return embedding_output_test, labels_output_test
+
+    print("Building test embedding")
 
     # load model
     model = torch.load(os.path.join(model_fp, 'model.pt'))
@@ -61,15 +64,23 @@ def compute_test_embedding(model_fp):
 
 def build_tsne_figure_cifar10(model_fp, epoch=None):
     model_fn = os.path.basename(model_fp)
+    parent_fp = os.path.dirname(model_fp)
     if epoch is not None:
-        ofp = os.path.join(model_fp, "{}-tsne-{}.jpg".format(model_fn, epoch))
+        ofp = os.path.join(parent_fp, "{}-tsne-{}.jpg".format(model_fn, epoch))
     else:
-        ofp = os.path.join(model_fp, "{}-tsne.jpg".format(model_fn, epoch))
+        ofp = os.path.join(parent_fp, "{}-tsne.jpg".format(model_fn, epoch))
+
+    with open(os.path.join(model_fp, 'stats.json'), 'r') as fh:
+        stats_dict = json.load(fh)
+    if stats_dict['test_accuracy'] < 0.80:
+        if os.path.exists(ofp):
+            os.remove(ofp)
+            return
+
     if os.path.exists(ofp):
         return
     print(model_fn)
 
-    print("Building test embedding")
     embedding_output_test, labels_output_test = compute_test_embedding(model_fp)
 
     # load model
@@ -168,6 +179,7 @@ def build_tsne_figure_cifar10(model_fp, epoch=None):
 if __name__ == '__main__':
     ifp = './models-tsne'
     fns = [fn for fn in os.listdir(ifp) if fn.startswith('id-')]
+    fns = [fn for fn in fns if not fn.endswith('jpg')]
     fns.sort()
 
     for fn in fns:

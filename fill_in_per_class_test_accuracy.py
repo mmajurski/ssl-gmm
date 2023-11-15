@@ -28,8 +28,6 @@ for fn in fns:
     json_file_path = os.path.join(ifp, fn, 'config.json')
     with open(json_file_path) as json_file:
         config_dict = json.load(json_file)
-    if 'ood_p' not in config_dict.keys():
-        config_dict['ood_p'] = 0.0
 
     parser = argparse.ArgumentParser()
     for k, v in config_dict.items():

@@ -41,7 +41,7 @@ def main():
     parser.add_argument('--mu', default=7, type=int, help='the number of unlabeled batches per labeled batch factor.')
     parser.add_argument('--eps', default=1e-3, type=float, help='eps value for determining early stopping metric equivalence.')
     parser.add_argument('--patience', default=50, type=int, help='number of epochs past optimal to explore before early stopping terminates training.')
-    parser.add_argument('--embedding_dim', default=16, type=int, help='dimensionality of the embedding space.')
+    parser.add_argument('--embedding_dim', default=0, type=int, help='dimensionality of the embedding space.')
     parser.add_argument('--weight-decay', default=0.0005, type=float)  # 5e-4
     parser.add_argument('--cycle-factor', default=2.0, type=float, help='Cycle factor for cyclic learning rate scheduler.')
     parser.add_argument('--num-lr-reductions', default=2, type=int)

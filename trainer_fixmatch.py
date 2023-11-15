@@ -6,6 +6,7 @@ import torch.nn.functional
 import time
 import logging
 import psutil
+import copy
 
 import cifar_datasets
 import utils
@@ -51,7 +52,7 @@ class FixMatchTrainer(trainer.SupervisedTrainer):
         dataloader_ul = torch.utils.data.DataLoader(unlabeled_dataset, batch_size=self.args.mu*self.args.batch_size, shuffle=True, num_workers=self.args.num_workers, drop_last=True)
 
         if len(dataloader) != len(dataloader_ul):
-            raise RuntimeError("Mismatch is dataloader lengths")
+            raise RuntimeError("Mismatch in dataloader lengths")
 
         iter_ul = iter(dataloader_ul)
 
@@ -68,11 +69,6 @@ class FixMatchTrainer(trainer.SupervisedTrainer):
 
         embedding_criterion = torch.nn.MSELoss()
 
-        # if hasattr(model, 'last_layer') and hasattr(model.last_layer, 'centers'):
-        #     model.last_layer.centers = model.last_layer.centers.cuda()
-        # if hasattr(model, 'module') and hasattr(model.module.last_layer, 'centers'):
-        #     model.module.last_layer.centers = model.module.last_layer.centers.cuda()
-
         for batch_idx, tensor_dict_l in enumerate(dataloader):
             inputs_l = tensor_dict_l[0]
             targets_l = tensor_dict_l[1]
@@ -85,7 +81,6 @@ class FixMatchTrainer(trainer.SupervisedTrainer):
 
             inputs = torch.cat((inputs_l, inputs_ul_weak, inputs_ul_strong))
             inputs = inputs.cuda()
-
 
             # interleave not required for single GPU training
             inputs = utils.interleave(inputs, 2 * self.args.mu + 1)
@@ -143,17 +138,19 @@ class FixMatchTrainer(trainer.SupervisedTrainer):
 
             if pl_count > 0:
                 # capture the confusion matrix of the PL
+                valid_pl[targets_ul < 0] = False  # remove and labels < 0, as they aren't real
                 preds = pred_weak[valid_pl]
                 tgts = targets_ul[valid_pl]
-                acc_vec = preds == tgts
-                acc = torch.mean(acc_vec.detach().cpu().type(torch.FloatTensor))
-                train_stats.append_accumulate('train_pseudo_label_accuracy', acc.item())
-                train_stats.append_accumulate('train_pseudo_label_impurity', (1.0 - acc.item()))
+                if len(tgts) > 0:
+                    acc_vec = preds == tgts
+                    acc = torch.mean(acc_vec.detach().cpu().type(torch.FloatTensor))
+                    train_stats.append_accumulate('train_pseudo_label_accuracy', acc.item())
+                    train_stats.append_accumulate('train_pseudo_label_impurity', (1.0 - acc.item()))
 
-                for c in range(self.args.num_classes):
-                    pl_acc_per_class[c].extend(acc_vec[tgts == c].detach().cpu().tolist())
-                    pl_count_per_class[c] += torch.sum(preds == c).item()
-                    pl_gt_count_per_class[c] += torch.sum(tgts == c).item()
+                    for c in range(self.args.num_classes):
+                        pl_acc_per_class[c].extend(acc_vec[tgts == c].detach().cpu().tolist())
+                        pl_count_per_class[c] += torch.sum(preds == c).item()
+                        pl_gt_count_per_class[c] += torch.sum(tgts == c).item()
 
             loss_l = criterion(logits_l, targets_l)
             score_l, pred_l = torch.max(logits_l, dim=-1)
@@ -272,7 +269,6 @@ class FixMatchTrainer(trainer.SupervisedTrainer):
         train_stats.add(epoch, 'train_wall_time', time.time() - start_time)
 
         train_stats.close_accumulate(epoch, 'train_pseudo_label_count', method='sum', default_value=0.0)
-        train_stats.close_accumulate(epoch, 'train_pseudo_label_ood_count', method='sum', default_value=0.0)
         # close the rest with avg
         train_stats.close_all_accumulate(epoch, method='avg', default_value=0.0)
 

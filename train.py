@@ -292,8 +292,8 @@ def train(args):
             train_stats.update_global(epoch)
             best_model.cpu()  # move to cpu before saving to simplify loading the model
             torch.save(best_model, os.path.join(args.output_dirpath, 'model.pt'))
-            import tsne
-            tsne.build_tsne_figure_cifar10(args.output_dirpath, epoch=epoch)
+            # import tsne
+            # tsne.build_tsne_figure_cifar10(args.output_dirpath, epoch=epoch)
 
     wall_time = time.time() - train_start_time
     train_stats.add_global('wall_time', wall_time)

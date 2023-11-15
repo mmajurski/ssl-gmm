@@ -121,13 +121,17 @@ for config_key in dict_of_df_lists.keys():
             ep.append(d['epoch'])
             mta.append(100 * d['min_test_accuracy_per_class'])
             if d['seed'] not in lcl_seeds:
-                print("Invalid seed for {}".format(d['model']))
-                print(config_key)
-                raise RuntimeError("Invalid seed")
-            if d['seed'] not in lcl_seeds and d['seed'] in seeds:
-                print("Duplicate seed for {}".format(d['model']))
-                print(config_key)
-                raise RuntimeError("Duplicate seed")
+                if d['seed'] in seeds:
+                    print("Duplicate seed for {}".format(d['model']))
+                    print(config_key)
+                    print("conflicting models")
+                    for d2 in dict_of_df_lists[config_key]:
+                        if d['seed'] == d2['seed']:
+                            print(d2['model'])
+                else:
+                    print("Invalid seed for {}".format(d['model']))
+                    print(config_key)
+                    raise RuntimeError("Invalid seed")
             if d['seed'] in lcl_seeds:
                 lcl_seeds.remove(d['seed'])
 
@@ -160,9 +164,9 @@ for config_key in dict_of_df_lists.keys():
             # print("outlier: {}".format(d['model']))
             print("mv {} ../models-cifar10-unused/".format(d['model']))
 
-    # if len(ta) > 6:  # and '250' in config_key:
-    #     # pick just 6 at random
-    #     overage = len(ta) - 6
+    # if len(ta) > 5:  # and '250' in config_key:
+    #     # pick just 5 at random
+    #     overage = len(ta) - 5
     #
     #     k = 0
     #     thres = 0.01
@@ -201,7 +205,7 @@ for config_key in dict_of_df_lists.keys():
     removed_mta = np.asarray(mta)[idx].tolist()
     mta = np.asarray(mta)[np.logical_not(idx)].tolist()
 
-    # if len(ta) < 6:
+    # if len(ta) < 5:
     #     print(config_key)
     #     print("missing {}".format(6 - len(ta)))
 

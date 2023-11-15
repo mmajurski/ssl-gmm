@@ -56,15 +56,15 @@
 \backcite {pytorch}{{3}{3.1.1}{equation.3.4}}
 \backcite {pytorch}{{4}{3.1.2}{subsubsection.3.1.2}}
 \backcite {pearson1936method}{{4}{3.2}{subsection.3.2}}
-\backcite {sohn2020fixmatch}{{5}{\caption@xref {??}{ on input line 501}}{table.caption.2}}
-\backcite {sohn2020fixmatch}{{5}{\caption@xref {??}{ on input line 501}}{table.caption.2}}
 \backcite {cifar10}{{5}{4}{table.caption.2}}
 \backcite {zheng2022simmatch}{{5}{4}{table.caption.2}}
 \backcite {sohn2020fixmatch}{{5}{4}{table.caption.2}}
 \backcite {sohn2020fixmatch}{{5}{4.1}{subsection.4.1}}
 \backcite {sohn2020fixmatch}{{6}{4.2}{subsection.4.2}}
-\backcite {sohn2020fixmatch}{{7}{\caption@xref {??}{ on input line 576}}{table.caption.3}}
+\backcite {sohn2020fixmatch}{{7}{\caption@xref {??}{ on input line 567}}{table.caption.4}}
+\backcite {zhang2021flexmatch}{{7}{\caption@xref {??}{ on input line 568}}{table.caption.4}}
+\backcite {wang2022freematch}{{7}{\caption@xref {??}{ on input line 569}}{table.caption.4}}
+\backcite {zheng2023simmatchv2}{{7}{\caption@xref {??}{ on input line 570}}{table.caption.4}}
 \backcite {wang2022usb}{{7}{3}{table.caption.4}}
-\backcite {sohn2020fixmatch}{{7}{3}{table.caption.4}}
-\backcite {wang2022usb}{{7}{4}{table.caption.5}}
-\backcite {sohn2020fixmatch}{{7}{4}{table.caption.5}}
+\backcite {wang2022freematch}{{7}{3}{table.caption.4}}
+\backcite {zheng2023simmatchv2}{{7}{3}{table.caption.4}}

@@ -66,6 +66,8 @@
 	% TODO fix the wording to harp on the Generative vs Discrimitative nature.
 	\title{Enhancing Semi-Supervised Learning with a Generative Gaussian Mixture Model Final Layer}
 	
+	%\title{Training a final activation layer with the method of moments, and its application to semi-supervised learning.}
+	
 	\author{Michael Majurski\\
 		Information Technology Lab, NIST\\
 		University of Maryland, Baltimore County\\
@@ -126,7 +128,6 @@
 
 
 \begin{abstract}
-	% TODO motiviate why gmm and why descriminitive models over linear layer.
 	Semi-Supervised Learning (SSL) leverages an abundance of unlabeled data to improve deep learning based model performance under limited training data regimes.
 	This paper presents a novel extension to any image classification architecture which improves accuracy in low-label regimes by enhancing class inlier determination. 
 	We demonstrate our method by extending the FixMatch \cite{sohn2020fixmatch} training scheme with our novel final layers. 
@@ -141,6 +142,9 @@
 
 
 \section{Introduction}
+
+\TODO {(majurski) purge bibliography of arxiv pre-prints where possible, replacing with their peer reviewed equivalents}
+
 %\begin{figure}[ht]
 %	\centering
 %	\includegraphics[width=0.9\linewidth]{example-image-a}
@@ -150,14 +154,14 @@
 
 \begin{figure}[ht]
 	\centering
-	\subfloat{\includegraphics[width=.5\columnwidth]{figures/id-00000121-tsne.jpg}}
-	\subfloat{\includegraphics[width=.5\columnwidth]{figures/id-00000409-tsne.jpg}}
+	\subfloat{\includegraphics[width=.5\columnwidth]{figures/id-00000001-tsne.jpg}}
+	\subfloat{\includegraphics[width=.5\columnwidth]{figures/id-00000013-tsne.jpg}}
 	\\
-	\subfloat{\includegraphics[width=.5\columnwidth]{figures/id-00000150-tsne.jpg}}
-	\subfloat{\includegraphics[width=.5\columnwidth]{figures/id-00000415-tsne.jpg}}
+	\subfloat{\includegraphics[width=.5\columnwidth]{figures/id-00000054-tsne.jpg}}
+	\subfloat{\includegraphics[width=.5\columnwidth]{figures/id-00000021-tsne.jpg}}
 	
 	%	\includegraphics[width=0.9\linewidth]{example-image-a}
-	\caption{t-SNE embedding of latent embedding space for various final network layers with or without a 1st order Method of Moments constraint.}
+	\caption{t-SNE plot of the latent embedding space for various final network layers with different Method of Moments embedding constraints.} 
 	\label{fig:schema}
 \end{figure}
 
@@ -187,28 +191,14 @@ This work proposes:
 
 This paper explores the impacts of replacing the final linear layer of a network with a generative model and embedding space constraints.
 This combination demonstrates improvements in final model accuracy when using pseudo-labeling methods where very few annotations are available.
-We demonstrate this methodology using the standard CIFAR-10 (40 and 250 labels) and CIFAR-100 (400 and 2500 label) benchmarks \cite{cifar10}. 
+We demonstrate this methodology using the standard CIFAR-10 benchmark dataset with 40 and 250 labels\cite{cifar10}. %) and CIFAR-100 (400 and 2500 label) benchmarks \cite{cifar10}. 
 Additionally, we explore and demonstrate that high level prescriptive constraints on the embedding space produce significantly worse outcomes than allowing the embedding space to take on whatever emergent structure the training process produces. 
 Finally, because the embedding constraint penalties are applied to all unlabeled data and not just the valid pseudo-labels, our method extracts training signal from every unlabeled data point, unlike FixMatch \cite{sohn2020fixmatch} and other methods which only learn from the valid pseudo-labels.
 
 
 % TODO CE masked where any truely low logit values are kept, but those midling are left alone.? I.e keep CE <0.1 but ignore those 0.1 < x < 0.95. cite chen2023boosting and rizve2021defense and kim2019nlnl for the idea. I.e. keep the strong negative PL in the CE term. chen2023boosting uses topk, instead of thresholds. 
 
-% TODO perform study with best mothod (i.e. aa_gmm_d1 or kmeans with l2) and show impact of PL threshold and the model impurity rate compared to baseline fixmatch (fc). Gerenate plot of impurity for FM vs gmm over the first 100-200 epochs?
-
-\TODO {(majurski) build t-SNE plots of the embedding spaces for the best models (1 per configuration)}
-
-\TODO {(majurski) purge bibliography of arxiv pre-prints where possible, replacing with their peer reviewed equivalents}
-
-
-% right now our method is a combination of 
-% - last layer replacement fc -> GMM
-% - embedding constraint l2
-% - null result that fancy embedding constraints help (mean_covar is worse performing)
-% - (maybe) that negative sampling helps a la chen2023boosting and rizve2021defense
-% - TODO ablation study on the above
-
-% TODO test more potent clustering method in place of l2 kenyon2018clustering
+% TODO perform study with best mothod (i.e. aa_gmm_d1 or kmeans with l2) and show impact of PL threshold and the model impurity rate compared to baseline fixmatch (fc). Gerenate plot of impurity for FM vs gmm over the first 100-200 epochs?]
 
 
 \section{Related Work}
@@ -470,57 +460,51 @@ This heuristic weighting scheme ensures that the overall contribution of each mo
 		\hline
 		Embedding Constraint  &  & None & $1st$ Order & $2nd$ Order & $3rd$ Order & $4th$ Order  \\ 
 		\hline
-		& 128  & $83.23$ \scriptsize{$\pm 3.74$}   &  &  &  &   \\
-		FixMatch\cite{sohn2020fixmatch} & 32  & $82.87$ \scriptsize{$\pm 2.56$}    &  &  &  &   \\
-		(i.e. FullyConnected) & 8  & $xx.yy$ \scriptsize{$\pm z.zz$}      &  &  &  &   \\
+		Linear & 128  & $82.19$ \scriptsize{$\pm 6.54$}   &  &  &  &   \\
+		(i.e. FullyConnected) & 8  & $88.40$ \scriptsize{$\pm 3.54$}      &  &  &  &   \\
 		\hline
-		& 128  & $84.65$ \scriptsize{$\pm 4.86$}    & $87.66$ \scriptsize{$\pm 4.45$} & $70.94$ \scriptsize{$\pm 2.51$} &  &  \\
-		KMeans & 32  & $86.90$ \scriptsize{$\pm 5.38$}    & $\boldsymbol{91.58}$ \scriptsize{$\pm 1.39$} & $75.24$ \scriptsize{$\pm 3.35$} &  &  \\
-		& 8  & $85.22$ \scriptsize{$\pm 4.53$}    & $87.97$ \scriptsize{$\pm 3.04$} & $68.21$ \scriptsize{$\pm 3.09$} & $xx.yy$ \scriptsize{$\pm z.zz$} & $xx.yy$ \scriptsize{$\pm z.zz$}  \\
+		AAGMM & 128  & $\boldsymbol{91.23}$ \scriptsize{$\pm 2.89$}    & $89.23$ \scriptsize{$\pm 2.50$} & $90.22$ \scriptsize{$\pm 3.42$} &  &  \\
+		& 8  & $88.34$ \scriptsize{$\pm 2.34$}    & $82.39$ \scriptsize{$\pm 9.96$} & $87.97$ \scriptsize{$\pm 3.34$} & $82.51$ \scriptsize{$\pm 9.42$} & $82.57$ \scriptsize{$\pm 6.94$} \\
 		\hline
-		& 128  & $88.21$ \scriptsize{$\pm 3.32$}    & $88.83$ \scriptsize{$\pm 4.38$} & $85.29$ \scriptsize{$\pm 2.67$} &  &  \\
-		AAGMM  & 32  & $85.31$ \scriptsize{$\pm 6.31$}    & $86.89$ \scriptsize{$\pm 3.44$} & $84.47$ \scriptsize{$\pm 2.38$} &  &  \\
-		& 8  & $87.44$ \scriptsize{$\pm 3.44$}    & $88.37$ \scriptsize{$\pm 5.21$} & $81.59$ \scriptsize{$\pm 3.23$} & $xx.yy$ \scriptsize{$\pm z.zz$} & $xx.yy$ \scriptsize{$\pm z.zz$} \\
+		KMeans & 128  & $81.13$ \scriptsize{$\pm 2.17$}    & $89.74$ \scriptsize{$\pm 2.62$} & $\boldsymbol{89.89}$ \scriptsize{$\pm 2.79$} &  &  \\
+		& 8  & $78.28$ \scriptsize{$\pm 9.87$}    & $73.27$ \scriptsize{$\pm 12.1$} & $75.80$ \scriptsize{$\pm 10.69$} & $80.96$ \scriptsize{$\pm 5.94$} & $80.01$ \scriptsize{$\pm 7.53$}  \\
 		
 		\hline\hline
 		Last Layer  &   Emb Dim  & \multicolumn{5}{c}{250 Labels (5 trials)}            \\ 
 		\hline
 		\multicolumn{1}{c|}{Embedding Constraint} &  & None & $1st$ Order & $2nd$ Order & $3rd$ Order & $4th$ Order  \\ 
 		\hline
-		& 128  & $94.73$ \scriptsize{$\pm 0.18$}   &  &  &  &   \\
-		FixMatch\cite{sohn2020fixmatch} & 32  & $94.07$ \scriptsize{$\pm 0.96$}    &  &  &  &   \\
-		(i.e. FullyConnected) & 8  & $94.70$ \scriptsize{$\pm 0.13$}      &  &  &  &   \\
+		Linear & 128  & $94.61$ \scriptsize{$\pm 0.11$}   &  &  &  &   \\
+		(i.e. FullyConnected) & 8  & $93.72$ \scriptsize{$\pm 0.57$}      &  &  &  &   \\
 		\hline
-		& 128  & $94.56$ \scriptsize{$\pm 0.17$}    & $94.40$ \scriptsize{$\pm 0.18$} & $89.77$ \scriptsize{$\pm 0.47$} &  &  \\
-		KMeans & 32  & $94.66$ \scriptsize{$\pm 0.27$}    & $94.32$ \scriptsize{$\pm 0.39$} & $91.56$ \scriptsize{$\pm 0.16$} &  &  \\
-		& 8  & \TODO {update} $94.25$ \scriptsize{$\pm 0.16$}    & \TODO {update} $94.09$ \scriptsize{$\pm 0.56$} & $89.77$ \scriptsize{$\pm 1.25$} & $90.85$ \scriptsize{$\pm 0.76$} & $88.8$ \scriptsize{$\pm 0.49$}  \\
+		AAGMM & 128  & $94.09$ \scriptsize{$\pm 0.34$}    & $94.20$ \scriptsize{$\pm 0.62$} & $94.42$ \scriptsize{$\pm 0.14$} &  &  \\
+		& 8  & $94.17$ \scriptsize{$\pm 0.57$}    & $94.01$ \scriptsize{$\pm 0.73$} & $94.33$ \scriptsize{$\pm 0.37$} & $93.77$ \scriptsize{$\pm 0.90$} & $94.22$ \scriptsize{$\pm 0.50$} \\
 		\hline
-		& 128  & $94.25$ \scriptsize{$\pm 0.48$}    & $\boldsymbol{94.75}$ \scriptsize{$\pm 0.29$} & $93.05$ \scriptsize{$\pm 0.62$} &  &  \\
-		AAGMM  & 32  & $94.07$ \scriptsize{$\pm 0.76$}    & $94.42$ \scriptsize{$\pm 0.54$} & $93.89$ \scriptsize{$\pm 0.62$} &  &  \\
-		& 8  & $94.36$ \scriptsize{$\pm 0.40$}    & $94.42$ \scriptsize{$\pm 0.21$} & $92.97$ \scriptsize{$\pm 0.99$} & $93.87$ \scriptsize{$\pm 0.46$} & $93.29$ \scriptsize{$\pm 0.59$} \\
+		KMeans & 128  & $92.83$ \scriptsize{$\pm 1.16$}    & $93.29$ \scriptsize{$\pm 0.92$} & $93.16$ \scriptsize{$\pm 1.25$} &  &  \\
+		& 8  & $93.71$ \scriptsize{$\pm 0.89$}    & $94.09$ \scriptsize{$\pm 0.50$} & $93.64$ \scriptsize{$\pm 0.99$} & $94.31$ \scriptsize{$\pm 0.39$} & $94.09$ \scriptsize{$\pm 0.59$}  \\
 	\end{tabularx}
-	\caption{Mean test accuracy \% for CIFAR-10 SSL benchmark comparing various configurations of our method. The FixMatch results in the table is our reproduction of the published results, using our training pipeline modifications, which verifies the original published results. For CIFAR-10 the WideResNet model used by FixMatch has an embedding size of 128 dimension. Due to exponential GPU memory requirements only the 8D embedding can operate with higher order MoM embedding constraints. Results for a given order of embedding constraint include all lower constraints.}
+	\caption{Mean test accuracy \% for CIFAR-10 SSL benchmark comparing various configurations of our method. The FixMatch results in the table is our reproduction of the published results, using our training pipeline modifications, which verifies the original published results. For CIFAR-10 the WideResNet model used by FixMatch has an embedding size of 128 dimension. Due to exponential GPU memory requirements only the 8D embedding can operate with higher order MoM embedding constraints. Results for a given order of embedding constraint include all lower constraints. \TODO{(majurski) update table with final few missing runs to bring N=5}}
 	\label{table1}
 \end{table*}
 
 
-We evaluate our linear layer replacement and embedding space constraints using our modified FixMatch on common SSL benchmarks CIFAR-10/100 \cite{cifar10} under various label scarcities. 
+We evaluate our linear layer replacement and embedding space constraints using our modified FixMatch on common SSL benchmarks CIFAR-10 \cite{cifar10} under various label scarcities. 
 % FixMatch \cite{sohn2020fixmatch}, CoMatch \cite{li2021comatch}, and SimMatch \cite{zheng2022simmatch} serve as our primary comparisons.
 When comparing against other SSL benchmark results (like SimMatch \cite{zheng2022simmatch}) it is unclear how the labeled samples were selected from the fully labeled dataset. 
 For our evaluation, for each model training run, the required number of labeled samples are drawn without replacement from the training population of the dataset.
 All data not in this labeled subset is used as unlabeled data (i.e. the labels are discarded).
-We evaluate our method against CIFAR-10 at 40 and 250 labels, and CIFAR-100 at 400 and 2500 labels. 
+% TODO maybe re-add cifar100 if there is time
+We evaluate our method against CIFAR-10 at 40 and 250 labels. %, and CIFAR-100 at 400 and 2500 labels. 
 This corresponds to 4 or 25 samples per class.
 As prior work \cite{sohn2020fixmatch} has noted, resulting model quality is highly variable when only 4 samples are selected per class, as the quality and usefulness of the specific 4 samples can vary drastically. 
 It can be informative to compare mean performance with max performance over $N$ runs to see how well a method can be expected to do on average with random label sampling, vs how well it can potentially do with a more representative subset of labeled data.
 
 \subsection{Hyper-Parameters}
 
-Our training configuration for both CIFAR-10 and CIFAR-100 is identical with the exception of the model architecture.
-For CIFAR-10 we a WideResNet28-2, whereas the CIFAR-100 models use WideResNet28-8.
-%Its worth noting for the record that these models, drawn from prior SSL work like FixMatch, do not match the original publication definition \cite{zagoruyko2016wide}.
-%Somewhere along the paper chain, an additional convolutional block was added, making the models perform better than the originally published version would.
+%Our training configuration for CIFAR-10 and CIFAR-100 is identical with the exception of the model architecture.
+%For CIFAR-10 we a WideResNet28-2, whereas the CIFAR-100 models use WideResNet28-8.
 
+We train the CIFAR-10 models with a WideResNet28-2 architecture.
 Matching the FixMatch \cite{sohn2020fixmatch} hyper-parameters, we use SGD with Nesterov momentum and $\lambda_u = 1$, $\beta = 0.9$, $\tau = 0.95$, $\mu = 7$, $B = 64$, and epoch size = $1024$ regardless of the number of images in the labeled dataset.
 Our $learning\_rate (\eta) = 0.01$ and we use an exponential moving average of the model weights with a decay $=0.999$.
 The replacement of a fixed number of training steps with an early stopping criteria, where the model does not improve by $1e-3$ for $40$ epochs, prevents the use of a cosine decay schedule.
@@ -554,27 +538,23 @@ The FixMatch rows in table \ref{table1} also represent the baseline fully connec
 For 250 labels both the KMeans and AAGMM last layer perform approximately equivalent to base FixMatch when using $None$, or just the $1st$ Order MoM embedding constraint.
 However, higher order constraints, which enforce ever stricter controls on what the embedding space should look like, produce worse overall model accuracy.
 
-\TODO {(majurski) include DASH, FlexMatch, and FreeMatch results in this table}
 \begin{table*}[ht!]
 	\begin{tabularx}{\textwidth}{c|c|XXXXXX}
 		\multicolumn{6}{c}{CIFAR-10 Max Test Accuracy} \\ \hline\hline
-		Last Layer &   Emb Dim   & \multicolumn{5}{c}{40 Labels (6 trials)}            \\ 
+		Last Layer &   Emb Dim   & \multicolumn{5}{c}{40 Labels (5 trials)}            \\ 
 		\hline
 		Embedding Constraint  &  & None & $1st$ Order & $2nd$ Order & $3rd$ Order & $4th$ Order  \\ 
 		\hline
-		& 128  & $89.89$   &  &  &  &   \\
-		FixMatch\cite{sohn2020fixmatch} & 32  & $87.62$     &  &  &  &   \\
-		(i.e. FullyConnected) & 8  & $xx.yy$    &  &  &  &   \\
+		Linear & 128  & $91.01$   &  &  &  &   \\
+		(i.e. FullyConnected) & 8  & $92.10$    &  &  &  &   \\
 		\hline
-		& 128  & $91.72$    & $90.91$   & $74.88$  &  &  \\
-		KMeans & 32  & $93.51$     & $93.57$   & $81.80$   &  &  \\
-		& 8  & $92.69$    & $92.05$  & $73.34$  & $xx.yy$  & $xx.yy$  \\
+		AAGMM  & 128  & $\boldsymbol{94.64}$    & $91.33$   & $92.74$   &  &  \\
+		& 8  & $90.40$    & $93.25$   & $92.11$   & $91.95$  & $92.01$  \\
 		\hline
-		& 128  & $94.10$    & $94.58$   & $88.43$   &  &  \\
-		AAGMM  & 32  & $90.63$    & $94.27$   & $88.65$   &  &  \\
-		& 8  & $91.30$    & $94.28$   & $87.13$   & $xx.yy$  & $xx.yy$  \\
+		KMeans & 128  & $84.08$    & $91.62$   & $92.22$  &  &  \\
+		& 8  & $\boldsymbol{93.21}$    & $91.22$  & $89.35$  & $85.96$  & $92.59$  \\
 	\end{tabularx}
-	\caption{Max run accuracy \% for CIFAR-10 SSL benchmark with 40 labels comparing various configurations of our method. This table shows the best-case performance of our various methods; with the effect of poorly representative labels selected for each class. This demonstrates that for AAGMM high embedding dimensionality, the embedding constraints have no effect on the final accuracy, but with reduced embedding space dimensionality, adding a $1st$ Order penalty to the cluster centers improves model accuracy.}
+	\caption{Max run accuracy \% for CIFAR-10 SSL benchmark with 40 labels comparing various configurations of our method. This table shows the best-case performance of our various methods; without the effect of poorly representative labels selected for each class. This demonstrates that for AAGMM high embedding dimensionality, the embedding constraints have no effect on the final accuracy, but with reduced embedding space dimensionality, adding a $1st$ Order penalty to the cluster centers improves model accuracy.}
 	\label{table1.5}
 \end{table*}
 
@@ -582,68 +562,63 @@ However, higher order constraints, which enforce ever stricter controls on what 
 	\begin{tabular}{c|cc}
 		Method          & \multicolumn{2}{c}{CIFAR-10} \\ \hline
 		Label Count     & 40            & 250           \\
-		Supervised & $77.18$ \scriptsize{$\pm1.32$}   & $56.24$ \scriptsize{$\pm3.41$}   \\ \hline
-		FixMatch   & $13.81$ \scriptsize{$\pm3.37$}   & $5.07$ \scriptsize{$\pm0.65$}     \\
-		FlexMatch  & $5.29$ \scriptsize{$\pm0.29$}    & $4.97$ \scriptsize{$\pm0.07$}    \\
-		SimMatch   & $5.38$ \scriptsize{$\pm0.01$}    & $5.36$ \scriptsize{$\pm0.08$}    \\
-		SimMatchV2 & $4.90$ \scriptsize{$\pm0.16$}    & $5.04$ \scriptsize{$\pm0.09$}    \\ \hline
-		Ours (KMeans)    & $8.42$ \scriptsize{$\pm 1.39$}           & $5.34$ \scriptsize{$\pm 0.27$}       \\    
-		Ours (AAGMM)    & $11.17$ \scriptsize{$\pm 4.83$}           & $5.25$ \scriptsize{$\pm 0.29$}           
+		%Supervised & $77.18$ \scriptsize{$\pm1.32$}   & $56.24$ \scriptsize{$\pm3.41$}   \\ 
+		\hline
+		FixMatch\cite{sohn2020fixmatch}   & $13.81$ \scriptsize{$\pm3.37$}   & $5.07$ \scriptsize{$\pm0.65$}     \\
+		FlexMatch\cite{zhang2021flexmatch}  & $4.97$ \scriptsize{$\pm0.06$}    & $4.98$ \scriptsize{$\pm0.09$}    \\
+		FreeMatch\cite{wang2022freematch}  & $4.90$ \scriptsize{$\pm0.29$}    & $4.98$ \scriptsize{$\pm0.09$}    \\
+		SimMatchV2\cite{zheng2023simmatchv2} & $4.90$ \scriptsize{$\pm0.04$}    & $5.04$ \scriptsize{$\pm0.09$}    \\ \hline
+		Ours (AAGMM+None)    & $8.77$ \scriptsize{$\pm 2.89$}           & $5.91$ \scriptsize{$\pm 0.34$}  \\
+		Ours (KMeans+2ndOrder)    & $10.11$ \scriptsize{$\pm 2.79$}           & $6.84$ \scriptsize{$\pm 1.25$}  
+		
 	\end{tabular}
-	\caption{Error rate \% for CIFAR-10 SSL benchmark comparing to state of the art results. Results are copied from USB \cite{wang2022usb} unless otherwise stated. Results are based on 3 runs for USB, 5 runs for FixMatch \cite{sohn2020fixmatch}, and 6 runs for ours.}
+	\caption{Error rate \% for CIFAR-10 SSL benchmark comparing to state of the art results. Results are copied from USB \cite{wang2022usb} unless otherwise stated. Existing results are drawn from FreeMatch\cite{wang2022freematch} and SimMatchV2\cite{zheng2023simmatchv2} publications.}
 	\label{table2}
 \end{table}
 
 
 
 %\FloatBarrier
-\subsection{CIFAR-100}
-
-\TODO {document hyper-parameters}
-
-
-\begin{table}[htbp]
-	\begin{tabular}{c|cc}
-		Method            & \multicolumn{2}{c}{CIFAR-100} \\ 
-		\hline
-		Label Count           & 400           & 2500          \\
-		Supervised   & $89.6$ \scriptsize{$\pm0.43$}    & $58.33$ \scriptsize{$\pm1.41$}   \\ \hline
-		FixMatch      & $48.85$ \scriptsize{$\pm1.75$}   & $28.29$ \scriptsize{$\pm0.11$}   \\
-		FlexMatch   & $40.73$ \scriptsize{$\pm1.44$}   & $26.17$ \scriptsize{$\pm0.18$}   \\
-		SimMatch    & $39.32$ \scriptsize{$\pm0.72$}   & $26.21$ \scriptsize{$\pm0.37$}   \\
-		SimMatchV2    & $36.68$ \scriptsize{$\pm0.86$}   & $26.66$ \scriptsize{$\pm0.38$}   \\ \hline
-		Ours (KMeans)    & $xx.yy$ \scriptsize{$\pm z.zz$}           & $xx.yy$ \scriptsize{$\pm z.zz$}  \\
-		Ours (AAGMM)    & $xx.yy$ \scriptsize{$\pm z.zz$}           & $xx.yy$ \scriptsize{$\pm z.zz$}  
-	\end{tabular}
-	\caption{Error rate \% for CIFAR-100 SSL benchmark comparing to state of the art results. Results are copied from USB \cite{wang2022usb} unless otherwise stated. Results are based on 3 runs for USB, 5 runs for FixMatch \cite{sohn2020fixmatch}, and 6 runs for ours.}
-	\label{table3}
-\end{table}
+%\subsection{CIFAR-100}
+%
+%\TODO {document hyper-parameters}
+%
+%
+%\begin{table}[htbp]
+%	\begin{tabular}{c|cc}
+%		Method            & \multicolumn{2}{c}{CIFAR-100} \\ 
+%		\hline
+%		Label Count           & 400           & 2500          \\
+%		%Supervised   & $89.6$ \scriptsize{$\pm0.43$}    & $58.33$ \scriptsize{$\pm1.41$}   \\ 
+%		\hline
+%		FixMatch\cite{sohn2020fixmatch}      & $46.42$ \scriptsize{$\pm0.82$}   & $28.03$ \scriptsize{$\pm0.16$}   \\
+%		FlexMatch\cite{zhang2021flexmatch}  & $39.94$ \scriptsize{$\pm1.62$}   & $26.49$ \scriptsize{$\pm0.20$}   \\
+%		FreeMatch\cite{wang2022freematch}    & $37.98$ \scriptsize{$\pm0.42$}   & $26.47$ \scriptsize{$\pm0.20$}   \\
+%		SimMatchV2\cite{zheng2023simmatchv2}    & $36.68$ \scriptsize{$\pm0.86$}   & $26.66$ \scriptsize{$\pm0.38$}   \\ \hline
+%		Ours (AAGMM+None)    & $xx.yy$ \scriptsize{$\pm z.zz$}           & $xx.yy$ \scriptsize{$\pm z.zz$}  \\
+%		Ours (KMeans+2ndOrder)    & $xx.yy$ \scriptsize{$\pm z.zz$}           & $xx.yy$ \scriptsize{$\pm z.zz$}  
+%	\end{tabular}
+%	\caption{Error rate \% for CIFAR-100 SSL benchmark comparing to state of the art results. Results are copied from USB \cite{wang2022usb} unless otherwise stated. Existing results are drawn from FreeMatch\cite{wang2022freematch} and SimMatchV2\cite{zheng2023simmatchv2} publications.}
+%	\label{table3}
+%\end{table}
 
 \subsection{Ablation Study}
 
 \begin{table}[htbp]
 	% TODO include a histogram showing the bi-modal behavior of the final accuracy numbers
 	\begin{tabular}{c|c}
-		\multicolumn{2}{c}{Our Results on CIFAR-10 (40 Labels)}\\
+		\multicolumn{2}{c}{AAGMM+None Results on CIFAR-10 (40 Labels)}\\
 		\hline
 		Run Number            & Test Accuracy \\ 
-		
 		\hline
-		Run 1   & $xx.yy$     \\ 
-		Run 2      & $xx.yy$    \\
-		Run 3   & $xx.yy$ \\
-		Run 4    & $xx.yy$ \\
-		Run 5    & $xx.yy$ \\ 
-		Run 6    & $xx.yy$ \\ 
-		Run 7    & $xx.yy$ \\ 
-		Run 8    & $xx.yy$ \\ 
-		Run 9    & $xx.yy$  \\ 
-		Run 10    & $xx.yy$ \\ 
-		Run 11   & $xx.yy$ \\ 
-		Run 12    & $xx.yy$ \\ 
+		Run 1   & $94.6$     \\ 
+		Run 2   & $92.8$    \\
+		Run 3   & $92.8$ \\
+		Run 4   & $89.9$ \\
+		Run 5   & $86.4$ \\ 
 		
 	\end{tabular}
-	\caption{Error rate \% for CIFAR-10 SSL benchmark showing the run-to-run variance depending on the quality of the 40 labels selected from the full population.}
+	\caption{Error rate \% for CIFAR-10 SSL benchmark showing the run-to-run variance depending on the quality of the 40 labels selected from the full population when using an AAGMM last layer with no embedding constraints. All results for our methods are an average of 5 runs, where for all experiments the 5 seeds were picked randomly in advance.}
 	\label{table4}
 \end{table}
 
