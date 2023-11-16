@@ -23,10 +23,10 @@
 
 
 @TECHREPORT{cifar10,
-	author = {Alex Krizhevsky},
-	title = {Learning multiple layers of features from tiny images},
-	institution = {},
-	year = {2009}
+  title={Learning multiple layers of features from tiny images},
+author={Krizhevsky, Alex and Hinton, Geoffrey and others},
+year={2009},
+publisher={Toronto, ON, Canada}
 }
 
 @article{sohn2020fixmatch,
@@ -39,10 +39,11 @@
 }
 
 @article{zheng2023simmatchv2,
-	title={SimMatchV2: Semi-Supervised Learning with Graph Consistency},
-	author={Zheng, Mingkai and You, Shan and Huang, Lang and Luo, Chen and Wang, Fei and Qian, Chen and Xu, Chang},
-	journal={arXiv preprint arXiv:2308.06692},
-	year={2023}
+  title={SimMatchV2: Semi-Supervised Learning with Graph Consistency},
+author={Zheng, Mingkai and You, Shan and Huang, Lang and Luo, Chen and Wang, Fei and Qian, Chen and Xu, Chang},
+booktitle={Proceedings of the IEEE/CVF International Conference on Computer Vision},
+pages={16432--16442},
+year={2023}
 }
 @book{zhu2022introduction,
 	title={Introduction to semi-supervised learning},
@@ -178,6 +179,7 @@
 	year={1998}
 }
 
+% Unavoidable arXiv
 @article{prakash2014survey,
 	title={A survey on semi-supervised learning techniques},
 	author={Prakash, V Jothi and Nithya, Dr LM},
@@ -201,13 +203,13 @@
 	year={2019}
 }
 
-
-
-@article{berthelot2019remixmatch,
-	title={Remixmatch: Semi-supervised learning with distribution alignment and augmentation anchoring},
-	author={Berthelot, David and Carlini, Nicholas and Cubuk, Ekin D and Kurakin, Alex and Sohn, Kihyuk and Zhang, Han and Raffel, Colin},
-	journal={arXiv preprint arXiv:1911.09785},
-	year={2019}
+@inproceedings{
+	berthelot2019remixmatch,
+	title={ReMixMatch: Semi-Supervised Learning with Distribution Matching and Augmentation Anchoring},
+	author={David Berthelot and Nicholas Carlini and Ekin D. Cubuk and Alex Kurakin and Kihyuk Sohn and Han Zhang and Colin Raffel},
+	booktitle={International Conference on Learning Representations},
+	year={2020},
+	url={https://openreview.net/forum?id=HklkeR4KPB}
 }
 
 @inproceedings{mustafa2020transformation,
@@ -219,13 +221,12 @@
 	organization={Springer}
 }
 
-@misc{zheng2022simmatch,
-	title={SimMatch: Semi-supervised Learning with Similarity Matching}, 
-	author={Mingkai Zheng and Shan You and Lang Huang and Fei Wang and Chen Qian and Chang Xu},
-	year={2022},
-	eprint={2203.06915},
-	archivePrefix={arXiv},
-	primaryClass={cs.CV}
+@inproceedings{zheng2022simmatch,
+title={Simmatch: Semi-supervised learning with similarity matching},
+author={Zheng, Mingkai and You, Shan and Huang, Lang and Wang, Fei and Qian, Chen and Xu, Chang},
+booktitle={Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition},
+pages={14471--14481},
+year={2022}
 }
 
 @inproceedings{chen2023boosting,
@@ -235,11 +236,14 @@
 	pages={7548--7557},
 	year={2023}
 }
-@article{rizve2021defense,
-	title={In defense of pseudo-labeling: An uncertainty-aware pseudo-label selection framework for semi-supervised learning},
-	author={Rizve, Mamshad Nayeem and Duarte, Kevin and Rawat, Yogesh S and Shah, Mubarak},
-	journal={arXiv preprint arXiv:2101.06329},
-	year={2021}
+
+@inproceedings{
+	rizve2021defense,
+	title={In Defense of Pseudo-Labeling: An Uncertainty-Aware Pseudo-label Selection Framework for Semi-Supervised Learning},
+	author={Mamshad Nayeem Rizve and Kevin Duarte and Yogesh S Rawat and Mubarak Shah},
+	booktitle={International Conference on Learning Representations},
+	year={2021},
+	url={https://openreview.net/forum?id=-ODN6SbiUU}
 }
 
 @inproceedings{kim2019nlnl,
@@ -249,11 +253,14 @@
 	pages={101--110},
 	year={2019}
 }
+
 @article{kenyon2018clustering,
-	title={Clustering-oriented representation learning with attractive-repulsive loss},
-	author={Kenyon-Dean, Kian and Cianflone, Andre and Page-Caccia, Lucas and Rabusseau, Guillaume and Cheung, Jackie Chi Kit and Precup, Doina},
-	journal={arXiv preprint arXiv:1812.07627},
-	year={2018}
+	title={Clustering-Oriented Representation Learning with Attractive-Repulsive Loss},
+	author={Kian Kenyon-Dean and Andre Cianflone and Lucas Page-Caccia and Guillaume Rabusseau and Jackie Chi Kit Cheung and Doina Precup},
+	journal={ArXiv},
+	year={2018},
+	volume={abs/1812.07627},
+	url={https://api.semanticscholar.org/CorpusID:56475871}
 }
 
 @inproceedings{wei2022mitigating,
@@ -349,23 +356,27 @@
 	pages={3938--3961},
 	year={2022}
 }
-@misc{menon2020deep,
-	title={Deep Expectation-Maximization for Semi-Supervised Lung Cancer Screening}, 
-	author={Sumeet Menon and David Chapman and Phuong Nguyen and Yelena Yesha and Michael Morris and Babak Saboury},
-	year={2020},
-	eprint={2010.01173},
-	archivePrefix={arXiv},
-	primaryClass={cs.LG}
+
+@inproceedings{menon2020deep,
+	author = {Menon, Sumeet and Chapman, David and Nguyen, Phuong and Yesha, Yelena and Morris, Michael and Saboury, Babak},
+	year = {2019},
+	month = {08},
+	pages = {},
+	title = {Deep Expectation-Maximization for Semi-Supervised Lung Cancer Screening}
 }
 
-@misc{menon2022semisupervised,
-	title={Semi-supervised Contrastive Outlier removal for Pseudo Expectation Maximization (SCOPE)}, 
-	author={Sumeet Menon and David Chapman},
-	year={2022},
-	eprint={2206.14261},
-	archivePrefix={arXiv},
-	primaryClass={cs.LG}
+
+
+@phdthesis{menon2022semisupervised,
+	author = {Menon, Sumeet},
+	advisor = {David, Chapman,},
+	title = {Semi-Supervised Expectation Maximization with Contrastive Outlier Removal},
+	year = {2022},
+	isbn = {9798438799207},
+	publisher = {University of Maryland, Baltimore County},
+	note = {AAI29167191}
 }
+
 
 @article{pearson1936method,
 	title={Method of moments and method of maximum likelihood},
@@ -378,10 +389,11 @@
 	publisher={JSTOR}
 }
 @article{zagoruyko2016wide,
-	title={Wide residual networks},
-	author={Zagoruyko, Sergey and Komodakis, Nikos},
-	journal={arXiv preprint arXiv:1605.07146},
-	year={2016}
+	author = {Zagoruyko, Sergey and Komodakis, Nikos},
+	year = {2016},
+	month = {05},
+	pages = {},
+	title = {Wide Residual Networks}
 }
 
 @inproceedings{xu2021dash,
@@ -393,9 +405,12 @@
 	organization={PMLR}
 }
 
-@article{wang2022freematch,
-	title={Freematch: Self-adaptive thresholding for semi-supervised learning},
-	author={Wang, Yidong and Chen, Hao and Heng, Qiang and Hou, Wenxin and Fan, Yue and Wu, Zhen and Wang, Jindong and Savvides, Marios and Shinozaki, Takahiro and Raj, Bhiksha and others},
-	journal={arXiv preprint arXiv:2205.07246},
-	year={2022}
+
+@inproceedings{
+	wang2022freematch,
+	title={FreeMatch: Self-adaptive Thresholding for Semi-supervised Learning},
+	author={Yidong Wang and Hao Chen and Qiang Heng and Wenxin Hou and Yue Fan and Zhen Wu and Jindong Wang and Marios Savvides and Takahiro Shinozaki and Bhiksha Raj and Bernt Schiele and Xing Xie},
+	booktitle={The Eleventh International Conference on Learning Representations },
+	year={2023},
+	url={https://openreview.net/forum?id=PDrUPTXJI_A}
 }
