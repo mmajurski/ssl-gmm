@@ -1,5 +1,10 @@
-\backcite {wei2022mitigating}{{1}{1}{figure.caption.2}}
+\backcite {tsne}{{2}{2}{figure.caption.2}}
+\backcite {wei2022mitigating}{{2}{1}{figure.caption.2}}
+\backcite {kingma2013auto}{{2}{1}{figure.caption.2}}
+\backcite {kingma2019introduction}{{2}{1}{figure.caption.2}}
+\backcite {li2019disentangled}{{2}{1}{figure.caption.2}}
 \backcite {cifar10}{{2}{1}{figure.caption.2}}
+\backcite {tsne}{{2}{1}{figure.caption.2}}
 \backcite {hady2013semi}{{2}{1}{figure.caption.2}}
 \backcite {li2019safe}{{2}{1}{figure.caption.2}}
 \backcite {zhu2022introduction}{{2}{1}{figure.caption.2}}
@@ -13,7 +18,7 @@
 \backcite {pearson1936method}{{2}{2}{Item.2}}
 \backcite {cifar10}{{2}{1}{Item.2}}
 \backcite {sohn2020fixmatch}{{2}{1}{Item.2}}
-\backcite {zhang2021flexmatch}{{2}{2}{section.2}}
+\backcite {zhang2021flexmatch}{{3}{2}{section.2}}
 \backcite {olivier2006semi}{{3}{2.1}{subsection.2.1}}
 \backcite {livieris2019predicting}{{3}{2.1}{subsection.2.1}}
 \backcite {mcclosky2006reranking}{{3}{2.1}{subsection.2.1}}
@@ -56,8 +61,14 @@
 \backcite {cifar10}{{5}{4}{section.4}}
 \backcite {sohn2020fixmatch}{{5}{4}{table.caption.3}}
 \backcite {sohn2020fixmatch}{{5}{4.1}{table.caption.4}}
-\backcite {sohn2020fixmatch}{{5}{4.1}{table.caption.4}}
 \backcite {sohn2020fixmatch}{{6}{4.2}{subsection.4.2}}
 \backcite {wang2022freematch}{{6}{4.2}{subsection.4.2}}
 \backcite {zheng2023simmatchv2}{{6}{4.2}{subsection.4.2}}
-\backcite {sohn2020fixmatch}{{7}{5}{section.5}}
+\backcite {sohn2020fixmatch}{{7}{\caption@xref {??}{ on input line 571}}{table.caption.7}}
+\backcite {zhang2021flexmatch}{{7}{\caption@xref {??}{ on input line 572}}{table.caption.7}}
+\backcite {wang2022freematch}{{7}{\caption@xref {??}{ on input line 573}}{table.caption.7}}
+\backcite {zheng2023simmatchv2}{{7}{\caption@xref {??}{ on input line 574}}{table.caption.7}}
+\backcite {wang2022usb}{{7}{4}{table.caption.7}}
+\backcite {wang2022freematch}{{7}{4}{table.caption.7}}
+\backcite {zheng2023simmatchv2}{{7}{4}{table.caption.7}}
+\backcite {sohn2020fixmatch}{{8}{5}{section.5}}

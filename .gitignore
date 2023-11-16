@@ -8,8 +8,8 @@ kmeans*/
 study.db
 study-bck.db
 *.db
-*.jpg
-*.png
+#*.jpg
+#*.png
 *.svg
 
 *.bbl

@@ -135,39 +135,40 @@ Code is available at: \url{https://github.com/*******} % \url{https://github.com
 
 \section{Introduction}
 
+\TODO{(majurski) anonymize before submission}
+
 \begin{figure}[ht]
 	\centering
 	
-	\includegraphics[width=0.9\linewidth]{example-image-a}
-	\caption{Schematic of the outlier problem, and how generative modeling of the joint probability can improve the situation.} 
+	\includegraphics[width=0.75\linewidth]{figures/illustration.png}
+	% \includegraphics[width=0.9\linewidth]{example-image-a}
+	\caption{Schematic of the outlier problem, and how generative modeling of the joint probability can improve the situation.  Prediction with (top) fully-superivsed softmax (middle) semi-supervised KMeans and (bottom) semi-supervised AAGMM.} 
 	\label{fig:schema}
 \end{figure}
 
-%SSL leverages an abundance of unlabeled data to improve deep learning based model performance under limited training data regimes \cite{zhu2022introduction,li2019safe,hady2013semi}.
-%Image classification has become a playground for exploring novel SSL ideas.
-%The early successes of deep learning based methods relied on large annotated datasets to enable models to learn the relevant features to perform the task, i.e. image classification build on top of ImageNet \cite{deng2009imagenet}.
-%With data annotation becoming a significant bottleneck, especially in application domains outside of the standard benchmarks, another learning paradigm was needed.
-%
-%There are several flavors of SSL.
-%Contrastive learning methods leverage the intuition that similar instances should be close in the representation space, while different instances are farther apart \cite{yang2022class,li2021comatch}.
-%Consistency regularization borrows the intuition that modified views of the same instance should have similar representations and predictions \cite{sohn2020fixmatch,lee2022contrastive,zhang2021flexmatch,kim2022conmatch}.
-%Pseudo-labeling methods like FixMatch \cite{sohn2020fixmatch} fall within the consistency regularization domain.
-%
-%This work argues that pseudo-labeling methods can be improved with better calibration of the network logits used to filter the pseudo-labels into reliable and unreliable. 
-%This is equivalent to improving the accuracy of class inlier determination.
-%Neural networks are known to be overconfident in their predictions \cite{wei2022mitigating}, and this affects the pseudo-labeling process. 
-%Potentially allowing for the inclusion of more incorrect pseudo-labels any specific logit threshold would otherwise have.
-%This work demonstrates the better calibrated replacements for a models final linear layer can improve the final accuracy of pseudo-labeling based SSL algorithms in very label scarce regimes. 
-
 \begin{figure*}[ht]
 	\centering
-	\subfloat{\includegraphics[width=.25\textwidth]{figures/id-00000001-tsne.jpg}}
-	\subfloat{\includegraphics[width=.25\textwidth]{figures/id-00000013-tsne.jpg}}
-	\subfloat{\includegraphics[width=.25\textwidth]{figures/id-00000054-tsne.jpg}}
-	\subfloat{\includegraphics[width=.25\textwidth]{figures/id-00000021-tsne.jpg}}
-	
-	%	\includegraphics[width=0.9\linewidth]{example-image-a}
-	\caption{t-SNE plot of the latent embedding space for various final layers with different MoM embedding constraints.} 
+	\begin{subfigure}[t]{.24\textwidth}
+		\includegraphics[width=\textwidth]{figures/id-00000001-tsne.jpg}
+		\subcaption{}
+	\end{subfigure}
+	\begin{subfigure}[t]{.24\textwidth}
+		\includegraphics[width=\textwidth]{figures/id-00000013-tsne.jpg}
+		\subcaption{}
+	\end{subfigure}
+	\begin{subfigure}[t]{.24\textwidth}
+		\includegraphics[width=\textwidth]{figures/id-00000054-tsne.jpg}
+		\subcaption{}
+	\end{subfigure}
+	\begin{subfigure}[t]{.24\textwidth}
+		\includegraphics[width=\textwidth]{figures/id-00000021-tsne.jpg}
+		\subcaption{}
+	\end{subfigure}
+%	\subfloat{\includegraphics[width=.25\textwidth]{figures/id-00000001-tsne.jpg}}
+%	\subfloat{\includegraphics[width=.25\textwidth]{figures/id-00000013-tsne.jpg}}
+%	\subfloat{\includegraphics[width=.25\textwidth]{figures/id-00000054-tsne.jpg}}
+%	\subfloat{\includegraphics[width=.25\textwidth]{figures/id-00000021-tsne.jpg}}
+	\caption{t-SNE\cite{tsne} plot of the latent embedding space for various final layers with different MoM embedding constraints.} 
 	\label{fig:cifar10tsne}
 \end{figure*}
 
@@ -175,7 +176,7 @@ The majority of deep classifiers rely on a softmax final activation layer which 
 When that layer receives input $x$, the model predicts a soft psuedo-distribution of labels $y$ which argmax can convert into a hard label.
 If $x$ is far from the decision boundary, then by definition, softmax assigns a prediction $y$ with high confidence.
 This works well for inlier samples, well represented by the training distribution.
-However, when presented with an outlier $x$, it is likely $x$ will be far from the decision boundary (\TODO{Figure ?}).
+However, when presented with an outlier $x$, it is likely $x$ will be far from the decision boundary (\TODO{Figure 1}).
 This means that softmax perceptrons, by definition, over-confidently hallucinate when given unexpected inputs \cite{wei2022mitigating}. 
 Most deep classifiers use softmax without a safety net and thereby over-confidently predict $y$.
 Ideally, when input $x$ is far from the decision boundary and training exemplars, the model should not be confident about the output class label $y$.
@@ -185,32 +186,21 @@ Models using a final layer capable of learning the joint probability $p(y,x)$ ca
 More importantly, such a layer can also infer the prior probability $p(x)$.
 Thus, if $x$ is an unexpected input, then such layer can flag the input as a low-probability outlier, rather than confidently predicting a label.
 
-% TODO rewrite paragraph to remove weird conversational tone
-Although there is related work in creating a generative final activation layer, there is an open question of how best to train such a layer in a deep learning context.  \TODO{(chapman) Citations for the related work...?}
-The straw-man’s approach would be to minimize the cross entropy between $y$ and $y\_pred$ as usual.  
-Figure \ref{fig:cifar10tsne} shows actual t-SNE plots for semi-supervised CIFAR-10 \cite{cifar10} classification that beautifully illustrate why such an approach will not work as intended.  
-Figure \ref{fig:cifar10tsne} (top-right) shows the latent space of a classification model that is $93\%$ accurate on the test set, yet the cluster centers are not even remotely located anywhere nearby the data points at all.  
-If one only cares about predictive performance, then one might conclude such a strange model would suffice.  
-But if one needs a robust model, then simply fitting the decision boundary is not adequate, we need to learn the full latent distribution. 
-Figure \ref{fig:cifar10tsne} (bot) shows that with our MoM embedding constraints, the exact same model can achieve comparable if not better accuracy, but with the added benefit of modeling the true location of cluster centers in the latent space.
-
-%\begin{figure}[ht]
-%	\centering
-%	\subfloat{\includegraphics[width=.5\columnwidth]{figures/id-00000001-tsne.jpg}}
-%	\subfloat{\includegraphics[width=.5\columnwidth]{figures/id-00000013-tsne.jpg}}
-%	\\
-%	\subfloat{\includegraphics[width=.5\columnwidth]{figures/id-00000054-tsne.jpg}}
-%	\subfloat{\includegraphics[width=.5\columnwidth]{figures/id-00000021-tsne.jpg}}
-%	
-%	%	\includegraphics[width=0.9\linewidth]{example-image-a}
-%	\caption{t-SNE plot of the latent embedding space for various final layers with different MoM embedding constraints.} 
-%	\label{fig:cifar10tsne}
-%\end{figure}
+Prior work has explored generative modeling for image classification \cite{li2019disentangled,kingma2013auto,kingma2019introduction}.
+Open questions remain of how to best train and utilize generative modeling within a deep learning context.
+The naive approach of minimizing cross entropy between $y$ and $y\_pred$ will not work.
+Figure \ref{fig:cifar10tsne} (b) shows t-SNE plots for semi-supervised CIFAR-10 \cite{cifar10} image classification which illustrate why the naive approach will not work as intended. 
+The t-SNE\cite{tsne} plot of "KMeans + None" shows the latent space of a $93\%$ accurate CIFAR-10 classification model. 
+However, the explicitly modeled cluster centers (shown as X's) do not align with the underlying data.
+While that model has acceptable predictive performance, it does not accurately learn and represent the underlying training data.
+To construct a robust model, one cannot simply fit a decision boundary.
+The model needs to learn the full latent distribution. 
+Figure \ref{fig:cifar10tsne} (d) demonstrates that with our proposed AAGMM final layer with 4th order MoM embedding constraints, the exact same model can achieve comparable (if not better accuracy), but with the added benefit of modeling the underlying data clusters in the latent space.
 
 
 This work argues that Semi-supervised learning (SSL) pseudo-labeling methods can be improved with better calibration of the network logits used to filter reliable pseudo-labels from the unreliable ones. 
 This is equivalent to improving the accuracy of class inlier determination.
-SSL is an excellent application to test generative final activation layers which model the join probability $p(y,x)$, as pseudo-labeling methods are sensitive to outliers.
+SSL is an excellent application to test generative final activation layers which model the joint probability $p(y,x)$, as pseudo-labeling methods are sensitive to outliers.
 
 SSL leverages an abundance of unlabeled data to improve deep learning based model performance under limited training data regimes \cite{zhu2022introduction,li2019safe,hady2013semi}.
 %Image classification has become a playground for exploring novel SSL ideas, of which there are several flavors.
@@ -436,7 +426,6 @@ This explores both how well a method can be expected to do on average with rando
 
 \subsection{Hyper-Parameters}
 \label{hyperparams}
-% TODO reduce the WE in this section
 
 \begin{table*}[ht!]
 	\begin{tabularx}{\textwidth}{c|c|XXXXXX}
@@ -468,24 +457,25 @@ This explores both how well a method can be expected to do on average with rando
 		KMeans & 128  & $92.83$ \scriptsize{$\pm 1.16$}    & $93.29$ \scriptsize{$\pm 0.92$} & $93.16$ \scriptsize{$\pm 1.25$} &  &  \\
 		& 8  & $93.71$ \scriptsize{$\pm 0.89$}    & $94.09$ \scriptsize{$\pm 0.50$} & $93.64$ \scriptsize{$\pm 0.99$} & $94.31$ \scriptsize{$\pm 0.39$} & $94.09$ \scriptsize{$\pm 0.59$}  \\
 	\end{tabularx}
-	\caption{Mean test accuracy \% for CIFAR-10 SSL benchmark comparing various configurations of our method. The FixMatch results in the table is our reproduction of the published results, using our training pipeline modifications. For CIFAR-10 the WideResNet model used by FixMatch has an embedding size of 128 dimension. Due to exponential GPU memory requirements only the 8D embedding can operate with higher order MoM embedding constraints. Results for a given order of embedding constraint include all lower constraints. \TODO{(majurski) update table with final few missing runs to bring N=5}}
+	\caption{Mean test accuracy \% for CIFAR-10 SSL benchmark comparing various configurations of our method. The FixMatch results in the table is our reproduction of the published results, using our training pipeline modifications. For CIFAR-10 the WideResNet model used by FixMatch has an embedding size of 128 dimension. Due to exponential GPU memory requirements only the 8D embedding can operate with higher order MoM embedding constraints. Results for a given order of embedding constraint include all lower constraints.}
+	%TODO update table with final few missing runs to bring N=5
 	\label{table1}
 \end{table*}
 
-The CIFAR-10 models were trained with the standard benchmark WideResNet28-2 architecture.
-Matching the FixMatch \cite{sohn2020fixmatch} hyper-parameters, we use SGD with Nesterov momentum and $\lambda_u = 1$, $\beta = 0.9$, $\tau = 0.95$, $\mu = 7$, $B = 64$, and epoch size = $1024$ regardless of the number of images in the labeled dataset.
-We modify the stock FixMatch \cite{sohn2020fixmatch} training algorithm with an early-stopping condition when the model has not improved for 50 epochs (where epoch size is defined as 1024 batches).
-We also use a $learning\_rate (\eta) = 0.01$ and an exponential moving average of the model weights with a decay $0.999$.
-Our replacement of a fixed number of training steps with an early stopping criteria prevents the use of a cosine decay schedule.
-Therefore, we replace that with a plateau learning rate scheduler which multiplies the learning rate by $0.2$ every time the early stopping criteria is met (before being reset) for a max of 2 reductions.
-We employ a cyclic learning rate scheduler to vary the learning rate by a factor of $\pm2.0$ within each epoch to make training less dependent upon exact learning rate value.
-Additionally, due to the higher training instability of the AAGMM layers compared to a linear layer, if the training loss is greater than 1.0 we clip the gradient norm to 1.0.
-Despite computing the AAGMM and embedding constraints as numerically stable as we could, they are still less stable during backprop than a simple linear layer.
+All CIFAR-10 models were trained with the standard benchmark WideResNet28-2 architecture.
+This work leveraged the published FixMatch \cite{sohn2020fixmatch} hyper-parameters; using SGD with Nesterov momentum,  $\lambda_u = 1$, $\beta = 0.9$, $\tau = 0.95$, $\mu = 7$, $B = 64$, and epoch size = $1024$ batches regardless of the number of images in the labeled dataset.
+Model weights were updated as the moving average of the training weights with an exponential moving average (EMA) decay of $0.999$.
+The training algorithm was modified from stock FixMatch to include an early-stopping condition when the model has not improved for 50 epochs.
+The $learning\_rate (\eta) = 0.01$.
+Replacing the fixed number of training steps with an early stopping criteria prevents the use of a cosine decay schedule.
+Therefore, it was replaced with a plateau learning rate scheduler which multiplies the learning rate by $0.2$ every time the early stopping criteria is met (before being reset) for a max of 2 reductions.
+To reduce the training algorithm dependence on specific learning rate values, a cyclic learning rate scheduler was employed to vary the learning rate by a factor of $\pm2.0$ within each epoch.
+Additionally, due to the higher training instability of the AAGMM layers compared to a linear layer, if the training loss is greater than 1.0, the gradient norm was clipped to 1.0.
+Despite specific attention to computing the AAGMM and embedding constraints in a numerically stable manner, they are still less stable during backprop than a simple linear layer.
 
-As part of this work we explore how various latent embedding dimensionality affects the generative model linear layer replacement.
-%As such we modify the model architectures with a single additional linear layer before the output to project the base model embedding dimension (128 for WideResNes28-2 and 512 for WideResNes28-8) down to the required 32 or 8 dimensions.
-As such we modify the model architectures with a single additional linear layer before the output to project the base model embedding dimension (128 for WideResNes28-2) down to a reduced 8 dimensional space.
-We evaluate our method both with and without this reduced embedding space, to explore whether the generative capabilities of the AAGMM improve when its not fighting the curse of dimensionality.
+This work includes an exploration of how various latent embedding dimensionalities affects the generative linear layer replacement.
+As such, the model architecture was modified with a single additional linear layer before the output to project the baseline model embedding dimension (128 for WideResNes28-2) down to a reduced 8 dimensional space.
+The AAGMM and KMeans replacement layers with and without this reduced embedding space, were evaluated to determine whether the generative capabilities improve when not fighting the curse of dimensionality.
 Results listed with an embedding dimensionality of 128 do not include the additional linear layer which reduces the latent dimensionality. 
 Therefore, results with 128D embedding represents an unmodified network architecture.
 
@@ -534,19 +524,35 @@ Table \ref{tablemaxcf10} demonstrates that in the best case, the AAGMM can get w
 \end{table*}
 
 The modeled cluster centers vary in quality between individual model runs of the AAGMM layer due to the stochasticity of the training process.
-Figure \ref{fig:cifar10tsneaagmmnone} top row showcases degenerate cluster centers.
-The bottom left AAGMM model learned cluster centers that are an ok approximation of the underlying data.
-However, the embedding constraints encourage cluster centers which are better aligned with the underlying data (Figure \ref{fig:cifar10tsneaagmmnone} bottom right).
+Figure \ref{fig:cifar10tsneaagmmnone} (a \& b) showcases degenerate cluster centers.
+The Figure \ref{fig:cifar10tsneaagmmnone} (c) AAGMM model learned cluster centers that are an ok approximation of the underlying data.
+However, the embedding constraints encourage cluster centers which are better aligned with the underlying data, Figure \ref{fig:cifar10tsneaagmmnone} (d).
 It is worth noting that we did not observed the KMeans layer learning non-degenerate cluster centers without an embedding constraint.
 In contrast, the AAGMM layer can, under some circumstances, learn viable cluster centers.
 
 \begin{figure}[h]
 	\centering
-	\subfloat{\includegraphics[width=.5\columnwidth]{figures/id-00000132-tsne.jpg}}
-	\subfloat{\includegraphics[width=.5\columnwidth]{figures/id-00000020-tsne.jpg}}
-	\\
-	\subfloat{\includegraphics[width=.5\columnwidth]{figures/id-00000120-tsne.jpg}}
-	\subfloat{\includegraphics[width=.5\columnwidth]{figures/id-00000054-tsne.jpg}}
+%	\subfloat{\includegraphics[width=.5\columnwidth]{figures/id-00000132-tsne.jpg}}
+%	\subfloat{\includegraphics[width=.5\columnwidth]{figures/id-00000020-tsne.jpg}}
+%	\\
+%	\subfloat{\includegraphics[width=.5\columnwidth]{figures/id-00000120-tsne.jpg}}
+%	\subfloat{\includegraphics[width=.5\columnwidth]{figures/id-00000054-tsne.jpg}}
+	\begin{subfigure}[t]{.49\columnwidth}
+		\includegraphics[width=\textwidth]{figures/id-00000132-tsne.jpg}
+		\subcaption{}
+	\end{subfigure}
+	\begin{subfigure}[t]{.49\columnwidth}
+		\includegraphics[width=\textwidth]{figures/id-00000020-tsne.jpg}
+		\subcaption{}
+	\end{subfigure}
+	\begin{subfigure}[t]{.49\columnwidth}
+		\includegraphics[width=\textwidth]{figures/id-00000120-tsne.jpg}
+		\subcaption{}
+	\end{subfigure}
+	\begin{subfigure}[t]{.49\columnwidth}
+		\includegraphics[width=\textwidth]{figures/id-00000054-tsne.jpg}
+		\subcaption{}
+	\end{subfigure}
 	
 	%	\includegraphics[width=0.9\linewidth]{example-image-a}
 	\caption{t-SNE plot of fully trained and reasonably accuracy AAGMM model's latent embedding space (with the learned cluster centers marked with X's). Depending on the run, the AAGMM cluster centers will be degenerate (top left), non-degenerate but still mis-aligned with the clusters (top right), acceptably aligned (bottom left), or well aligned with the underlying clusters when a 2nd order constraint is employed (bottom right).} 
@@ -554,53 +560,53 @@ In contrast, the AAGMM layer can, under some circumstances, learn viable cluster
 \end{figure}
 
 
+Table \ref{sslcifar10} puts these results in context with the current SSL SOTA for CIFAR-10 at 40 labels and demonstrates that this methodology still requires improvement before it is competitive with the latest methods. 
 
-
-%\begin{table}[htbp]
-%	\begin{tabular}{c|cc}
-%		Method          & \multicolumn{2}{c}{CIFAR-10} \\ \hline
-%		Label Count     & 40            & 250           \\
-%		%Supervised & $77.18$ \scriptsize{$\pm1.32$}   & $56.24$ \scriptsize{$\pm3.41$}   \\ 
-%		\hline
-%		FixMatch\cite{sohn2020fixmatch}   & $13.81$ \scriptsize{$\pm3.37$}   & $5.07$ \scriptsize{$\pm0.65$}     \\
-%		FlexMatch\cite{zhang2021flexmatch}  & $4.97$ \scriptsize{$\pm0.06$}    & $4.98$ \scriptsize{$\pm0.09$}    \\
-%		FreeMatch\cite{wang2022freematch}  & $4.90$ \scriptsize{$\pm0.29$}    & $4.98$ \scriptsize{$\pm0.09$}    \\
-%		SimMatchV2\cite{zheng2023simmatchv2} & $4.90$ \scriptsize{$\pm0.04$}    & $5.04$ \scriptsize{$\pm0.09$}    \\ \hline
-%		Ours (AAGMM+None)    & $8.77$ \scriptsize{$\pm 2.89$}           & $5.91$ \scriptsize{$\pm 0.34$}  \\
-%		Ours (KMeans+2ndOrder)    & $10.11$ \scriptsize{$\pm 2.79$}           & $6.84$ \scriptsize{$\pm 1.25$}  
-%		
-%	\end{tabular}
-%	\caption{Error rate \% for CIFAR-10 SSL benchmark comparing to state of the art results. Results are copied from USB \cite{wang2022usb} unless otherwise stated. Existing results are drawn from FreeMatch\cite{wang2022freematch} and SimMatchV2\cite{zheng2023simmatchv2} publications.}
-%	\label{table2}
-%\end{table}
+\begin{table}[htbp]
+	\begin{tabular}{c|cc}
+		Method          & \multicolumn{2}{c}{CIFAR-10} \\ \hline
+		Label Count     & 40            & 250           \\
+		%Supervised & $77.18$ \scriptsize{$\pm1.32$}   & $56.24$ \scriptsize{$\pm3.41$}   \\ 
+		\hline
+		FixMatch\cite{sohn2020fixmatch}   & $13.81$ \scriptsize{$\pm3.37$}   & $5.07$ \scriptsize{$\pm0.65$}     \\
+		FlexMatch\cite{zhang2021flexmatch}  & $4.97$ \scriptsize{$\pm0.06$}    & $4.98$ \scriptsize{$\pm0.09$}    \\
+		FreeMatch\cite{wang2022freematch}  & $4.90$ \scriptsize{$\pm0.29$}    & $4.98$ \scriptsize{$\pm0.09$}    \\
+		SimMatchV2\cite{zheng2023simmatchv2} & $4.90$ \scriptsize{$\pm0.04$}    & $5.04$ \scriptsize{$\pm0.09$}    \\ \hline
+		Ours (AAGMM+None)    & $8.77$ \scriptsize{$\pm 2.89$}           & $5.91$ \scriptsize{$\pm 0.34$}  \\
+		Ours (KMeans+2ndOrder)    & $10.11$ \scriptsize{$\pm 2.79$}           & $6.84$ \scriptsize{$\pm 1.25$}  
+		
+	\end{tabular}
+	\caption{Error rate \% for CIFAR-10 SSL benchmark comparing to state of the art results. Results for previously published methods are drawn from USB \cite{wang2022usb} except for FreeMatch\cite{wang2022freematch} and SimMatchV2\cite{zheng2023simmatchv2} publications.}
+	\label{sslcifar10}
+\end{table}
 
 
 
 \section{Discussion}
-% TODO fix conversational tone. Lots of opinion adjectives "only" "even"
 
-\TODO{(chapman) need citation for VAE methods}
-The most similar embedding constraint to our MoM as commonly seen in deep learning is the use of variational inference, as applied in Variational Auto-Encoder models (VAE).
-VAE constrains the latent distribution using a KL-divergence penalty $D_KL(Q||P)$, where $Q(Z)$ is the variational distribution designed to approximate $p(Z|X)$, and $P$ is the target distribution, typically the multivariate standard normal distribution. 
+% TODO (chapman) need citation for VAE inference methods
+% The most similar embedding constraint to our MoM as commonly seen in deep learning is the use of variational inference, as applied in Variational Auto-Encoder models (VAE).
+The proposed MoM embedding constraint is similar to the use of variational inference in deep learning based Variational Auto-Encoder models (VAE).
+VAE constrains the latent distribution using a KL-divergence penalty $D_KL(Q|P)$, where $Q(Z)$ is the variational distribution designed to approximate $p(Z|X)$, and $P$ is the target distribution, typically the multivariate standard normal distribution. 
 Although the use of KL-divergence is strongly rooted in information theory, true calculation of KL-divergence is intractable, and thus approximations are often employed. 
-% TODO make following sentence more quantitative/concrete
-As such, the choice of the variational distribution $Q(Z)$ hides a great deal of error in approximation, limiting the VAE embedding constraint to penalize simple differences in the shape of the feature space.
+Therefore, the choice of variational distribution $Q(Z)$ can hide a great deal of approximation error, thereby limiting the VAE embedding constraint to penalize simple differences in the shape of the feature space.
 
 In most VAE models the variational distribution $Q(Z)$ constrains the first order (mean) and second order diagonal moments (standard deviation).
 Second order off-diagonal terms are usually discarded by VAE models.  
-This means that most practical VAE models have no ability to constrain even the linear orthogonality of the feature space, because the cross-covariance terms are omitted to 'simplify' KL-divergence.  
-By comparison, our MoM constraints not only constrain linearly orthogonality, but also penalize more complicated non-linear shape descriptions including skew, kutorsis, as well as complex multivariate hyper-covariance descriptions of shape.  
-By penalizing higher order off-diagonal terms, we can produce feature spaces that are not only linearly orthogonal, but closely resemble true statistical independence.
+Therefore, most practical VAE models cannot constrain the linear orthogonality of the feature space, because the cross-covariance terms are omitted to 'simplify' KL-divergence.
+In contrast, the proposed MoM latent embedding constraints not only encourage linear orthogonality, but also penalize more complicated non-linear shape descriptions including skew, kutorsis, and complex multivariate hyper-covariance descriptions of shape.  
+By penalizing higher order off-diagonal terms, this method can produce feature spaces that are not only linearly orthogonal, but closely resemble true statistical independence.
 
-One significant downside to our MoM embedding constraints is the exponential GPU memory requirements. 
-The unreasonable amount of GPU memory required limits their practical application.
+The proposed MoM embedding constraint has one significant downside, it requires exponentially increasing amounts of GPU memory for each successive moment.
+This unreasonable GPU memory requirement limits the current practicality of MoM embedding constraints. 
 Additional optimization and/or avoiding the explicit creation of both the $nth$ order moment and its target value on device would likely improve the usability.
 
-Semi-supervised learning is highly sensitive to both which samples are selected for the labeled population \cite{sohn2020fixmatch} and the stochasticity of the training process.
-The stochasticity of training runs with the same starting seed (and identical labeled samples) will quickly diverge due to the randomness inherent in the training process.
-Anecdotally its worse in semi-supervised than fully supervised.
-To characterize this variance, and hence how much we should trust the error bars for our 5 runs, we took a few of our configurations and ran them $N=5$ times with the same seed with CIFAR-10 at 40 labeled samples.
-This produced the potentially widely varying final model accuracies seen in Table \ref{tab:runseedvariability}.
+Semi-supervised learning is highly sensitive to both which samples are selected for the labeled population \cite{sohn2020fixmatch} and the stochasticity of the training process itself.
+Given identical starting random seeds, and identical labeled samples, training stochasticity will quickly cause models to diverge, resulting in vastly different final results.
+Anecdotally its appears worse in semi-supervised methods than fully supervised models.
+To characterize this variance, and hence how much one can trust the error bars for Table \ref{table1} and \ref{tablemaxcf10}, we took a few final layer configurations and ran them $N=5$ times with the same seed.
+Table \ref{tab:runseedvariability} showcases the run-to-run variances for models that started out identical.
+Interestingly enough, the AAGMM models converge with much lower variance than the KMeans models.
 
 \begin{table}[h!]
 	\begin{tabular}{r|c|c|c|c}
@@ -608,20 +614,21 @@ This produced the potentially widely varying final model accuracies seen in Tabl
 		\hline
 		 & \small{\makecell{AAGMM\\+2nd Order}} & \small{\makecell{KMeans\\+2nd Order}} & \small{\makecell{AAGMM\\+None}} & \small{\makecell{KMeans\\+None}} \\
 		\hline
-		Run 1 & $87.5$ & $86.9$ & $71.2$ & $xx.y$ \\
-		Run 2 & $85.6$ & $91.2$ & $67.9$ & $xx.y$ \\
-		Run 3 & $84.8$ & $77.7$ & $xx.y$ & $xx.y$ \\
-		Run 4 & $85.3$ & $87.6$ & $xx.y$ & $xx.y$ \\
-		Run 5 & $85.2$ & $xx.y$ & $xx.y$ & $xx.y$ \\
+		Run 1 & $87.5$ & $86.9$ & $71.2$ & $86.5$ \\
+		Run 2 & $85.6$ & $91.2$ & $67.9$ & $85.4$ \\
+		Run 3 & $84.8$ & $77.7$ & $75.8$ & $86.0$ \\
+		Run 4 & $85.3$ & $87.6$ & $69.5$ & $87.6$ \\
+		Run 5 & $85.2$ & $83.7$ & $xx.y$ & $xx.y$ \\
 	\end{tabular}
-	\caption{Test accuracy for independent training runs with the same random seed for various final layer configurations. All runs use the 128D (default) model latent embedding. All runs use the same labeled samples. \TODO{(majurski) update table with final few currently running experiments}}
+	\caption{Test accuracy for independent training runs with the same random seed for various final layer configurations. All runs use the 128D (baseline) model latent embedding dimensionality. All runs use the same labeled samples.}
+	% TODO (majurski) update table with final few currently running experiments
 	\label{tab:runseedvariability}
 \end{table}
 
-Future work in this area should explore both accuracy improvements as well as implementation optimization to ensure the novel final layers are not prohibitively memory expensive to use.
+Future work in this area should explore both accuracy improvements as well as implementation optimization to ensure the proposed novel final layers are not prohibitively memory expensive.
 Additionally, one should explore how to best take advantage of the better behaved latent embedding space to improve data efficiency for model training. 
 
-We demonstrate a fully differentiable Axis-Aligned Gaussian Mixture Model with Method of Moments based latent embedding space constraints to improve the generative inlier/outlier performance of image classification deep learning models. 
+We demonstrate a novel fully differentiable Axis-Aligned Gaussian Mixture Model with Method of Moments based latent embedding space constraints to improve the generative inlier/outlier performance of image classification deep learning models. 
 This preliminary work constructs those novel layers with the associated constraints, and demonstrates reasonable performance on challenging benchmark semi-supervised learning tasks.
 
 
