@@ -1,7 +1,7 @@
 \documentclass[10pt,twocolumn,letterpaper]{article}
-%\usepackage[review]{cvpr}
+\usepackage[review]{cvpr}
 %\usepackage[final]{cvpr}
-\usepackage[pagenumbers]{cvpr} % To force page numbers, e.g. for an arXiv version
+%\usepackage[pagenumbers]{cvpr} % To force page numbers, e.g. for an arXiv version
 
 
 \usepackage[utf8]{inputenc} % allow utf-8 input
@@ -45,56 +45,50 @@
 \definecolor{cvprblue}{rgb}{0.21,0.49,0.74}
 \usepackage[pagebackref,breaklinks,colorlinks,citecolor=cvprblue]{hyperref}
 
+\def\paperID{16555} % *** Enter the Paper ID here
+\def\confName{CVPR}
+\def\confYear{2024}
+
 \def\confName{ar$\xi$iv}
 \def\confYear{2023}
 
-%%% Add PDF metadata to help others organize their library
-%%% Once the PDF is generated, you can check the metadata with
-%%% $ pdfinfo template.pdf
-\hypersetup{
-	pdftitle={Beyond the Final Linear Layer},
-	pdfauthor={Michael Majurski, David Chapman},
-	pdfkeywords={AI,Semi-Supervised,Classification,FixMatch},
+
+%\title{GmmMatch: Enhancing Semi-Supervised Learning with a Generative Gaussian Mixture Model Final Layer}
+%\title{The Use of a Generative Gaussian Mixture Model Final Layer For Enhancing Deep Semi-Supervised Learning}
+%\title{Enhancing Deep Semi-Supervised Learning via a Generative Gaussian Mixture Model Final Layer}
+%\title{Enhancing Semi-Supervised Learning with a Generative Gaussian Mixture Model Final Layer}
+%\title{Training a final activation layer with the method of moments, and its application to semi-supervised learning.}
+%\title{A Method of Moments Embedding Constraint for Generative Final Layers}
+\title{A Method of Moments Embedding Constraint and its Application to Semi-Supervised Learning}
+
+\author{Michael Majurski\\
+	Information Technology Lab, NIST\\
+	University of Maryland, Baltimore County\\
+	%	100 Bureau Dr. Gaithersburg MD, 20899\\
+	{\tt\small michael.majurski@nist.gov}
+	% For a paper whose authors are all at the same institution,
+	% omit the following lines up until the closing ``}''.
+% Additional authors and addresses can be added with ``\and'',
+% just like the second author.
+% To save space, use either the email address or home page, not both
+\and
+Sumeet Menon\\
+University of Maryland, Baltimore County\\
+{\tt\small sumeet1@umbc.edu}
+\and
+Parniyan Farvardin\\
+University of Miami\\
+{\tt\small pxf291@miami.edu}
+\and
+David Chapman\\
+University of Miami\\
+{\tt\small dchapman@cs.miami.edu}
 }
 
 
 
 \begin{document}
-	
-	%\title{GmmMatch: Enhancing Semi-Supervised Learning with a Generative Gaussian Mixture Model Final Layer}
-	%\title{The Use of a Generative Gaussian Mixture Model Final Layer For Enhancing Deep Semi-Supervised Learning}
-	%\title{Enhancing Deep Semi-Supervised Learning via a Generative Gaussian Mixture Model Final Layer}
-	%\title{Enhancing Semi-Supervised Learning with a Generative Gaussian Mixture Model Final Layer}
-	%\title{Training a final activation layer with the method of moments, and its application to semi-supervised learning.}
-	%\title{A Method of Moments Embedding Constraint for Generative Final Layers}
-	\title{A Method of Moments Embedding Constraint and its Application to Semi-Supervised Learning}
-	
-	\author{Michael Majurski\\
-		Information Technology Lab, NIST\\
-		University of Maryland, Baltimore County\\
-		%	100 Bureau Dr. Gaithersburg MD, 20899\\
-		{\tt\small michael.majurski@nist.gov}
-		% For a paper whose authors are all at the same institution,
-		% omit the following lines up until the closing ``}''.
-	% Additional authors and addresses can be added with ``\and'',
-	% just like the second author.
-	% To save space, use either the email address or home page, not both
-	\and
-	Sumeet Menon\\
-	University of Maryland, Baltimore County\\
-	{\tt\small sumeet1@umbc.edu}
-	\and
-	Parniyan Farvardin\\
-	University of Miami\\
-	{\tt\small pxf291@miami.edu}
-	\and
-	David Chapman\\
-	University of Miami\\
-	{\tt\small dchapman@cs.miami.edu}
-}
-
 \maketitle
-
 
 
 \begin{abstract}
@@ -112,8 +106,6 @@ Code is available at: \url{https://github.com/*******} % \url{https://github.com
 
 
 \section{Introduction}
-
-\TODO{(majurski) anonymize before submission}
 
 \begin{figure}[ht]
 	\centering
@@ -262,23 +254,11 @@ FixMatch \cite{sohn2020fixmatch} is a simple, well performing SSL algorithm.
 As such, it serves as a good comparison point for exploring the effect of our contributions.
 Our methodology is based upon the published FixMatch \cite{sohn2020fixmatch} algorithm, with identical hyper-parameters unless otherwise stated.
 We extend FixMatch with a few minor training algorithm modifications explored in the Hyperparameters Section \ref{hyperparams}.
+While we keep the FixMatch valid pseudo-label selection, our embedding constraints operate on all data, labeled and unlabeled.
 
 Both the linear layer replacements and the embedding constraints explored herein represent increasing levels of prescription about how the final latent embedding space should be arranged compared to a traditional linear layer.
 The idea of leveraging clusters in embedding space is not new \cite{caron2018deep,caron2020unsupervised,enguehard2019semi}, but we extend the core idea with a novel differentiable model with learned cluster centroids and MoM based constraints.
-
-% TODO From Peter:
-% From the paper about FixMatch:
-% "Consistency regularization utilizes unlabeled data by relying on the assumption that the model
-% should output similar predictions when fed perturbed versions of the same image."
-% "Pseudo-labeling leverages the idea of using the model itself to obtain artificial labels for unlabeled
-% data [ 32 , 47]. Specifically, this refers to the use of “hard” labels (i.e., the arg max of the model’s
-% output) and only retaining artificial labels whose largest class probability fall above a predefined
-% threshold [25]."
-% Q1: Is your contribution in avoiding the thresholding in FixMatch when pseudo-labeling?
-% Q2: is your algorithm assuming a minimum distance separation of classes based on the consistency regularization?
-% Q3: Is your approach assuming that classes are represented by convex shapes in high-dimensional manifolds and therefore clusters (and their centers) are good descriptors of classes?
-
-% In the nutshell, can you add a paragraph with your assumptions about the data representation? 
+The MoM constraints do not impose any assumptions outside of applying l2 penalties as described in Section \ref{sec:mom}.
 
 \subsection{Alternate Final Layers}
 
@@ -349,6 +329,7 @@ See the published codebase for implementation details about the AAGMM and KMeans
 
 
 \subsection{Method of Moments Embedding Constraints}
+\label{sec:mom}
 
 We introduce and evaluate a series of embedding constraints based on the Method of Moments (MoM) \cite{pearson1936method} in order to fit the semi-parametric latent prior parameters.  
 The latent prior $p(X_i)$ is calculated in equation \ref{eq_px} and then used to infer the posterior $p(Y_{i,k}|X_i)$.
@@ -405,8 +386,7 @@ This is because, in a $D \times D$ covariance matrix, there are $D(D-1)$ off dia
 The $p^{th}$ order sample moments form a $p-1$ dimensional hyper-covariance matrix, with terms residing on the intersection of anywhere between $0$ and $p-1$ hyper-diagonals.  
 To prevent over-representation of off-diagonal terms and encourage representation of on-diagonal terms, the loss function we use for any given moment term is inversely proportional to the number moment terms that share the same number of hyper-diagonals.  
 This heuristic weighting scheme ensures that the overall contribution of each moment order is not overly influenced by the off-diagonal terms, and that the error weighting is therefore diagonally dominant.
-% TODO From Peter
-% how do you choose weights? Do they have to sum to one? what if I choose N moments as opposed to 4 moments? 
+This weighting scheme supports using 0 to 4th order MoM constraints seamlessly and is not a hyper-parameter we expect to require tuning.
 
 \section{Experiments}
 

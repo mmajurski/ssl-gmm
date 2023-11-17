@@ -1,5 +1,5 @@
+\backcite {wei2022mitigating}{{1}{1}{figure.caption.2}}
 \backcite {tsne}{{2}{2}{figure.caption.2}}
-\backcite {wei2022mitigating}{{2}{1}{figure.caption.2}}
 \backcite {kingma2013auto}{{2}{1}{figure.caption.2}}
 \backcite {kingma2019introduction}{{2}{1}{figure.caption.2}}
 \backcite {li2019disentangled}{{2}{1}{figure.caption.2}}
@@ -17,8 +17,8 @@
 \backcite {sohn2020fixmatch}{{2}{1}{figure.caption.2}}
 \backcite {pearson1936method}{{2}{3}{Item.3}}
 \backcite {cifar10}{{2}{1}{Item.3}}
-\backcite {sohn2020fixmatch}{{3}{1}{Item.3}}
-\backcite {zhang2021flexmatch}{{3}{2}{section.2}}
+\backcite {sohn2020fixmatch}{{2}{1}{Item.3}}
+\backcite {zhang2021flexmatch}{{2}{2}{section.2}}
 \backcite {olivier2006semi}{{3}{2.1}{subsection.2.1}}
 \backcite {livieris2019predicting}{{3}{2.1}{subsection.2.1}}
 \backcite {mcclosky2006reranking}{{3}{2.1}{subsection.2.1}}
@@ -58,8 +58,8 @@
 \backcite {WANG2018135}{{3}{2.3}{subsection.2.3}}
 \backcite {Wang2023rethinking}{{3}{2.3}{subsection.2.3}}
 \backcite {zhao2019infovae}{{3}{2.3}{subsection.2.3}}
-\backcite {sohn2020fixmatch}{{4}{3}{section.3}}
-\backcite {sohn2020fixmatch}{{4}{3}{section.3}}
+\backcite {sohn2020fixmatch}{{3}{3}{section.3}}
+\backcite {sohn2020fixmatch}{{3}{3}{section.3}}
 \backcite {caron2018deep}{{4}{3}{section.3}}
 \backcite {caron2020unsupervised}{{4}{3}{section.3}}
 \backcite {enguehard2019semi}{{4}{3}{section.3}}
@@ -73,10 +73,10 @@
 \backcite {sohn2020fixmatch}{{7}{4.2}{subsection.4.2}}
 \backcite {wang2022freematch}{{7}{4.2}{subsection.4.2}}
 \backcite {zheng2023simmatchv2}{{7}{4.2}{subsection.4.2}}
-\backcite {sohn2020fixmatch}{{8}{\caption@xref {??}{ on input line 586}}{table.caption.7}}
-\backcite {zhang2021flexmatch}{{8}{\caption@xref {??}{ on input line 587}}{table.caption.7}}
-\backcite {wang2022freematch}{{8}{\caption@xref {??}{ on input line 588}}{table.caption.7}}
-\backcite {zheng2023simmatchv2}{{8}{\caption@xref {??}{ on input line 589}}{table.caption.7}}
+\backcite {sohn2020fixmatch}{{8}{\caption@xref {??}{ on input line 566}}{table.caption.7}}
+\backcite {zhang2021flexmatch}{{8}{\caption@xref {??}{ on input line 567}}{table.caption.7}}
+\backcite {wang2022freematch}{{8}{\caption@xref {??}{ on input line 568}}{table.caption.7}}
+\backcite {zheng2023simmatchv2}{{8}{\caption@xref {??}{ on input line 569}}{table.caption.7}}
 \backcite {wang2022usb}{{8}{4}{table.caption.7}}
 \backcite {wang2022freematch}{{8}{4}{table.caption.7}}
 \backcite {zheng2023simmatchv2}{{8}{4}{table.caption.7}}
