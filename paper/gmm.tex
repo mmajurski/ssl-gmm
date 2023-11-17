@@ -61,12 +61,13 @@
 
 \begin{document}
 	
-	% \title{GmmMatch: Enhancing Semi-Supervised Learning with a Generative Gaussian Mixture Model Final Layer}
-	% \title{The Use of a Generative Gaussian Mixture Model Final Layer For Enhancing Deep Semi-Supervised Learning}
-	% \title{Enhancing Deep Semi-Supervised Learning via a Generative Gaussian Mixture Model Final Layer}
-	% \title{Enhancing Semi-Supervised Learning with a Generative Gaussian Mixture Model Final Layer}
+	%\title{GmmMatch: Enhancing Semi-Supervised Learning with a Generative Gaussian Mixture Model Final Layer}
+	%\title{The Use of a Generative Gaussian Mixture Model Final Layer For Enhancing Deep Semi-Supervised Learning}
+	%\title{Enhancing Deep Semi-Supervised Learning via a Generative Gaussian Mixture Model Final Layer}
+	%\title{Enhancing Semi-Supervised Learning with a Generative Gaussian Mixture Model Final Layer}
 	%\title{Training a final activation layer with the method of moments, and its application to semi-supervised learning.}
-	\title{A Method of Moments Embedding Constraint for Generative Final Layers}
+	%\title{A Method of Moments Embedding Constraint for Generative Final Layers}
+	\title{A Method of Moments Embedding Constraint and its Application to Semi-Supervised Learning}
 	
 	\author{Michael Majurski\\
 		Information Technology Lab, NIST\\
@@ -96,38 +97,15 @@
 
 
 
-
-% SCOPE paper review notes that I need to make sure i also address
-%3.2- The performance gains obtained with 250 labels and 4000 labels on cifar10 are not significant. A similar case of very limited performance gains on CIFAR100 with 2500 and 4000 labels.
-
-%1. The results are reported only on Cifar-10 and Cifar-100 datasets. Considering that the initial training only is performed for 1024 epochs, is it scalable for larger datasets?
-
-
-%\begin{abstract}
-%	Semi-Supervised Learning (SSL) leverages an abundance of unlabeled data to improve deep learning based model performance under limited training data regimes.
-%	This paper presents a novel extension to any image classification architecture which improves accuracy in low-label regimes by enhancing class inlier determination. 
-%	We demonstrate our method by extending the FixMatch \cite{sohn2020fixmatch} training scheme with our novel final layers. 
-%	We present two semi-parametric final layers of differing complexity (a) the Axis Aligned GMM (AAGMM) layer, and (b) an equal variance version we call KMeans. % of AAGMM we call KMeans.
-%	Both layers are integrated into the network architecture as regular fully differentiable modules which are trained via backprop (not Expectation Maximization).
-%	Importantly, these novel layers exhibit both discriminative and generative properties, enhancing their capability to characterize inlier data; improving pseudo-labeling performance. 
-%	We also introduce and evaluate a series of class-wise embedding constraints based on the Method of Moments (MoM) \cite{pearson1936method} in order to fit the parameters of our semi-parametric latent prior.  
-%	These methods match published SOTA 250 label CIFAR-10 \cite{cifar10} accuracy and come close to matching the recently improved SOTA in the 40 label regime without the significant increase in model complexity of other modern SOTA methods \cite{zheng2023simmatchv2}.
-%	%Our code is available at: \url{https://github.com/*} % \url{https://github.com/mmajurski/ssl-gmm}
-%\end{abstract}
-
 \begin{abstract}
 Discriminative deep learning models with a linear+softmax final layer have a problem: the latent space only predicts the conditional probabilities $p(y|x)$ but not the full joint distribution $p(y,x)$, which necessitates a generative approach.
-%A problem with deep learning discrimination models with a linear+softmax final layer is that the latent space only predicts the conditional probabilities $p(Y|X)$ but not the full joint distribution $p(Y,X)$ which necessitates a generative approach.
-The conditional probability cannot detect outliers, causing sensitivity to them in softmax networks.
-%This exacerbates model over-confidence which has been linked to a multitude of problems, ranging from hallucinations, confounding biases, and dependence on large labeled training data.
+The conditional probability cannot detect outliers, causing outlier sensitivity in softmax networks.
 This exacerbates model over-confidence impacting many problems: from hallucinations, to confounding biases, and dependence on large datasets.
 We introduce a novel embedding constraint based on the Method of Moments (MoM).
 We investigate the use of polynomial moments ranging from 1st through 4th order hyper-covariance matrices.
 Furthermore, we use this embedding constraint to train an Axis-aligned Gaussian Mixture Model (AAGMM) final layer, which learns not only the conditional, but also the joint distribution of the latent space.
-%Next, we demonstrate this technique in the problem area of Semi-supervised image classification by extending the well-known FixMatch algorithm.
 We demonstrate our approach by extending FixMatch based semi-supervised image classification.
 We find our MoM constraint with the AAGMM layer is able to match or improve upon the reported FixMatch accuracy, while also modeling the joint distribution, thereby reducing outlier sensitivity.
-%We further include a future work discussion about potential future applications for this layer and embedding constraint, as well as how and why this MoM technique can overcome the theoretical limitations of other existing methods including the approximate KL-divergence constraint of variational autoencoders.
 Future work explores potential applications for this layer and embedding constraint, and how/why this MoM technique can overcome theoretical limitations of other existing methods including the approximate KL-divergence constraint of variational autoencoders.
 Code is available at: \url{https://github.com/*******} % \url{https://github.com/mmajurski/ssl-gmm}
 \end{abstract}
@@ -141,7 +119,6 @@ Code is available at: \url{https://github.com/*******} % \url{https://github.com
 	\centering
 	
 	\includegraphics[width=0.75\linewidth]{figures/illustration.png}
-	% \includegraphics[width=0.9\linewidth]{example-image-a}
 	\caption{Schematic of the outlier problem, and how generative modeling of the joint probability can improve the situation.  Prediction with (top) fully-superivsed softmax (middle) semi-supervised KMeans and (bottom) semi-supervised AAGMM.} 
 	\label{fig:schema}
 \end{figure}
@@ -164,10 +141,10 @@ Code is available at: \url{https://github.com/*******} % \url{https://github.com
 		\includegraphics[width=\textwidth]{figures/id-00000021-tsne.jpg}
 		\subcaption{}
 	\end{subfigure}
-%	\subfloat{\includegraphics[width=.25\textwidth]{figures/id-00000001-tsne.jpg}}
-%	\subfloat{\includegraphics[width=.25\textwidth]{figures/id-00000013-tsne.jpg}}
-%	\subfloat{\includegraphics[width=.25\textwidth]{figures/id-00000054-tsne.jpg}}
-%	\subfloat{\includegraphics[width=.25\textwidth]{figures/id-00000021-tsne.jpg}}
+	%	\subfloat{\includegraphics[width=.25\textwidth]{figures/id-00000001-tsne.jpg}}
+	%	\subfloat{\includegraphics[width=.25\textwidth]{figures/id-00000013-tsne.jpg}}
+	%	\subfloat{\includegraphics[width=.25\textwidth]{figures/id-00000054-tsne.jpg}}
+	%	\subfloat{\includegraphics[width=.25\textwidth]{figures/id-00000021-tsne.jpg}}
 	\caption{t-SNE\cite{tsne} plot of the latent embedding space for various final layers with different MoM embedding constraints.} 
 	\label{fig:cifar10tsne}
 \end{figure*}
@@ -176,8 +153,8 @@ The majority of deep classifiers rely on a softmax final activation layer which 
 When that layer receives input $x$, the model predicts a soft psuedo-distribution of labels $y$ which argmax can convert into a hard label.
 If $x$ is far from the decision boundary, then by definition, softmax assigns a prediction $y$ with high confidence.
 This works well for inlier samples, well represented by the training distribution.
-However, when presented with an outlier $x$, it is likely $x$ will be far from the decision boundary (\TODO{Figure 1}).
-This means that softmax perceptrons, by definition, over-confidently hallucinate when given unexpected inputs \cite{wei2022mitigating}. 
+However, when presented with an outlier $x$, it is likely $x$ will be far from the decision boundary (Figure \ref{fig:schema}, top).
+Therefore softmax perceptrons, by definition, over-confidently hallucinate when given unexpected inputs \cite{wei2022mitigating}. 
 Most deep classifiers use softmax without a safety net and thereby over-confidently predict $y$.
 Ideally, when input $x$ is far from the decision boundary and training exemplars, the model should not be confident about the output class label $y$.
 
@@ -207,18 +184,20 @@ SSL leverages an abundance of unlabeled data to improve deep learning based mode
 Contrastive learning methods leverage the intuition that similar instances should be close in the representation space, while different instances are farther apart \cite{yang2022class,li2021comatch}.
 Consistency regularization borrows the intuition that modified views of the same instance should have similar representations and predictions \cite{sohn2020fixmatch,lee2022contrastive,zhang2021flexmatch,kim2022conmatch}.
 Pseudo-labeling methods like FixMatch \cite{sohn2020fixmatch} leverage the ideas of consistency regularization.
-This works contributes:
+This work contributes:
 
 \begin{enumerate}
-	\item A replacement of the final linear+softmax final activation layer of the neural network with either an axis-aligned differentiable Gaussian Mixture Model (AAGMM) or an equal variance version named KMeans trained via back prop, both of which have explicit modeling of class cluster centroids. 
-	\item A demonstration on the latent embedding space reacts to various constraints on how it should be structured by adding penalties if the per-class clustering does not conform to between 0 and 4 of the first gaussian moments being identity/zero \cite{pearson1936method}.
+	\item A novel Method of Moments (MoM) based embedding constraint that enables the model to not only learn the decision boundary but also the latent joint distribution. 
+	Moreover, this constraint ensures that each latent cluster exhibits a well-behaved Gaussian shape.
+	\item A replacement of the final linear+softmax final activation layer of the neural network with either an axis-aligned differentiable Gaussian Mixture Model (AAGMM) or an equal variance version named KMeans trained via back propagation, both of which have explicit modeling of class cluster centroids. 
+	\item A demonstration of the latent embedding space response to various constraints on how it should be structured by adding penalties if the per-class clustering does not conform to between 0 and 4 of the first Gaussian moments being identity/zero \cite{pearson1936method}.
 \end{enumerate}
 
 %This paper explores the impacts of replacing the final linear layer of a network with a generative model and embedding space constraints.
 %This combination demonstrates improvements in final model accuracy when using pseudo-labeling methods where very few annotations are available.
 We demonstrate this methodology using the standard CIFAR-10 benchmark dataset with 40 and 250 labels\cite{cifar10}. %) and CIFAR-100 (400 and 2500 label) benchmarks \cite{cifar10}. 
 %Additionally, we explore the impact high level prescriptive constraints on the embedding space have on the resulting trained model. 
-Finally, because the embedding constraint penalties are applied to all unlabeled data and not just the valid pseudo-labels, our method extracts training signal from every unlabeled data point, an improvement on baseline pseudo-labeling methods (like FixMatch \cite{sohn2020fixmatch}) which only learn from the valid pseudo-labels.
+Finally, because the embedding constraint penalties are applied to all unlabeled data and not just the valid pseudo-labels, our method extracts training signal from every unlabeled data point, an improvement on baseline pseudo-labeling methods (like FixMatch \cite{sohn2020fixmatch}) which only learn from the valid pseudo-labels due to removing low confidence pseudo-labels.
 
 
 \section{Related Work}
@@ -237,6 +216,12 @@ These independent sample sets are subsequently trained separately using two dist
 A notably advanced approach to pseudo-labeling is the Mean Teacher algorithm \cite{tarvainen2017mean}, which leverages exponential moving averages of model parameters to acquire a notably more stable target prediction. 
 This refinement has a substantial impact on enhancing the convergence of the algorithm.
 
+Several papers have attempted to enhance the quality of pseudo-labels to either improve the final model accuracy, improve the rate of convergence, or avoid confirmation bias \cite{arazo2020pseudo}.
+Rizve et al. \cite{rizve2021defense} explores how uncertainty aware pseudo-label selection/filtering can be used to reduce the label noise.
+Incorrect pseudo-labels can be viewed as a network calibration issue \cite{rizve2021defense} where better network logit calibration might improve results \cite{Xing2020DistanceBased}.
+Improvements to the pseudo-labeling process have been demonstrated by imposing curriculum \cite{zhang2021flexmatch} or by including a class-aware contrastive term \cite{yang2022class}.
+Leveraging the concept of explicit class cluster centers for conditioning semantic similarity improves final model accuracy \cite{zheng2022simmatch}.
+Additionally, improvements have been found in extended purely clustering based methods like DINO \cite{caron2021emerging} into semi-supervised methods \cite{fini2023semi}.
 
 \subsection{Consistency Regularization}
 
@@ -249,12 +234,24 @@ Finally, pseudo-labeling filtering based on consistence between strongly augment
 
 \subsection{Latent Embedding Constraints}
 
-Several papers have attempted to enhance the quality of pseudo-labels to either improve the final model accuracy, improve the rate of convergence, or avoid confirmation bias \cite{arazo2020pseudo}.
-Rizve et al. \cite{rizve2021defense} explores how uncertainty aware pseudo-label selection/filtering can be used to reduce the label noise.
-Incorrect pseudo-labels can be viewed as a network calibration issue \cite{rizve2021defense} where better network logit calibration might improve results \cite{Xing2020DistanceBased}.
-Improvements to the pseudo-labeling process have been demonstrated by imposing curriculum \cite{zhang2021flexmatch} or by including a class-aware contrastive term \cite{yang2022class}.
-Leveraging the concept of explicit class cluster centers for conditioning semantic similarity improves final model accuracy \cite{zheng2022simmatch}.
-Additionally, improvements have been found in extended purely clustering based methods like DINO \cite{caron2021emerging} into semi-supervised methods \cite{fini2023semi}.
+A notable latent embedding constraint that related to our approach is Evidence Lower Bound (ELBO).
+ELBO approximates a latent sample with a variational distribution and constrains the KL-divergence between the variational distribution and a target shape which is typically a multivariate Gaussian \cite{kingma2013auto}. 
+The main drawback of this approach is that the true KL-divergence is intractable to calculate.  
+As such the posterior must take on a simplified form. 
+Most implementations use a diagonal posterior which only penalizes simple differences in shape such as mean and standard deviation.  
+The method of Normalizing Flows provides an iterative framework based on change of variables to construct arbitrarily complex posteriors \cite{rezende2015variational,kingma2016improved,caterini2021variational}.  
+Our MoM constraint can also penalize complex differences in shape by constraining 2nd, 3rd, and 4th order hyper-covariance matrices, although we do so by comparing the moments directly.  
+This greatly simplifies implementation as we do not need to explicitly construct a posterior distribution.
+
+Another notable embedding constraint is the Maximum Mean Discrepancy (MMD), also known as the two-sample test \cite{gretton2007kernel}.  
+MMD was used in the Generative Moment Matching Network \cite{li2015generative} and has since been used extensively for the problem of domain adaptation \cite{WANG2018135,Wang2023rethinking}, in order to constrain the latent projections of the source and target distributions to follow the same distribution.  
+MMD is a moment-matching constraint based on the kernel trick, and can therefore constrain any difference in shape between two distributions including very high order moments. 
+Typcially, MMD is only be used to constrain one sample to another sample, although numerical methods can extend this technique to include sample-to-distribution comparisons \cite{zhao2019infovae}.
+
+
+%This embedding constraint is used to ensure the regularity of the cluster centers within Variational Auto-Encoders (VAE) \cite{kingma2013auto}.  
+
+
 
 % TODO talk about SimMatch embedding constraint via semantic seimilarity?
 
@@ -268,6 +265,20 @@ We extend FixMatch with a few minor training algorithm modifications explored in
 
 Both the linear layer replacements and the embedding constraints explored herein represent increasing levels of prescription about how the final latent embedding space should be arranged compared to a traditional linear layer.
 The idea of leveraging clusters in embedding space is not new \cite{caron2018deep,caron2020unsupervised,enguehard2019semi}, but we extend the core idea with a novel differentiable model with learned cluster centroids and MoM based constraints.
+
+% TODO From Peter:
+% From the paper about FixMatch:
+% "Consistency regularization utilizes unlabeled data by relying on the assumption that the model
+% should output similar predictions when fed perturbed versions of the same image."
+% "Pseudo-labeling leverages the idea of using the model itself to obtain artificial labels for unlabeled
+% data [ 32 , 47]. Specifically, this refers to the use of “hard” labels (i.e., the arg max of the model’s
+% output) and only retaining artificial labels whose largest class probability fall above a predefined
+% threshold [25]."
+% Q1: Is your contribution in avoiding the thresholding in FixMatch when pseudo-labeling?
+% Q2: is your algorithm assuming a minimum distance separation of classes based on the consistency regularization?
+% Q3: Is your approach assuming that classes are represented by convex shapes in high-dimensional manifolds and therefore clusters (and their centers) are good descriptors of classes?
+
+% In the nutshell, can you add a paragraph with your assumptions about the data representation? 
 
 \subsection{Alternate Final Layers}
 
@@ -337,8 +348,6 @@ The explicit cluster centers is a learned parameter updated by backprop.
 See the published codebase for implementation details about the AAGMM and KMeans layers.
 
 
-
-
 \subsection{Method of Moments Embedding Constraints}
 
 We introduce and evaluate a series of embedding constraints based on the Method of Moments (MoM) \cite{pearson1936method} in order to fit the semi-parametric latent prior parameters.  
@@ -396,8 +405,12 @@ This is because, in a $D \times D$ covariance matrix, there are $D(D-1)$ off dia
 The $p^{th}$ order sample moments form a $p-1$ dimensional hyper-covariance matrix, with terms residing on the intersection of anywhere between $0$ and $p-1$ hyper-diagonals.  
 To prevent over-representation of off-diagonal terms and encourage representation of on-diagonal terms, the loss function we use for any given moment term is inversely proportional to the number moment terms that share the same number of hyper-diagonals.  
 This heuristic weighting scheme ensures that the overall contribution of each moment order is not overly influenced by the off-diagonal terms, and that the error weighting is therefore diagonally dominant.
+% TODO From Peter
+% how do you choose weights? Do they have to sum to one? what if I choose N moments as opposed to 4 moments? 
 
 \section{Experiments}
+
+
 
 We evaluate both AAGMM and KMeans linear layer replacements and the embedding space constraints using our modified FixMatch\cite{sohn2020fixmatch} on the common SSL benchmarks CIFAR-10 \cite{cifar10} at 40 and 250 labels (4 and 25 labels per class). 
 %When comparing against other SSL benchmark results (like SimMatch \cite{zheng2022simmatch}) it is unclear how the labeled samples were selected from the fully labeled dataset. 
@@ -405,6 +418,7 @@ We randomly selected 5 seed a priori for evaluation.
 For each algorithm configuration tested one model was trained per seed.
 During each run, the required number of labeled samples are drawn without replacement from the training population of the dataset in a deterministic manner (reproducible with the same seed).
 All data not in this labeled subset is used as unlabeled data (i.e. the labels are discarded).
+
 
 
 \begin{table}[h!]
@@ -419,14 +433,6 @@ All data not in this labeled subset is used as unlabeled data (i.e. the labels a
 	\label{tab:runvariability}
 \end{table}
 
-As prior work \cite{sohn2020fixmatch} has noted, the resulting model quality is highly variable when only 4 samples are selected per class, as the quality and usefulness of the specific 4 samples can vary drastically. 
-Table \ref{tab:runvariability} shows final test accuracy for the 5 AAGMM model runs with no embedding constraints, with the accuracy varying from $86\%$ to $94\%$.
-Due to the potential for significant variance in the final model test accuracy, it can be informative to compare mean performance with max performance over the $N=5$ runs.
-This explores both how well a method can be expected to do on average with random label sampling, vs how well it can potentially do with a more representative subset of labeled data.
-
-\subsection{Hyper-Parameters}
-\label{hyperparams}
-
 \begin{table*}[ht!]
 	\begin{tabularx}{\textwidth}{c|c|XXXXXX}
 		\multicolumn{6}{c}{CIFAR-10 Mean Test Accuracy} \\ \hline\hline
@@ -434,33 +440,43 @@ This explores both how well a method can be expected to do on average with rando
 		\hline
 		Embedding Constraint  &  & None & $1st$ Order & $2nd$ Order & $3rd$ Order & $4th$ Order  \\ 
 		\hline
-		Linear & 128  & $82.19$ \scriptsize{$\pm 6.54$}   &  &  &  &   \\
+		Linear & 128  & $77.14$ \scriptsize{$\pm 9.09$}   &  &  &  &   \\
 		(i.e. FullyConnected) & 8  & $88.40$ \scriptsize{$\pm 3.54$}      &  &  &  &   \\
 		\hline
-		AAGMM & 128  & $\boldsymbol{91.23}$ \scriptsize{$\pm 2.89$}    & $89.23$ \scriptsize{$\pm 2.50$} & $90.22$ \scriptsize{$\pm 3.42$} &  &  \\
-		& 8  & $88.34$ \scriptsize{$\pm 2.34$}    & $82.39$ \scriptsize{$\pm 9.96$} & $87.97$ \scriptsize{$\pm 3.34$} & $82.51$ \scriptsize{$\pm 9.42$} & $82.57$ \scriptsize{$\pm 6.94$} \\
+		AAGMM & 128  & $\boldsymbol{91.30}$ \scriptsize{$\pm 2.89$}    & $89.23$ \scriptsize{$\pm 2.50$} & $90.22$ \scriptsize{$\pm 3.42$} &  &  \\
+		& 8  & $88.40$ \scriptsize{$\pm 2.34$}    & $82.39$ \scriptsize{$\pm 9.96$} & $87.97$ \scriptsize{$\pm 3.35$} & $82.51$ \scriptsize{$\pm 9.42$} & $82.57$ \scriptsize{$\pm 6.94$} \\
 		\hline
-		KMeans & 128  & $81.13$ \scriptsize{$\pm 2.17$}    & $89.74$ \scriptsize{$\pm 2.62$} & $\boldsymbol{89.89}$ \scriptsize{$\pm 2.79$} &  &  \\
-		& 8  & $78.28$ \scriptsize{$\pm 9.87$}    & $73.27$ \scriptsize{$\pm 12.1$} & $75.80$ \scriptsize{$\pm 10.69$} & $80.96$ \scriptsize{$\pm 5.94$} & $80.01$ \scriptsize{$\pm 7.53$}  \\
+		KMeans & 128  & $81.13$ \scriptsize{$\pm 2.19$}    & $89.74$ \scriptsize{$\pm 2.62$} & $\boldsymbol{89.89}$ \scriptsize{$\pm 2.79$} &  &  \\
+		& 8  & $78.28$ \scriptsize{$\pm 9.87$}    & $73.27$ \scriptsize{$\pm 12.01$} & $75.80$ \scriptsize{$\pm 10.69$} & $80.96$ \scriptsize{$\pm 5.94$} & $80.01$ \scriptsize{$\pm 7.53$}  \\
 		
 		\hline\hline
 		Last Layer  &   Emb Dim  & \multicolumn{5}{c}{250 Labels (5 trials)}            \\ 
 		\hline
 		\multicolumn{1}{c|}{Embedding Constraint} &  & None & $1st$ Order & $2nd$ Order & $3rd$ Order & $4th$ Order  \\ 
 		\hline
-		Linear & 128  & $94.61$ \scriptsize{$\pm 0.11$}   &  &  &  &   \\
-		(i.e. FullyConnected) & 8  & $93.72$ \scriptsize{$\pm 0.57$}      &  &  &  &   \\
+		Linear & 128  & $94.06$ \scriptsize{$\pm 0.87$}   &  &  &  &   \\
+		(i.e. FullyConnected) & 8  & $93.69$ \scriptsize{$\pm 0.50$}      &  &  &  &   \\
 		\hline
-		AAGMM & 128  & $94.09$ \scriptsize{$\pm 0.34$}    & $94.20$ \scriptsize{$\pm 0.62$} & $94.42$ \scriptsize{$\pm 0.14$} &  &  \\
-		& 8  & $94.17$ \scriptsize{$\pm 0.57$}    & $94.01$ \scriptsize{$\pm 0.73$} & $94.33$ \scriptsize{$\pm 0.37$} & $93.77$ \scriptsize{$\pm 0.90$} & $94.22$ \scriptsize{$\pm 0.50$} \\
+		AAGMM & 128  & $94.30$ \scriptsize{$\pm 0.51$}    & $94.20$ \scriptsize{$\pm 0.62$} & $94.42$ \scriptsize{$\pm 0.14$} &  &  \\
+		& 8  & $94.17$ \scriptsize{$\pm 0.57$}    & $94.01$ \scriptsize{$\pm 0.73$} & $94.33$ \scriptsize{$\pm 0.37$} & $93.77$ \scriptsize{$\pm 0.90$} & $94.10$ \scriptsize{$\pm 0.51$} \\
 		\hline
 		KMeans & 128  & $92.83$ \scriptsize{$\pm 1.16$}    & $93.29$ \scriptsize{$\pm 0.92$} & $93.16$ \scriptsize{$\pm 1.25$} &  &  \\
-		& 8  & $93.71$ \scriptsize{$\pm 0.89$}    & $94.09$ \scriptsize{$\pm 0.50$} & $93.64$ \scriptsize{$\pm 0.99$} & $94.31$ \scriptsize{$\pm 0.39$} & $94.09$ \scriptsize{$\pm 0.59$}  \\
+		& 8  & $93.71$ \scriptsize{$\pm 0.89$}    & $94.09$ \scriptsize{$\pm 0.59$} & $93.64$ \scriptsize{$\pm 0.99$} & $94.10$ \scriptsize{$\pm 0.55$} & $94.09$ \scriptsize{$\pm 0.59$}  \\
 	\end{tabularx}
 	\caption{Mean test accuracy \% for CIFAR-10 SSL benchmark comparing various configurations of our method. The FixMatch results in the table is our reproduction of the published results, using our training pipeline modifications. For CIFAR-10 the WideResNet model used by FixMatch has an embedding size of 128 dimension. Due to exponential GPU memory requirements only the 8D embedding can operate with higher order MoM embedding constraints. Results for a given order of embedding constraint include all lower constraints.}
-	%TODO update table with final few missing runs to bring N=5
 	\label{table1}
 \end{table*}
+
+As prior work \cite{sohn2020fixmatch} has noted, the resulting model quality is highly variable when only 4 samples are selected per class, as the quality and usefulness of the specific 4 samples can vary drastically. 
+Table \ref{tab:runvariability} shows final test accuracy for the 5 AAGMM model runs with no embedding constraints, with the accuracy varying from $86\%$ to $94\%$.
+Due to the potential for significant variance in the final model test accuracy, it can be informative to compare mean performance with max performance over the $N=5$ runs.
+This explores both how well a method can be expected to do on average with random label sampling, vs how well it can potentially do with a more representative subset of labeled data.
+
+
+
+
+\subsection{Hyper-Parameters}
+\label{hyperparams}
 
 All CIFAR-10 models were trained with the standard benchmark WideResNet28-2 architecture.
 This work leveraged the published FixMatch \cite{sohn2020fixmatch} hyper-parameters; using SGD with Nesterov momentum,  $\lambda_u = 1$, $\beta = 0.9$, $\tau = 0.95$, $\mu = 7$, $B = 64$, and epoch size = $1024$ batches regardless of the number of images in the labeled dataset.
@@ -481,6 +497,25 @@ Therefore, results with 128D embedding represents an unmodified network architec
 
 Due to exponential GPU memory requirements with each successive MoM moment, only the 8D embedding can operate with higher order MoM embedding constraints. Results for any given order of embedding constraint include all lower constraints.
 
+\begin{table*}[ht!]
+	\begin{tabularx}{\textwidth}{c|c|XXXXXX}
+		\multicolumn{6}{c}{CIFAR-10 Max Test Accuracy} \\ \hline\hline
+		Last Layer &   Emb Dim   & \multicolumn{5}{c}{40 Labels (5 trials)}            \\ 
+		\hline
+		Embedding Constraint  &  & None & $1st$ Order & $2nd$ Order & $3rd$ Order & $4th$ Order  \\ 
+		\hline
+		Linear & 128  & $91.01$   &  &  &  &   \\
+		(i.e. FullyConnected) & 8  & $92.08$    &  &  &  &   \\
+		\hline
+		AAGMM  & 128  & $\boldsymbol{94.64}$    & $91.33$   & $92.74$   &  &  \\
+		& 8  & $90.40$    & $93.25$   & $92.11$   & $91.95$  & $92.01$  \\
+		\hline
+		KMeans & 128  & $84.08$    & $91.62$   & $92.22$  &  &  \\
+		& 8  & $\boldsymbol{93.21}$    & $91.22$  & $89.35$  & $85.96$  & $92.59$  \\
+	\end{tabularx}
+	\caption{Max test accuracy (\%) for CIFAR-10 SSL benchmark with 40 labels comparing various configurations. This table shows the best-case performance of our various methods; without the effect of poorly representative labels selected for each class. }
+	\label{tablemaxcf10}
+\end{table*}
 
 %\FloatBarrier
 \subsection{CIFAR-10}
@@ -503,26 +538,6 @@ Table \ref{tablemaxcf10} demonstrates that in the best case, the AAGMM can get w
 
 
 
-\begin{table*}[ht!]
-	\begin{tabularx}{\textwidth}{c|c|XXXXXX}
-		\multicolumn{6}{c}{CIFAR-10 Max Test Accuracy} \\ \hline\hline
-		Last Layer &   Emb Dim   & \multicolumn{5}{c}{40 Labels (5 trials)}            \\ 
-		\hline
-		Embedding Constraint  &  & None & $1st$ Order & $2nd$ Order & $3rd$ Order & $4th$ Order  \\ 
-		\hline
-		Linear & 128  & $91.01$   &  &  &  &   \\
-		(i.e. FullyConnected) & 8  & $92.10$    &  &  &  &   \\
-		\hline
-		AAGMM  & 128  & $\boldsymbol{94.64}$    & $91.33$   & $92.74$   &  &  \\
-		& 8  & $90.40$    & $93.25$   & $92.11$   & $91.95$  & $92.01$  \\
-		\hline
-		KMeans & 128  & $84.08$    & $91.62$   & $92.22$  &  &  \\
-		& 8  & $\boldsymbol{93.21}$    & $91.22$  & $89.35$  & $85.96$  & $92.59$  \\
-	\end{tabularx}
-	\caption{Max test accuracy (\%) for CIFAR-10 SSL benchmark with 40 labels comparing various configurations. This table shows the best-case performance of our various methods; without the effect of poorly representative labels selected for each class. }
-	\label{tablemaxcf10}
-\end{table*}
-
 The modeled cluster centers vary in quality between individual model runs of the AAGMM layer due to the stochasticity of the training process.
 Figure \ref{fig:cifar10tsneaagmmnone} (a \& b) showcases degenerate cluster centers.
 The Figure \ref{fig:cifar10tsneaagmmnone} (c) AAGMM model learned cluster centers that are an ok approximation of the underlying data.
@@ -532,11 +547,11 @@ In contrast, the AAGMM layer can, under some circumstances, learn viable cluster
 
 \begin{figure}[h]
 	\centering
-%	\subfloat{\includegraphics[width=.5\columnwidth]{figures/id-00000132-tsne.jpg}}
-%	\subfloat{\includegraphics[width=.5\columnwidth]{figures/id-00000020-tsne.jpg}}
-%	\\
-%	\subfloat{\includegraphics[width=.5\columnwidth]{figures/id-00000120-tsne.jpg}}
-%	\subfloat{\includegraphics[width=.5\columnwidth]{figures/id-00000054-tsne.jpg}}
+	%	\subfloat{\includegraphics[width=.5\columnwidth]{figures/id-00000132-tsne.jpg}}
+	%	\subfloat{\includegraphics[width=.5\columnwidth]{figures/id-00000020-tsne.jpg}}
+	%	\\
+	%	\subfloat{\includegraphics[width=.5\columnwidth]{figures/id-00000120-tsne.jpg}}
+	%	\subfloat{\includegraphics[width=.5\columnwidth]{figures/id-00000054-tsne.jpg}}
 	\begin{subfigure}[t]{.49\columnwidth}
 		\includegraphics[width=\textwidth]{figures/id-00000132-tsne.jpg}
 		\subcaption{}
@@ -584,21 +599,8 @@ Table \ref{sslcifar10} puts these results in context with the current SSL SOTA f
 
 \section{Discussion}
 
-% TODO (chapman) need citation for VAE inference methods
-% The most similar embedding constraint to our MoM as commonly seen in deep learning is the use of variational inference, as applied in Variational Auto-Encoder models (VAE).
-The proposed MoM embedding constraint is similar to the use of variational inference in deep learning based Variational Auto-Encoder models (VAE).
-VAE constrains the latent distribution using a KL-divergence penalty $D_KL(Q|P)$, where $Q(Z)$ is the variational distribution designed to approximate $p(Z|X)$, and $P$ is the target distribution, typically the multivariate standard normal distribution. 
-Although the use of KL-divergence is strongly rooted in information theory, true calculation of KL-divergence is intractable, and thus approximations are often employed. 
-Therefore, the choice of variational distribution $Q(Z)$ can hide a great deal of approximation error, thereby limiting the VAE embedding constraint to penalize simple differences in the shape of the feature space.
-
-In most VAE models the variational distribution $Q(Z)$ constrains the first order (mean) and second order diagonal moments (standard deviation).
-Second order off-diagonal terms are usually discarded by VAE models.  
-Therefore, most practical VAE models cannot constrain the linear orthogonality of the feature space, because the cross-covariance terms are omitted to 'simplify' KL-divergence.
-In contrast, the proposed MoM latent embedding constraints not only encourage linear orthogonality, but also penalize more complicated non-linear shape descriptions including skew, kutorsis, and complex multivariate hyper-covariance descriptions of shape.  
-By penalizing higher order off-diagonal terms, this method can produce feature spaces that are not only linearly orthogonal, but closely resemble true statistical independence.
-
-The proposed MoM embedding constraint has one significant downside, it requires exponentially increasing amounts of GPU memory for each successive moment.
-This unreasonable GPU memory requirement limits the current practicality of MoM embedding constraints. 
+The proposed MoM embedding constraint has at least one significant downside, it requires exponentially increasing amounts of GPU memory for each successive moment penalty included.
+This limits the current practicality of these MoM constraints. 
 Additional optimization and/or avoiding the explicit creation of both the $nth$ order moment and its target value on device would likely improve the usability.
 
 Semi-supervised learning is highly sensitive to both which samples are selected for the labeled population \cite{sohn2020fixmatch} and the stochasticity of the training process itself.
@@ -607,21 +609,21 @@ Anecdotally its appears worse in semi-supervised methods than fully supervised m
 To characterize this variance, and hence how much one can trust the error bars for Table \ref{table1} and \ref{tablemaxcf10}, we took a few final layer configurations and ran them $N=5$ times with the same seed.
 Table \ref{tab:runseedvariability} showcases the run-to-run variances for models that started out identical.
 Interestingly enough, the AAGMM models converge with much lower variance than the KMeans models.
+This contrasts with the KMeans layer being significantly simpler than AAGMM, both mathematically and implementation-wise.
 
 \begin{table}[h!]
 	\begin{tabular}{r|c|c|c|c}
 		\multicolumn{5}{c}{Identical Seed Runs on CIFAR-10 at 40 Labels}\\
 		\hline
-		 & \small{\makecell{AAGMM\\+2nd Order}} & \small{\makecell{KMeans\\+2nd Order}} & \small{\makecell{AAGMM\\+None}} & \small{\makecell{KMeans\\+None}} \\
+		& \small{\makecell{AAGMM\\+2nd Order}} & \small{\makecell{KMeans\\+2nd Order}} & \small{\makecell{AAGMM\\+None}} & \small{\makecell{KMeans\\+None}} \\
 		\hline
 		Run 1 & $87.5$ & $86.9$ & $71.2$ & $86.5$ \\
 		Run 2 & $85.6$ & $91.2$ & $67.9$ & $85.4$ \\
 		Run 3 & $84.8$ & $77.7$ & $75.8$ & $86.0$ \\
 		Run 4 & $85.3$ & $87.6$ & $69.5$ & $87.6$ \\
-		Run 5 & $85.2$ & $83.7$ & $xx.y$ & $xx.y$ \\
+		Run 5 & $85.2$ & $83.7$ & $78.9$ & $85.7$ \\
 	\end{tabular}
 	\caption{Test accuracy for independent training runs with the same random seed for various final layer configurations. All runs use the 128D (baseline) model latent embedding dimensionality. All runs use the same labeled samples.}
-	% TODO (majurski) update table with final few currently running experiments
 	\label{tab:runseedvariability}
 \end{table}
 

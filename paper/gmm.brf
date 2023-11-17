@@ -15,9 +15,9 @@
 \backcite {sohn2020fixmatch}{{2}{1}{figure.caption.2}}
 \backcite {zhang2021flexmatch}{{2}{1}{figure.caption.2}}
 \backcite {sohn2020fixmatch}{{2}{1}{figure.caption.2}}
-\backcite {pearson1936method}{{2}{2}{Item.2}}
-\backcite {cifar10}{{2}{1}{Item.2}}
-\backcite {sohn2020fixmatch}{{2}{1}{Item.2}}
+\backcite {pearson1936method}{{2}{3}{Item.3}}
+\backcite {cifar10}{{2}{1}{Item.3}}
+\backcite {sohn2020fixmatch}{{3}{1}{Item.3}}
 \backcite {zhang2021flexmatch}{{3}{2}{section.2}}
 \backcite {olivier2006semi}{{3}{2.1}{subsection.2.1}}
 \backcite {livieris2019predicting}{{3}{2.1}{subsection.2.1}}
@@ -30,6 +30,15 @@
 \backcite {blum1998combining}{{3}{2.1}{subsection.2.1}}
 \backcite {prakash2014survey}{{3}{2.1}{subsection.2.1}}
 \backcite {tarvainen2017mean}{{3}{2.1}{subsection.2.1}}
+\backcite {arazo2020pseudo}{{3}{2.1}{subsection.2.1}}
+\backcite {rizve2021defense}{{3}{2.1}{subsection.2.1}}
+\backcite {rizve2021defense}{{3}{2.1}{subsection.2.1}}
+\backcite {Xing2020DistanceBased}{{3}{2.1}{subsection.2.1}}
+\backcite {zhang2021flexmatch}{{3}{2.1}{subsection.2.1}}
+\backcite {yang2022class}{{3}{2.1}{subsection.2.1}}
+\backcite {zheng2022simmatch}{{3}{2.1}{subsection.2.1}}
+\backcite {caron2021emerging}{{3}{2.1}{subsection.2.1}}
+\backcite {fini2023semi}{{3}{2.1}{subsection.2.1}}
 \backcite {xie2020unsupervised}{{3}{2.2}{subsection.2.2}}
 \backcite {berthelot2019mixmatch}{{3}{2.2}{subsection.2.2}}
 \backcite {berthelot2019remixmatch}{{3}{2.2}{subsection.2.2}}
@@ -40,35 +49,35 @@
 \backcite {zheng2023simmatchv2}{{3}{2.2}{subsection.2.2}}
 \backcite {kim2022conmatch}{{3}{2.2}{subsection.2.2}}
 \backcite {menon2022semisupervised}{{3}{2.2}{subsection.2.2}}
-\backcite {arazo2020pseudo}{{3}{2.3}{subsection.2.3}}
-\backcite {rizve2021defense}{{3}{2.3}{subsection.2.3}}
-\backcite {rizve2021defense}{{3}{2.3}{subsection.2.3}}
-\backcite {Xing2020DistanceBased}{{3}{2.3}{subsection.2.3}}
-\backcite {zhang2021flexmatch}{{3}{2.3}{subsection.2.3}}
-\backcite {yang2022class}{{3}{2.3}{subsection.2.3}}
-\backcite {zheng2022simmatch}{{3}{2.3}{subsection.2.3}}
-\backcite {caron2021emerging}{{3}{2.3}{subsection.2.3}}
-\backcite {fini2023semi}{{3}{2.3}{subsection.2.3}}
-\backcite {sohn2020fixmatch}{{3}{3}{section.3}}
-\backcite {sohn2020fixmatch}{{3}{3}{section.3}}
-\backcite {caron2018deep}{{3}{3}{section.3}}
-\backcite {caron2020unsupervised}{{3}{3}{section.3}}
-\backcite {enguehard2019semi}{{3}{3}{section.3}}
+\backcite {kingma2013auto}{{3}{2.3}{subsection.2.3}}
+\backcite {caterini2021variational}{{3}{2.3}{subsection.2.3}}
+\backcite {kingma2016improved}{{3}{2.3}{subsection.2.3}}
+\backcite {rezende2015variational}{{3}{2.3}{subsection.2.3}}
+\backcite {gretton2007kernel}{{3}{2.3}{subsection.2.3}}
+\backcite {li2015generative}{{3}{2.3}{subsection.2.3}}
+\backcite {WANG2018135}{{3}{2.3}{subsection.2.3}}
+\backcite {Wang2023rethinking}{{3}{2.3}{subsection.2.3}}
+\backcite {zhao2019infovae}{{3}{2.3}{subsection.2.3}}
+\backcite {sohn2020fixmatch}{{4}{3}{section.3}}
+\backcite {sohn2020fixmatch}{{4}{3}{section.3}}
+\backcite {caron2018deep}{{4}{3}{section.3}}
+\backcite {caron2020unsupervised}{{4}{3}{section.3}}
+\backcite {enguehard2019semi}{{4}{3}{section.3}}
 \backcite {pytorch}{{4}{3.1.1}{equation.3.4}}
 \backcite {pytorch}{{4}{3.1.2}{subsubsection.3.1.2}}
 \backcite {pearson1936method}{{4}{3.2}{subsection.3.2}}
 \backcite {sohn2020fixmatch}{{5}{4}{section.4}}
 \backcite {cifar10}{{5}{4}{section.4}}
-\backcite {sohn2020fixmatch}{{5}{4}{table.caption.3}}
-\backcite {sohn2020fixmatch}{{5}{4.1}{table.caption.4}}
-\backcite {sohn2020fixmatch}{{6}{4.2}{subsection.4.2}}
-\backcite {wang2022freematch}{{6}{4.2}{subsection.4.2}}
-\backcite {zheng2023simmatchv2}{{6}{4.2}{subsection.4.2}}
-\backcite {sohn2020fixmatch}{{7}{\caption@xref {??}{ on input line 571}}{table.caption.7}}
-\backcite {zhang2021flexmatch}{{7}{\caption@xref {??}{ on input line 572}}{table.caption.7}}
-\backcite {wang2022freematch}{{7}{\caption@xref {??}{ on input line 573}}{table.caption.7}}
-\backcite {zheng2023simmatchv2}{{7}{\caption@xref {??}{ on input line 574}}{table.caption.7}}
-\backcite {wang2022usb}{{7}{4}{table.caption.7}}
-\backcite {wang2022freematch}{{7}{4}{table.caption.7}}
-\backcite {zheng2023simmatchv2}{{7}{4}{table.caption.7}}
+\backcite {sohn2020fixmatch}{{5}{4}{table.caption.4}}
+\backcite {sohn2020fixmatch}{{6}{4.1}{subsection.4.1}}
+\backcite {sohn2020fixmatch}{{7}{4.2}{subsection.4.2}}
+\backcite {wang2022freematch}{{7}{4.2}{subsection.4.2}}
+\backcite {zheng2023simmatchv2}{{7}{4.2}{subsection.4.2}}
+\backcite {sohn2020fixmatch}{{8}{\caption@xref {??}{ on input line 586}}{table.caption.7}}
+\backcite {zhang2021flexmatch}{{8}{\caption@xref {??}{ on input line 587}}{table.caption.7}}
+\backcite {wang2022freematch}{{8}{\caption@xref {??}{ on input line 588}}{table.caption.7}}
+\backcite {zheng2023simmatchv2}{{8}{\caption@xref {??}{ on input line 589}}{table.caption.7}}
+\backcite {wang2022usb}{{8}{4}{table.caption.7}}
+\backcite {wang2022freematch}{{8}{4}{table.caption.7}}
+\backcite {zheng2023simmatchv2}{{8}{4}{table.caption.7}}
 \backcite {sohn2020fixmatch}{{8}{5}{section.5}}
