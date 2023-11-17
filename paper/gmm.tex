@@ -1,7 +1,7 @@
 \documentclass[10pt,twocolumn,letterpaper]{article}
-%\usepackage[review]{cvpr}
+\usepackage[review]{cvpr}
 %\usepackage[final]{cvpr}
-\usepackage[pagenumbers]{cvpr} % To force page numbers, e.g. for an arXiv version
+%\usepackage[pagenumbers]{cvpr} % To force page numbers, e.g. for an arXiv version
 
 
 \usepackage[utf8]{inputenc} % allow utf-8 input
@@ -97,9 +97,9 @@ The conditional probability cannot detect outliers, causing outlier sensitivity 
 This exacerbates model over-confidence impacting many problems: from hallucinations, to confounding biases, and dependence on large datasets.
 We introduce a novel embedding constraint based on the Method of Moments (MoM).
 We investigate the use of polynomial moments ranging from 1st through 4th order hyper-covariance matrices.
-Furthermore, we use this embedding constraint to train an Axis-aligned Gaussian Mixture Model (AAGMM) final layer, which learns not only the conditional, but also the joint distribution of the latent space.
-We demonstrate our approach by extending FixMatch based semi-supervised image classification.
-We find our MoM constraint with the AAGMM layer is able to match or improve upon the reported FixMatch accuracy, while also modeling the joint distribution, thereby reducing outlier sensitivity.
+Furthermore, we use this embedding constraint to train an Axis-Aligned Gaussian Mixture Model (AAGMM) final layer, which learns not only the conditional, but also the joint distribution of the latent space.
+We apply this method to the domain of semi-supervised image classification by extending FixMatch with our technique.
+We find our MoM constraint with the AAGMM layer is able to match the reported FixMatch accuracy, while also modeling the joint distribution, thereby reducing outlier sensitivity.
 Future work explores potential applications for this layer and embedding constraint, and how/why this MoM technique can overcome theoretical limitations of other existing methods including the approximate KL-divergence constraint of variational autoencoders.
 Code is available at: \url{https://github.com/*******} % \url{https://github.com/mmajurski/ssl-gmm}
 \end{abstract}
@@ -163,14 +163,14 @@ The t-SNE\cite{tsne} plot of "KMeans + None" shows the latent space of a $93\%$ 
 However, the explicitly modeled cluster centers (shown as X's) do not align with the underlying data.
 While that model has acceptable predictive performance, it does not accurately learn and represent the underlying training data.
 To construct a robust model, one cannot simply fit a decision boundary.
-The model needs to learn the full latent distribution. 
-Figure \ref{fig:cifar10tsne} (d) demonstrates that with our proposed AAGMM final layer with 4th order MoM embedding constraints, the exact same model can achieve comparable (if not better accuracy), but with the added benefit of modeling the underlying data clusters in the latent space.
+The model needs to learn the full joint distribution of the latent space. 
+Figure \ref{fig:cifar10tsne} (d) demonstrates that with our proposed AAGMM final layer with 4th order MoM embedding constraints, the exact same model can achieve comparable (if not better) accuracy, but with the added benefit of modeling the underlying data clusters in the latent space.
 
 
-This work argues that Semi-supervised learning (SSL) pseudo-labeling methods can be improved with better calibration of the network logits used to filter reliable pseudo-labels from the unreliable ones. 
-This is equivalent to improving the accuracy of class inlier determination.
-SSL is an excellent application to test generative final activation layers which model the joint probability $p(y,x)$, as pseudo-labeling methods are sensitive to outliers.
-
+We apply this work to the domain of Semi-Supervised Learning (SSL), because over-confident label predictions can cause confounding issues with pseudo-labeling methods \cite{arazo2020pseudo}.
+%This is equivalent to improving the accuracy of class inlier determination.
+%As such SSL is an excellent application to test generative final activation layers which model the joint probability $p(y,x)$, thereby enabling estimation of both the conditional $p(y|x)$ and prior $p(x)$ probabilities. 
+%as pseudo-labeling methods are sensitive to outliers.
 SSL leverages an abundance of unlabeled data to improve deep learning based model performance under limited training data regimes \cite{zhu2022introduction,li2019safe,hady2013semi}.
 %Image classification has become a playground for exploring novel SSL ideas, of which there are several flavors.
 Contrastive learning methods leverage the intuition that similar instances should be close in the representation space, while different instances are farther apart \cite{yang2022class,li2021comatch}.
@@ -182,26 +182,29 @@ This work contributes:
 	\item A novel Method of Moments (MoM) based embedding constraint that enables the model to not only learn the decision boundary but also the latent joint distribution. 
 	Moreover, this constraint ensures that each latent cluster exhibits a well-behaved Gaussian shape.
 	\item A replacement of the final linear+softmax final activation layer of the neural network with either an axis-aligned differentiable Gaussian Mixture Model (AAGMM) or an equal variance version named KMeans trained via back propagation, both of which have explicit modeling of class cluster centroids. 
-	\item A demonstration of the latent embedding space response to various constraints on how it should be structured by adding penalties if the per-class clustering does not conform to between 0 and 4 of the first Gaussian moments being identity/zero \cite{pearson1936method}.
+	%\item A demonstration of the latent embedding space response to various constraints on how it should be structured by adding penalties if the per-class clustering does not conform to between 0 and 4 of the first Gaussian moments being identity/zero %\cite{pearson1936method}.
+	\item A visualization of the latent embedding space, showing how it responds to the incorporation of generative final activation layers with and without MoM based embedding constraints.
 \end{enumerate}
 
 %This paper explores the impacts of replacing the final linear layer of a network with a generative model and embedding space constraints.
 %This combination demonstrates improvements in final model accuracy when using pseudo-labeling methods where very few annotations are available.
-We demonstrate this methodology using the standard CIFAR-10 benchmark dataset with 40 and 250 labels\cite{cifar10}. %) and CIFAR-100 (400 and 2500 label) benchmarks \cite{cifar10}. 
+We apply this methodology to the task of semi-supervised CIFAR-10 image classification with 40 and 250 training labels \cite{cifar10}. 
+%) and CIFAR-100 (400 and 2500 label) benchmarks \cite{cifar10}. 
 %Additionally, we explore the impact high level prescriptive constraints on the embedding space have on the resulting trained model. 
-Finally, because the embedding constraint penalties are applied to all unlabeled data and not just the valid pseudo-labels, our method extracts training signal from every unlabeled data point, an improvement on baseline pseudo-labeling methods (like FixMatch \cite{sohn2020fixmatch}) which only learn from the valid pseudo-labels due to removing low confidence pseudo-labels.
+The embedding constraint penalties are applied to all unlabeled data and not just the valid pseudo-labels.  
+As such our method fits the latent joint distribution across all of the unlabeled data points, an improvement on baseline pseudo-labeling methods (like FixMatch \cite{sohn2020fixmatch}) which only fit the conditional distribution to the high confidence pseudo-labels while removing low confidence pseudo-labels.
 
 
 \section{Related Work}
 
 % TODO compare our method to lee2022contrastive which uses explicit cluster centers, and draws both the valid and non valid PL to the cluster center, just like we do, we just don't have a contrastive element like they do
 
-Semi-Supervised learning has shown great progress in learning high quality models, in some cases matching fully supervised performance for a number of benchmarks \cite{zhang2021flexmatch}.
+SSL has shown great progress in learning high quality models, in some cases matching fully supervised performance for a number of benchmarks \cite{zhang2021flexmatch}.
 The goal of SSL is to produce a trained model of equivalent accuracy to fully supervised training, with vastly reduced data annotation requirements.
 Doing so relies on accurately characterizing inlier vs outlier unlabeled samples.
 
 \subsection{Pseudo-Labeling}
-Self-supervised learning was among the initial approaches employed in the context of semi-supervised learning to annotate unlabeled images. 
+Self-training was among the initial approaches employed in the context of SSL to annotate unlabeled images. 
 This technique involves the initial training of a classifier with a limited set of labeled samples and incorporates pseudo-labels into the gradient descent process, exceeding a predefined threshold \cite{yarowsky1995unsupervised, mcclosky2006reranking, olivier2006semi,zhai2019s4l,livieris2019predicting,rosenberg2005semi,menon2020deep}. 
 A closely related method to self-training is co-training, where a given dataset is represented as two distinct feature sets \cite{blum1998combining}. 
 These independent sample sets are subsequently trained separately using two distinct models, and the sample predictions surpassing predetermined thresholds are utilized in the final model training process \cite{blum1998combining,prakash2014survey}.
@@ -226,19 +229,21 @@ Finally, pseudo-labeling filtering based on consistence between strongly augment
 
 \subsection{Latent Embedding Constraints}
 
-A notable latent embedding constraint that related to our approach is Evidence Lower Bound (ELBO).
-ELBO approximates a latent sample with a variational distribution and constrains the KL-divergence between the variational distribution and a target shape which is typically a multivariate Gaussian \cite{kingma2013auto}. 
+A notable latent embedding constraint  that is related yet substantially different from our approach is the Evidence Lower Bound (ELBO).
+ELBO approximates a latent sample with a variational distribution and constrains the KL-divergence between the variational distribution and a target shape which is typically a multivariate standard normal distribution \cite{kingma2013auto}. 
 The main drawback of this approach is that the true KL-divergence is intractable to calculate.  
 As such the posterior must take on a simplified form. 
-Most implementations use a diagonal posterior which only penalizes simple differences in shape such as mean and standard deviation.  
-The method of Normalizing Flows provides an iterative framework based on change of variables to construct arbitrarily complex posteriors \cite{rezende2015variational,kingma2016improved,caterini2021variational}.  
-Our MoM constraint can also penalize complex differences in shape by constraining 2nd, 3rd, and 4th order hyper-covariance matrices, although we do so by comparing the moments directly.  
+Most practical implementations use a diagonal posterior which can only penalize simple differences in shape such as mean and standard deviation.  
+Arbitrarily complex posteriors are nevertheless possible using the method of Normalizing flows, which provides an iterative framework based on change of variables although this method is quite involved \cite{rezende2015variational,kingma2016improved,caterini2021variational}.  
+Our MoM constraint is relatively simple but can also penalize complex differences in shape by constraining 2nd, 3rd, and 4th order hyper-covariance matrices, although we do so by comparing the moments directly.  
 This greatly simplifies implementation as we do not need to explicitly construct a posterior distribution.
 
 Another notable embedding constraint is the Maximum Mean Discrepancy (MMD), also known as the two-sample test \cite{gretton2007kernel}.  
 MMD was used in the Generative Moment Matching Network \cite{li2015generative} and has since been used extensively for the problem of domain adaptation \cite{WANG2018135,Wang2023rethinking}, in order to constrain the latent projections of the source and target distributions to follow the same distribution.  
-MMD is a moment-matching constraint based on the kernel trick, and can therefore constrain any difference in shape between two distributions including very high order moments. 
-Typcially, MMD is only be used to constrain one sample to another sample, although numerical methods can extend this technique to include sample-to-distribution comparisons \cite{zhao2019infovae}.
+MMD is a moment-matching constraint based on the kernel trick, and can therefore constrain any difference in shape between two samples including very high order moments. 
+Due to the kernel trick requiring proper inner products, MMD can only be used to constrain one sample to another sample.  
+It cannot directly constrain sample statistics to population statistics, although it is possible to approximate populations numerically via monte-carlo sampling \cite{zhao2019infovae}.  
+Like MMD, our method is based on MoM, but it does not involve the kernel trick, and instead penalizes polynomial moments explicitly thereby enabling the sample embedding to be constrained to an exact target distribution.
 
 
 %This embedding constraint is used to ensure the regularity of the cluster centers within Variational Auto-Encoders (VAE) \cite{kingma2013auto}.  
@@ -250,11 +255,11 @@ Typcially, MMD is only be used to constrain one sample to another sample, althou
 \section{Methodology}
 
 In this section, we explore our proposed replacement final activation layers and our embedding space constraints.
+Our methodology is based upon the published FixMatch \cite{sohn2020fixmatch} algorithm, with identical hyper-parameters unless otherwise stated.
+We extend FixMatch with a few minor training algorithm modifications explored in the Hyperparameters, Section \ref{hyperparams}.
 FixMatch \cite{sohn2020fixmatch} is a simple, well performing SSL algorithm.
 As such, it serves as a good comparison point for exploring the effect of our contributions.
-Our methodology is based upon the published FixMatch \cite{sohn2020fixmatch} algorithm, with identical hyper-parameters unless otherwise stated.
-We extend FixMatch with a few minor training algorithm modifications explored in the Hyperparameters Section \ref{hyperparams}.
-While we keep the FixMatch valid pseudo-label selection, our embedding constraints operate on all data, labeled and unlabeled.
+%While we keep the FixMatch valid pseudo-label selection, our embedding constraints operate on all data, labeled and unlabeled.
 
 Both the linear layer replacements and the embedding constraints explored herein represent increasing levels of prescription about how the final latent embedding space should be arranged compared to a traditional linear layer.
 The idea of leveraging clusters in embedding space is not new \cite{caron2018deep,caron2020unsupervised,enguehard2019semi}, but we extend the core idea with a novel differentiable model with learned cluster centroids and MoM based constraints.
@@ -262,8 +267,8 @@ The MoM constraints do not impose any assumptions outside of applying l2 penalti
 
 \subsection{Alternate Final Layers}
 
-A limitation of traditional final activation layers such as linear+softmax is that they are fully discriminative; i.e. they estimate the posterior $p(Y|X)$, but do not attempt to model the sample distribution $p(X)$ or the joint probabilities $p(Y,X)$. 
-To overcome this limitation, we present two semi-parametric final activation layers (a) the Axis Aligned GMM (AAGMM) layer, and (b) an equal variance version of AAGMM that we henceforth call the KMeans activation layer due to the similarity of the objective function with a gradient based KMeans.
+A limitation of traditional final activation layers such as linear+softmax is that they are fully discriminative; i.e. they estimate the conditional probability $p(Y|X)$, but do not attempt to model the prior distribution $p(X)$ or the joint probabilities $p(Y,X)$. 
+To overcome this limitation, we present two generative final activation layers (a) the Axis Aligned GMM (AAGMM) layer, and (b) an equal variance version of AAGMM that we henceforth call the KMeans activation layer due to the similarity of the objective function with a gradient based KMeans.
 
 These activation layers are fully differentiable and integrated into the neural network architecture as a module in the same way as a traditional final linear layer. 
 As such, they do not require external training and do not use expectation maximization.
@@ -276,7 +281,7 @@ The neural network model $F(X;\theta_F)$ transforms the data $X$ into a latent s
 
 The AAGMM layer defines a set of $K$ trainable clusters, one cluster per label category. 
 Each cluster $k=1 \dots K$ has a cluster center $\mu_k$ and cluster covariance $\Sigma_k$. 
-The prior probability of any given sample $X_i$ is defined by the mixture of cluster probability densities over the latent representation $Z_i$ as follows,
+The prior probability of any given sample $X_i$ is defined by the mixture of cluster probability densities over the $D$-dimensaional latent representation $Z_i$ as follows,
 
 \begin{equation}
 	\begin{aligned}
@@ -303,7 +308,7 @@ As there is one cluster per label category, the joint probability for sample $i$
 	\label{eq_pyx}
 	p(Y_{i,k},X_i) = \mathcal{N} (Z_i, \mu_{k}, \Sigma_k) \end{equation}
 
-By Bayesian identity, the posterior probability $\hat{Y}_k=p(Y_{k}|X_i)$ can therefore be inferred from eq \ref{eq_px} and \ref{eq_pyx} as follows,
+By Bayesian identity, the conditional probability $\hat{Y}_{i,k}=p(Y_{i,k}|X_i)$ can therefore be inferred from eq \ref{eq_px} and \ref{eq_pyx} as follows,
 
 \begin{equation}
 	\hat{Y}_{i,k} = p(Y_{i,k}|X_i) = \frac{p(Y_{i,k}, X_i)}{p(X_i)}
@@ -312,7 +317,7 @@ By Bayesian identity, the posterior probability $\hat{Y}_k=p(Y_{k}|X_i)$ can the
 The AAGMM layer is implemented as a normal PyTorch \cite{pytorch} module.
 It has two parameters updated by backprop.
 (1) the explicit cluster centers, a matrix $num\_classes \times embedding\_dim$ initialized randomly, and
-(2) the diagonal elements of the $Sigma$ matrix, randomly initialized in the range $[0.9, 1.1]$, which contains the diagonal elements of the GMM Sigma matrix for each cluster.
+(2) the diagonal elements of the $\Sigma_k$ matrix, randomly initialized in the range $[0.9, 1.1]$, which contains the diagonal elements of the GMM Sigma matrix for each cluster.
 
 \subsubsection{KMeans Layer}
 
@@ -331,14 +336,14 @@ See the published codebase for implementation details about the AAGMM and KMeans
 \subsection{Method of Moments Embedding Constraints}
 \label{sec:mom}
 
-We introduce and evaluate a series of embedding constraints based on the Method of Moments (MoM) \cite{pearson1936method} in order to fit the semi-parametric latent prior parameters.  
-The latent prior $p(X_i)$ is calculated in equation \ref{eq_px} and then used to infer the posterior $p(Y_{i,k}|X_i)$.
-As usual, the posterior is trained using cross entropy loss.  
-When embedding constraints are omitted, it is possible for the model to learn an accurate decision boundary for the posterior without modeling the latent prior.
-
-Our novel last layer is semi-parametric, because the prior is a parametric model of the latent distribution $Z$ which is the result of a neural network feature extraction $F(X;\theta)$. 
-Therefore, attempting to fit the GMM directly to $Z$ using Maximum Likelihood (ML) or simple Expectation Maximization (EM), is not appropriate, because doing so would fail to learn an appropriate feature space for discrimination.
-MoM solves these problems and is an appropriate strategy for semi-parametric models including ours.
+We introduce and evaluate a series of embedding constraints based on the Method of Moments (MoM) \cite{pearson1936method}.  
+For each sample $i$, the joint $p(Y_{i,k},X_i)$ is calculated as in equation \ref{eq_pyx} and then used to infer the prior $p(X_i)$ and the conditional $p(Y_{i,k}|X_i)$.
+As usual, the conditional probability is trained using cross entropy loss.  
+When embedding constraints are omitted, it is possible for the model to learn an accurate decision boundary for the conditional probability without modeling the latent joint distribution.
+%Our novel last layer is semi-parametric, because the prior is a parametric model of the latent distribution $Z$ which is the result of a neural network feature extraction $F(X;\theta)$. 
+%Therefore, a
+%Attempting to fit the GMM directly to $Z$ using Maximum Likelihood (ML) or simple Expectation Maximization (EM), is not appropriate, because doing so would fail to learn an appropriate feature space for discrimination.
+MoM solves these problems and is an appropriate strategy for semi-parametric models.
 
 The MoM relies on the use of \textit{consistent estimators}, which asymptotically share sample and population statistics.
 Assume that $z$ is a finite sample of $n$ elements drawn from infinite population $Z$, then a series of $P$ well-behaved sample statistics $g_p$ should very closely approximate their $k$ population statistic as follows,
@@ -348,8 +353,8 @@ Assume that $z$ is a finite sample of $n$ elements drawn from infinite populatio
 	\frac{1}{n} \sum_{i=1}^n g_p(z_i) \approx E(g_p(Z))
 \end{equation}
 
-We can therefore constrain the latent representation of our model to approximate an independent joint Gaussian distribution. 
-In the univariate gaussian case, the $p^{th}$ order centralized moment constraint is the following.
+We can therefore constrain the latent representation of our model to approximate a multivariate standard normal distribution. 
+In the univariate standard normal case, the $p^{th}$ order centralized moment constraint is the following.
 
 \begin{equation}
 	E\left[ (Z-\mu)^p \right] = 
@@ -359,18 +364,19 @@ In the univariate gaussian case, the $p^{th}$ order centralized moment constrain
 	\end{cases}
 \end{equation}
 
+Where '$!!$' represents the double factorial operator.  
 By this formula, the univariate unit gaussian has mean $0$, standard deviation $1$, skew $0$, and kurtosis $3$.
 
-In the joint multivariate case, each dimension is independent by definition.  As such, if we redefine $Z$, $\mu$, and $p$ to be all $D$ dimensional, then the centralized joint gaussian moment can be defined as follows,
+The multivariate standard normal distribution is the marginal product of the univariate standard normal distributions.  As such, if we redefine $Z$, $\mu$, and $p$ to be all $D$ dimensional, then the centralized marginal product moment can be defined as follows,
 
 \begin{equation}
-	E\left[g_p(Z - \mu)\right] = E\left[ \prod_{d=1}^D (Z_d - \mu_d)^p_d \right]
+	E\left[g_p(Z - \mu)\right] = E\left[ \prod_{d=1}^D (Z_d - \mu_d)^{p_d} \right]
 \end{equation}
 
-Due to independence of the axes, this moment can be represented as a product of univariate moments of the individual gaussians as follows,
+Due to independence of the axes, this multivariate population moment can be represented as a product of univariate moments of the individual standard normal distributions as follows,
 
 \begin{equation}
-	E\left[ \prod_{d=1}^D (Z_d - \mu_d)^p_d \right] = \prod_{d=1}^D E\left[ (Z_d - \mu_d)^p_d \right]
+	E\left[ \prod_{d=1}^D (Z_d - \mu_d)^p_d \right] = \prod_{d=1}^D E\left[ (Z_d - \mu_d)^{p_d} \right]
 \end{equation}
 
 The error (loss) term associated with the embedding constraint for any moment $p$ is equal to the L2 difference between the sample and population statistics as follows,
