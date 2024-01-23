@@ -21,7 +21,6 @@ study-bck.db
 
 *.ods
 *.pyc
-*.png
 *.csv
 *.pt
 *.tar.gz
