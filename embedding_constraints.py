@@ -1,7 +1,6 @@
 import torch
 import gauss_moments
-import time
-import random
+
 
 class GaussianMoments(torch.nn.Module):
     def __init__(self, embedding_dim: int, num_classes: int, moment_order: int):
