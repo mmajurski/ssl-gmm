@@ -181,7 +181,7 @@ class AagmmModelWrapper(torch.nn.Module):
         self.outlier_threshold = torch.nn.Parameter(5.0 * torch.ones(size=(1,), requires_grad=True))
 
         self.last_layer_name = last_layer
-        if self.last_layer_name == 'fc':
+        if self.last_layer_name == 'linear':
             self.last_layer = torch.nn.Linear(self.embedding_dim, self.num_classes)
         elif self.last_layer_name == 'aa_gmm':
             self.last_layer = aagmm_layer(self.embedding_dim, self.num_classes)
@@ -195,7 +195,7 @@ class AagmmModelWrapper(torch.nn.Module):
 
         if self.emb_linear is not None:
             embedding = self.emb_linear(embedding)
-        if self.last_layer_name == 'fc':
+        if self.last_layer_name == 'linear':
             logits = self.last_layer(embedding)
             denom = torch.ones((logits.shape[0]))
         else:
