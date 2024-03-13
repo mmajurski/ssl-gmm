@@ -47,6 +47,7 @@ class aagmm_layer(torch.nn.Module):
         det_scale_factor = -0.5 * log_det
         det_scale_factor_safe = det_scale_factor - torch.max(det_scale_factor)
         det_scale_safe = torch.exp(det_scale_factor_safe)
+        # det_scale_unsafe = torch.exp(det_scale_factor)
 
         # ---
         # Calculate distance to cluster centers
@@ -71,6 +72,11 @@ class aagmm_layer(torch.nn.Module):
             curr_dist_sq = torch.sum(curr_dist_sq, 1)
             dist_sq[:, k] = curr_dist_sq
 
+        cluster_dist_mat = torch.sqrt(dist_sq)  # in sigma
+        # TOOD filter for > 2.0 for the nearest assigned class
+        # TODO if min per col? > 2.0, not use
+
+
         #   GMM
         # dist_sq = (x-mu) Sigma_inv (x-mu)T
         #   K-means
@@ -79,8 +85,14 @@ class aagmm_layer(torch.nn.Module):
         # Obtain the exponents
         expo_gmm = -0.5 * dist_sq
 
+        # TODO for aagmm dist_sq is in units of std for the clusters, maybe use this for outlier thresholding
+        # TODO use min of sqrt(dist_sq) as the outlier thresholding. I.e. whats it min distance to any cluster. If data point is x std away from all clusters, then its an outlier. So threshold this value with x=2.
+
+
         # Safe version
         det_scale_rep_safe = det_scale_safe.unsqueeze(0).repeat(batch, 1)
+        # det_scale_rep_unsafe = det_scale_unsafe.unsqueeze(0).repeat(batch, 1)
+
 
         # Obtain the "safe" (numerically stable) versions of the
         #  exponents.  These "safe" exponents produce fake numer and denom
@@ -88,6 +100,10 @@ class aagmm_layer(torch.nn.Module):
         #  where fake_numer and fake_denom are numerically stable
         expo_safe_off_gmm, _ = torch.max(expo_gmm, dim=-1, keepdim=True)
         expo_safe_gmm = expo_gmm - expo_safe_off_gmm  # use broadcast instead of the repeat
+
+        # numer_unsafe_gmm = det_scale_rep_unsafe * torch.exp(expo_gmm)
+        # denom_unsafe_gmm = torch.sum(numer_unsafe_gmm, 1, keepdim=True)
+
 
         # Calculate the responsibilities
         numer_safe_gmm = det_scale_rep_safe * torch.exp(expo_safe_gmm)
@@ -109,7 +125,11 @@ class aagmm_layer(torch.nn.Module):
         # cross_entropy_embed *= assign_gmm_onehot
         # cross_entropy_embed = (-1.0 / batch) * torch.sum(assign_gmm_onehot * cross_entropy_embed)
 
-        return resp_gmm, denom_safe_gmm  #, cross_entropy_embed
+        cluster_assignment = torch.argmax(resp_gmm, dim=1)
+        cluster_dist = cluster_dist_mat[range(cluster_dist_mat.shape[0]), cluster_assignment]
+        #cluster_dist2 = torch.min(cluster_dist_mat, dim=1).values
+
+        return resp_gmm, cluster_dist  #denom_unsafe_gmm  #, cross_entropy_embed
 
 
 class kmeans_layer(torch.nn.Module):

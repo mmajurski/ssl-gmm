@@ -2,7 +2,6 @@ import os
 import torch
 import numpy as np
 import sklearn
-import torchmetrics
 
 from sklearn.metrics import (
     accuracy_score,
@@ -112,6 +111,7 @@ class AAGMM(AlgorithmBase):
 
     def train_step(self, x_lb, y_lb, idx_ulb, x_ulb_w, x_ulb_s):
         num_lb = y_lb.shape[0]
+        GENERATE_CSV = False
 
         # inference and calculate sup/unsup losses
         with (self.amp_cm()):
@@ -142,47 +142,47 @@ class AAGMM(AlgorithmBase):
             denom_lb = outputs['denom'][:num_lb]
             denom_ulb_w, denom_ulb_s = outputs['denom'][num_lb:].chunk(2)
 
-            mask = self.call_hook("masking", "MaskingHook", logits_x_ulb=probs_x_ulb_w, softmax_x_ulb=False, idx_ulb=idx_ulb, denom_lb=denom_lb, denom_ulb=denom_ulb_w)
+            mask = self.call_hook("masking", "MaskingHook", logits_x_ulb=probs_x_ulb_w, softmax_x_ulb=False, idx_ulb=idx_ulb) #, denom_lb=denom_lb, denom_ulb=denom_ulb_w)
 
             # remove outliers
             # denom_thres = torch.min(denom_lb)
-            denom_thres = torch.quantile(denom_lb, 0.05)  # 5th percentile
-            dthres_rate = torch.sum((denom_ulb_w <= denom_thres).float()) / denom_ulb_w.shape[0]
-            # mask[denom_ulb_w <= denom_thres] = 0
+            # denom_thres = torch.quantile(denom_lb, 0.25)  # 5th percentile
+            # dthres_rate = torch.sum((denom_ulb_w <= denom_thres).float()) / denom_ulb_w.shape[0]
 
-            # # capture the stats of the denom_lb, denom_ulb_w, denom_ulb_s
-            # # save every 10th percentile to get a rough approx of hte pdf
-            # q = np.linspace(0, 1.0, 21).astype(np.float32)
-            # q = torch.tensor(q).to(denom_lb.device)
-            # denom_lb_percs = torch.quantile(denom_lb, q)
-            # denom_ulb_w_percs = torch.quantile(denom_ulb_w, q)
-            # denom_ulb_s_percs = torch.quantile(denom_ulb_s, q)
+            if isinstance(self.args.outlier_thres, (int, float)):
+                denom_thres = torch.tensor(self.args.outlier_thres, device=denom_ulb_w.device, dtype=denom_ulb_w.dtype, requires_grad=False)
+                dthres_rate = torch.sum((denom_ulb_w > denom_thres).float()) / denom_ulb_w.shape[0]
+                mask[denom_ulb_w > denom_thres] = 0
+            else:
+                denom_thres = torch.tensor(torch.nan)
+                dthres_rate = torch.tensor(torch.nan)
 
-            bins = np.linspace(0, 10, 50)
-            denom_lb_hist_c, denom_lb_hist_x = np.histogram(denom_lb.detach().cpu().numpy(), bins=bins)
-            denom_ulb_w_hist_c, denom_ulb_w_hist_x = np.histogram(denom_ulb_w.detach().cpu().numpy(), bins=bins)
-            denom_ulb_s_hist_c, denom_ulb_s_hist_x = np.histogram(denom_ulb_s.detach().cpu().numpy(), bins=bins)
+            if GENERATE_CSV:
+                bins = np.linspace(0, 10, 50)
+                denom_lb_hist_c, denom_lb_hist_x = np.histogram(denom_lb.detach().cpu().numpy(), bins=bins)
+                denom_ulb_w_hist_c, denom_ulb_w_hist_x = np.histogram(denom_ulb_w.detach().cpu().numpy(), bins=bins)
+                denom_ulb_s_hist_c, denom_ulb_s_hist_x = np.histogram(denom_ulb_s.detach().cpu().numpy(), bins=bins)
 
-            if 'denom_lb_hist_c' not in self.lcl_stats.keys():
-                self.lcl_stats['denom_lb_hist_c'] = []
-            self.lcl_stats['denom_lb_hist_c'].append(denom_lb_hist_c)
-            if 'denom_lb_hist_x' not in self.lcl_stats.keys():
-                self.lcl_stats['denom_lb_hist_x'] = []
-            self.lcl_stats['denom_lb_hist_x'].append(denom_lb_hist_x)
+                if 'denom_lb_hist_c' not in self.lcl_stats.keys():
+                    self.lcl_stats['denom_lb_hist_c'] = []
+                self.lcl_stats['denom_lb_hist_c'].append(denom_lb_hist_c)
+                if 'denom_lb_hist_x' not in self.lcl_stats.keys():
+                    self.lcl_stats['denom_lb_hist_x'] = []
+                self.lcl_stats['denom_lb_hist_x'].append(denom_lb_hist_x)
 
-            if 'denom_ulb_w_hist_c' not in self.lcl_stats.keys():
-                self.lcl_stats['denom_ulb_w_hist_c'] = []
-            self.lcl_stats['denom_ulb_w_hist_c'].append(denom_ulb_w_hist_c)
-            if 'denom_ulb_w_hist_x' not in self.lcl_stats.keys():
-                self.lcl_stats['denom_ulb_w_hist_x'] = []
-            self.lcl_stats['denom_ulb_w_hist_x'].append(denom_ulb_w_hist_x)
+                if 'denom_ulb_w_hist_c' not in self.lcl_stats.keys():
+                    self.lcl_stats['denom_ulb_w_hist_c'] = []
+                self.lcl_stats['denom_ulb_w_hist_c'].append(denom_ulb_w_hist_c)
+                if 'denom_ulb_w_hist_x' not in self.lcl_stats.keys():
+                    self.lcl_stats['denom_ulb_w_hist_x'] = []
+                self.lcl_stats['denom_ulb_w_hist_x'].append(denom_ulb_w_hist_x)
 
-            if 'denom_ulb_s_hist_c' not in self.lcl_stats.keys():
-                self.lcl_stats['denom_ulb_s_hist_c'] = []
-            self.lcl_stats['denom_ulb_s_hist_c'].append(denom_ulb_s_hist_c)
-            if 'denom_ulb_s_hist_x' not in self.lcl_stats.keys():
-                self.lcl_stats['denom_ulb_s_hist_x'] = []
-            self.lcl_stats['denom_ulb_s_hist_x'].append(denom_ulb_s_hist_x)
+                if 'denom_ulb_s_hist_c' not in self.lcl_stats.keys():
+                    self.lcl_stats['denom_ulb_s_hist_c'] = []
+                self.lcl_stats['denom_ulb_s_hist_c'].append(denom_ulb_s_hist_c)
+                if 'denom_ulb_s_hist_x' not in self.lcl_stats.keys():
+                    self.lcl_stats['denom_ulb_s_hist_x'] = []
+                self.lcl_stats['denom_ulb_s_hist_x'].append(denom_ulb_s_hist_x)
 
             # generate unlabeled targets using pseudo label hook
             pseudo_label = self.call_hook("gen_ulb_targets", "PseudoLabelingHook",
@@ -223,7 +223,56 @@ class AAGMM(AlgorithmBase):
                 emb_constraint_loss_ul_strong = None
                 emb_constraint_loss_ul_weak = None
 
-        lb_acc = torch.mean((torch.argmax(logits_x_lb, dim=-1) == y_lb).detach().float())
+        lb_acc_elementwise = (torch.argmax(logits_x_lb, dim=-1) == y_lb).float()
+
+        lb_acc = torch.mean(lb_acc_elementwise).detach()
+
+        if GENERATE_CSV:
+            lb_D = denom_lb.detach().cpu().numpy()
+            ulb_w_D = denom_ulb_w.detach().cpu().numpy()
+            ulb_s_D = denom_ulb_s.detach().cpu().numpy()
+
+            if 'denom_lb_vals' not in self.lcl_stats.keys():
+                self.lcl_stats['denom_lb_vals'] = []
+            self.lcl_stats['denom_lb_vals'].append(lb_D)
+            if 'pl_acc' not in self.lcl_stats.keys():
+                self.lcl_stats['pl_acc'] = []
+            self.lcl_stats['pl_acc'].append(lb_acc_elementwise.detach().cpu().numpy())
+
+            for c in range(self.num_classes):
+                idx = y_lb.detach().cpu().numpy() == c
+                cur_lb_D = lb_D[idx]
+                cur_lb_acc_elementwise = lb_acc_elementwise[idx]
+                k = 'denom_lb_c{}_vals'.format(c)
+                if k not in self.lcl_stats.keys():
+                    self.lcl_stats[k] = []
+                self.lcl_stats[k].append(cur_lb_D)
+                k = 'pl_acc_c{}_vals'.format(c)
+                if k not in self.lcl_stats.keys():
+                    self.lcl_stats[k] = []
+                self.lcl_stats[k].append(cur_lb_acc_elementwise)
+
+            k = 'denom_ulb_w_vals'
+            if k not in self.lcl_stats.keys():
+                self.lcl_stats[k] = []
+            self.lcl_stats[k].append(ulb_w_D)
+            k = 'denom_ulb_s_vals'
+            if k not in self.lcl_stats.keys():
+                self.lcl_stats[k] = []
+            self.lcl_stats[k].append(ulb_s_D)
+
+            for c in range(self.num_classes):
+                idx = pseudo_label.detach().cpu().numpy() == c
+                cur_ulb_w_D = ulb_w_D[idx]
+                cur_ulb_s_D = ulb_s_D[idx]
+                k = 'denom_ulb_w_c{}_vals'.format(c)
+                if k not in self.lcl_stats.keys():
+                    self.lcl_stats[k] = []
+                self.lcl_stats[k].append(cur_ulb_w_D)
+                k = 'denom_ulb_s_c{}_vals'.format(c)
+                if k not in self.lcl_stats.keys():
+                    self.lcl_stats[k] = []
+                self.lcl_stats[k].append(cur_ulb_s_D)
 
         out_dict = self.process_out_dict(loss=total_loss, feat=feat_dict)
         if self.emb_constraint is not None:

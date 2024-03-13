@@ -265,6 +265,10 @@ def main(args):
     ), f"# total training iter. {args.num_train_iter} is not divisible by # epochs {args.epoch}"  # noqa: E501
 
     save_path = os.path.join(args.save_dir, args.save_name)
+    if os.path.exists(os.path.join(save_path, 'success.txt')):
+        print("successful model already exists, exiting")
+        return
+
     if os.path.exists(save_path) and args.overwrite and args.resume is False:
         import shutil
 
@@ -307,14 +311,23 @@ def main(args):
     args.distributed = args.world_size > 1 or args.multiprocessing_distributed
     ngpus_per_node = torch.cuda.device_count()  # number of gpus of each node
 
-    if args.multiprocessing_distributed:
-        # now, args.world_size means num of total processes in all nodes
-        args.world_size = ngpus_per_node * args.world_size
+    try:
+        if args.multiprocessing_distributed:
+            # now, args.world_size means num of total processes in all nodes
+            args.world_size = ngpus_per_node * args.world_size
 
-        # args=(,) means the arguments of main_worker
-        mp.spawn(main_worker, nprocs=ngpus_per_node, args=(ngpus_per_node, args))
-    else:
-        main_worker(args.gpu, ngpus_per_node, args)
+            # args=(,) means the arguments of main_worker
+            mp.spawn(main_worker, nprocs=ngpus_per_node, args=(ngpus_per_node, args))
+        else:
+            main_worker(args.gpu, ngpus_per_node, args)
+        logging.info("Training succeeded")
+        with open(os.path.join(save_path, 'success.txt'), mode='w', encoding='utf-8') as f:
+            f.write('success')
+    except:
+        logging.info("Training failed")
+        with open(os.path.join(save_path, 'failure.txt'), mode='w', encoding='utf-8') as f:
+            f.write('failure')
+        raise
 
 
 def main_worker(gpu, ngpus_per_node, args):

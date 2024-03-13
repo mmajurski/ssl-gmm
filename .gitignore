@@ -5,6 +5,8 @@ data/
 # ignore all model directories
 model*/
 kmeans*/
+usb/tensorboard
+gifs*
 study.db
 study-bck.db
 *.db
