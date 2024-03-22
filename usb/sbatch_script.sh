@@ -2,15 +2,14 @@
 # **************************
 # MODIFY THESE OPTIONS
 
-#SBATCH --partition=isg
-#SBATCH --exclude=oscar,papa,quebec,sierra,echo,foxtrot,golf,hotel,p100,romeo
+#SBATCH --partition=isg,heimdall
+#SBATCH --exclude=p100,charlie,pn120395,quebec,hotel
 #SBATCH --nodes=1
-#SBATCH --oversubscribe
 #SBATCH --cpus-per-task=10
 #SBATCH --gres=gpu:1
 #SBATCH --job-name=cf10
 #SBATCH -o log-%N.%j.out
-#SBATCH --time=256:0:0
+#SBATCH --time=128:0:0
 
 # NIST-developed software is provided by NIST as a public service. You may use, copy and distribute copies of the software in any medium, provided that you keep intact this entire notice. You may improve, modify and create derivative works of the software or any portion of the software, and you may copy and distribute such modifications or works. Modified works should carry a notice stating that you changed the software and should note the date and nature of any such change. Please explicitly acknowledge the National Institute of Standards and Technology as the source of the software.
 
@@ -21,9 +20,15 @@
 
 source /mnt/isgnas/home/mmajursk/miniconda3/etc/profile.d/conda.sh
 conda activate usb
+#SBATCH --exclude=oscar,papa,sierra,echo,foxtrot,golf,hotel,p100,romeo
+
+#SBATCH --partition=isg
+#SBATCH --exclude=p100,romeo,quebec,oscar,papa,sierra
+
+#SBATCH --partition=heimdall
+#SBATCH --exclude=echo,foxtrot
+
+config_filepath=$1
 
 
-config_name=$1
-
-
-python train.py --c=./config/classic_cv/aagmm/${config_name}
+python train.py --c=${config_filepath}

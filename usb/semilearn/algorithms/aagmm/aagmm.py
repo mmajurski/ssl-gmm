@@ -150,8 +150,9 @@ class AAGMM(AlgorithmBase):
             # dthres_rate = torch.sum((denom_ulb_w <= denom_thres).float()) / denom_ulb_w.shape[0]
 
             if isinstance(self.args.outlier_thres, (int, float)):
-                denom_thres = torch.tensor(self.args.outlier_thres, device=denom_ulb_w.device, dtype=denom_ulb_w.dtype, requires_grad=False)
-                dthres_rate = torch.sum((denom_ulb_w > denom_thres).float()) / denom_ulb_w.shape[0]
+                # denom_thres = torch.tensor(self.args.outlier_thres, device=denom_ulb_w.device, dtype=denom_ulb_w.dtype, requires_grad=False)
+                denom_thres = torch.quantile(denom_lb, self.args.outlier_thres)
+                dthres_rate = torch.sum((denom_ulb_w >= denom_thres).float()) / denom_ulb_w.shape[0]
                 mask[denom_ulb_w > denom_thres] = 0
             else:
                 denom_thres = torch.tensor(torch.nan)
@@ -325,6 +326,7 @@ class AAGMM(AlgorithmBase):
         """
         self.model.eval()
         self.ema.apply_shadow()
+        print("running evaluate")
 
         for key in self.lcl_stats.keys():
             save_path = os.path.join(self.args.save_dir, self.args.save_name, '{}.csv'.format(key))
@@ -345,6 +347,10 @@ class AAGMM(AlgorithmBase):
         y_true = []
         y_pred = []
         y_logits = []
+
+        embedding_output_test = list()
+        labels_output_test = list()
+
         with torch.no_grad():
             for data in eval_loader:
                 x = data["x_lb"]
@@ -359,7 +365,13 @@ class AAGMM(AlgorithmBase):
                 num_batch = y.shape[0]
                 total_num += num_batch
 
-                logits = self.model(x)[out_key]
+                outputs = self.model(x)
+                logits = outputs[out_key]
+                embedding = outputs['feat']
+
+                embedding_output_test.append(embedding.detach().cpu().numpy())
+                labels_output_test.append(y.detach().cpu().numpy())
+
 
                 loss = torch.nn.functional.cross_entropy(logits, y, reduction="mean", ignore_index=-1)
                 y_true.extend(y.cpu().tolist())
@@ -386,6 +398,19 @@ class AAGMM(AlgorithmBase):
         disp = sklearn.metrics.ConfusionMatrixDisplay(confusion_matrix=cf_mat)
         disp.plot(include_values=True, cmap='Blues', ax=None, xticks_rotation='horizontal')
         plt.savefig(save_path)
+
+
+        # embedding_output_test = utils.multiconcat_numpy(embedding_output_test)
+        embedding_output_test = np.concatenate(embedding_output_test, axis=0)
+        save_path = os.path.join(self.args.save_dir, self.args.save_name, 'test_embedding.npy')
+        np.save(save_path, embedding_output_test)
+
+        # labels_output_test = utils.multiconcat_numpy(labels_output_test)
+        labels_output_test = np.concatenate(labels_output_test, axis=0)
+        save_path = os.path.join(self.args.save_dir, self.args.save_name, 'test_labels.npy')
+        np.save(save_path, labels_output_test)
+
+        torch.save(self.model.cpu(), os.path.join(self.args.save_dir, self.args.save_name, "model.pt"))
 
         self.print_fn("confusion matrix:\n" + np.array_str(cf_mat))
         self.ema.restore()

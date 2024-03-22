@@ -23,42 +23,44 @@ def compute_test_embedding(model_fp):
     a = os.path.join(model_fp, 'test_embedding.npy')
     b = os.path.join(model_fp, 'test_labels.npy')
     if os.path.exists(a) and os.path.exists(b):
-        print("Using pre-computed and saved test embedding")
         embedding_output_test = np.load(a)
         labels_output_test = np.load(b)
         return embedding_output_test, labels_output_test
 
-    print("Building test embedding")
-
-    # load model
-    model = torch.load(os.path.join(model_fp, 'model.pt'))
-    model.cuda()
-    model.eval()
-
-    # load config json file into dict
-    with open(os.path.join(model_fp, 'config.json'), 'r') as fh:
-        args_dict = json.load(fh)
-    args = Namespace(**args_dict)
-
-    # load data
-    test_dataset = cifar_datasets.Cifar10(transform=cifar_datasets.Cifar10.TRANSFORM_TEST, train=False)
-    test_dataset.load_data()
-
-    model_trainer = trainer_fixmatch.FixMatchTrainer(args)
-    # setup the metadata capture object
-    train_stats = metadata.TrainingStats()
-    criterion = torch.nn.CrossEntropyLoss()
-
-    emb_constraint = None  # no need to use an embedding constraint for this
-    epoch = 0
-    embedding_output_test, labels_output_test = model_trainer.eval_model(model, test_dataset, criterion, train_stats, "test", emb_constraint, epoch, args, return_embedding=True)
-
-    ofp = os.path.join(model_fp, 'test_embedding.npy')
-    np.save(ofp, embedding_output_test)
-    ofp = os.path.join(model_fp, 'test_labels.npy')
-    np.save(ofp, labels_output_test)
-
-    return embedding_output_test, labels_output_test
+    else:
+        raise RuntimeError("Please build embedding and label .npy files first")
+    #
+    # print("Building test embedding")
+    #
+    # # load model
+    # model = torch.load(os.path.join(model_fp, 'model_best.pt'))
+    # model.cuda()
+    # model.eval()
+    #
+    # # load config json file into dict
+    # with open(os.path.join(model_fp, 'config.json'), 'r') as fh:
+    #     args_dict = json.load(fh)
+    # args = Namespace(**args_dict)
+    #
+    # # load data
+    # test_dataset = cifar_datasets.Cifar10(transform=cifar_datasets.Cifar10.TRANSFORM_TEST, train=False)
+    # test_dataset.load_data()
+    #
+    # model_trainer = trainer_fixmatch.FixMatchTrainer(args)
+    # # setup the metadata capture object
+    # train_stats = metadata.TrainingStats()
+    # criterion = torch.nn.CrossEntropyLoss()
+    #
+    # emb_constraint = None  # no need to use an embedding constraint for this
+    # epoch = 0
+    # embedding_output_test, labels_output_test = model_trainer.eval_model(model, test_dataset, criterion, train_stats, "test", emb_constraint, epoch, args, return_embedding=True)
+    #
+    # ofp = os.path.join(model_fp, 'test_embedding.npy')
+    # np.save(ofp, embedding_output_test)
+    # ofp = os.path.join(model_fp, 'test_labels.npy')
+    # np.save(ofp, labels_output_test)
+    #
+    # return embedding_output_test, labels_output_test
 
 
 
@@ -70,12 +72,12 @@ def build_tsne_figure_cifar10(model_fp, epoch=None):
     else:
         ofp = os.path.join(parent_fp, "{}-tsne.jpg".format(model_fn, epoch))
 
-    with open(os.path.join(model_fp, 'stats.json'), 'r') as fh:
-        stats_dict = json.load(fh)
-    if stats_dict['test_accuracy'] < 0.80:
-        if os.path.exists(ofp):
-            os.remove(ofp)
-            return
+    # with open(os.path.join(model_fp, 'stats.json'), 'r') as fh:
+    #     stats_dict = json.load(fh)
+    # if stats_dict['test_accuracy'] < 0.80:
+    #     if os.path.exists(ofp):
+    #         os.remove(ofp)
+    #         return
 
     if os.path.exists(ofp):
         return
@@ -84,23 +86,13 @@ def build_tsne_figure_cifar10(model_fp, epoch=None):
     embedding_output_test, labels_output_test = compute_test_embedding(model_fp)
 
     # load model
-    model = torch.load(os.path.join(model_fp, 'model.pt'))
-    model.cuda()
-    model.eval()
-
-    # load config json file into dict
-    with open(os.path.join(model_fp, 'config.json'), 'r') as fh:
-        args_dict = json.load(fh)
-    args = Namespace(**args_dict)
-
-    sd = model.state_dict()
+    model = torch.load(os.path.join(model_fp, 'model_best.pth'))
+    model = model['model']
     centers = None
-    if hasattr(model, 'module'):
-        if hasattr(model.module.last_layer, 'centers'):
-            centers = sd['module.last_layer.centers']
-    else:
-        if hasattr(model.last_layer, 'centers'):
-            centers = sd['last_layer.centers']
+    try:
+        centers = model['module.last_layer.centers']
+    except:
+        pass
 
 
     matplotlib.rcParams.update({'font.size': 38})
@@ -152,19 +144,23 @@ def build_tsne_figure_cifar10(model_fp, epoch=None):
 
     if centers is not None:
         plt.scatter(Y_centers[:, 0], Y_centers[:, 1], s=400, c=labels_centers, marker="X", linewidths=2.5, edgecolors='black')
+    toks = model_fn.split('_')
     ll = "Linear"
-    if args.last_layer == 'kmeans':
+    if 'kmeans' in model_fn:
         ll = "KMeans"
-    elif args.last_layer == 'aa_gmm':
+    elif 'aagmm' in model_fn:
         ll = "AAGMM"
     emb_c = "None"
-    if args.embedding_constraint == "l2":
+    e = int(toks[0][-1])
+    if e == 0:
+        emb_c = "None"
+    elif e == 1:
         emb_c = "1st Order"
-    elif args.embedding_constraint == "mean_covar":
+    elif e == 2:
         emb_c = "2nd Order"
-    elif args.embedding_constraint == "gauss_moment3":
+    elif e == 3:
         emb_c = "3rd Order"
-    elif args.embedding_constraint == "gauss_moment4":
+    elif e == 4:
         emb_c = "4th Order"
     plt.title("tSNE: {} + {}".format(ll, emb_c))
 
@@ -178,7 +174,7 @@ def build_tsne_figure_cifar10(model_fp, epoch=None):
 
 if __name__ == '__main__':
     ifp = './models-tsne'
-    fns = [fn for fn in os.listdir(ifp) if fn.startswith('id-')]
+    fns = [fn for fn in os.listdir(ifp) if '_40_' in fn]
     fns = [fn for fn in fns if not fn.endswith('jpg')]
     fns.sort()
 

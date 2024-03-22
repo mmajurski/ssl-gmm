@@ -12,6 +12,8 @@ ifp = '/home/mmajurski/github/ssl-gmm/usb/saved_models/classic_cv'
 
 fldrs = [fn for fn in os.listdir(ifp) if os.path.isdir(os.path.join(ifp, fn))]
 fldrs = [fn for fn in fldrs if 'debug' not in fn]
+fldrs = [fn for fn in fldrs if 'freematch' not in fn]
+fldrs = [fn for fn in fldrs if 'flexmatch' not in fn]
 fldrs.sort()
 
 df_list = list()
@@ -33,6 +35,10 @@ for fldr in fldrs:
     run_num = int(toks[3])
     grad_clip = float(toks[4])
     embedding_dim = int(toks[5])
+    if toks[6] == 'none':
+        outlier_thres = 'none'
+    else:
+        outlier_thres = float(toks[6])
 
     if num_labeled_datapoints == 250:
         continue
@@ -47,6 +53,7 @@ for fldr in fldrs:
     train_util_ratio = df[df['tag'] == 'train/util_ratio']
     train_denom_thres = df[df['tag'] == 'train/denom_thres']
     train_denom_thres_rate = df[df['tag'] == 'train/dthres_rate']
+
 
     # from matplotlib import pyplot as plt
     # plt.plot(eval_f1['step'], eval_f1['value'])
@@ -69,6 +76,7 @@ for fldr in fldrs:
     a['embedding_dim'] = embedding_dim
     a['grad_clip'] = grad_clip
     a['eval_f1'] = eval_f1['value'].max()
+    a['outlier_thres'] = outlier_thres
 
     cd = pd.json_normalize(a)
     df_list.append(cd)
@@ -84,6 +92,7 @@ final_layers = results_df['final_layer'].unique()
 embedding_constraints = results_df['embedding_constraint'].unique()
 grad_clips = results_df['grad_clip'].unique()
 embedding_dims = results_df['embedding_dim'].unique()
+outlier_thresholds = results_df['outlier_thres'].unique()
 
 df_list = list()
 for dataset in datasets:
@@ -92,16 +101,18 @@ for dataset in datasets:
             for embedding_constraint in embedding_constraints:
                 for embedding_dim in embedding_dims:
                     for grad_clip in grad_clips:
-                        df = results_df[(results_df['dataset'] == dataset) & (results_df['num_labeled_datapoints'] == num_labeled_datapoint) & (results_df['final_layer'] == final_layer) & (results_df['embedding_constraint'] == embedding_constraint) & (results_df['grad_clip'] == grad_clip) & (results_df['embedding_dim'] == embedding_dim)]
-                        if len(df) > 0:
-                            # copy out the first row of the dataframe
-                            df2 = df.iloc[[0]]
-                            df2 = df2.drop(columns=['eval_f1', 'run_num'])
-                            df2['eval_f1_mean'] = df['eval_f1'].mean()
-                            df2['eval_f1_err_mean'] = 1.0 - df['eval_f1'].mean()
-                            df2['eval_f1_err_std'] = df['eval_f1'].std()
+                        for outlier_thres in outlier_thresholds:
+                            df = results_df[(results_df['dataset'] == dataset) & (results_df['num_labeled_datapoints'] == num_labeled_datapoint) & (results_df['final_layer'] == final_layer) & (results_df['embedding_constraint'] == embedding_constraint) & (results_df['grad_clip'] == grad_clip) & (results_df['embedding_dim'] == embedding_dim) & (results_df['outlier_thres'] == outlier_thres)]
+                            if len(df) > 0:
+                                # copy out the first row of the dataframe
+                                df2 = df.iloc[[0]]
+                                df2 = df2.drop(columns=['eval_f1', 'run_num'])
+                                df2['eval_f1_mean'] = 100.0 * df['eval_f1'].mean()
+                                df2['eval_f1_err_mean'] = 100.0 * (1.0 - df['eval_f1'].mean())
+                                df2['eval_f1_err_std'] = 100.0 * df['eval_f1'].std()
+                                df2['n'] = np.max(df['run_num']) + 1
 
-                            df_list.append(df2)
+                                df_list.append(df2)
 
 stats_df = pd.concat(df_list, axis=0)
 

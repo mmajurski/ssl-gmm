@@ -12,7 +12,7 @@ dist_url: tcp://127.0.0.1:10003
 ema_m: 0.999
 embedding_constraint: 2
 embedding_dim: 8
-outlier_thres: none
+outlier_thres: 0.9
 epoch: 1024
 eval_batch_size: 256
 gpu: None

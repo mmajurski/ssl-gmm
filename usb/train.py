@@ -265,6 +265,9 @@ def main(args):
     ), f"# total training iter. {args.num_train_iter} is not divisible by # epochs {args.epoch}"  # noqa: E501
 
     save_path = os.path.join(args.save_dir, args.save_name)
+    if os.path.exists(os.path.join(save_path)):
+        print("model output already exists, exiting")
+        return
     if os.path.exists(os.path.join(save_path, 'success.txt')):
         print("successful model already exists, exiting")
         return
@@ -373,6 +376,20 @@ def main_worker(gpu, ngpus_per_node, args):
 
     logger = get_logger(args.save_name, save_path, logger_level)
     logger.info(f"Use GPU: {args.gpu} for training")
+
+    try:
+        # attempt to get the slurm job id and log it
+        logging.info("Slurm JobId: {}".format(os.environ['SLURM_JOB_ID']))
+    except KeyError:
+        pass
+
+    try:
+        # attempt to get the hostname and log it
+        import socket
+        hn = socket.gethostname()
+        logging.info("Job running on host: {}".format(hn))
+    except RuntimeError:
+        pass
 
     _net_builder = get_net_builder(args.net, args.net_from_name)
     # optimizer, scheduler, datasets, dataloaders with be set in algorithms
