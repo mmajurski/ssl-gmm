@@ -1,7 +1,7 @@
 \documentclass[10pt,twocolumn,letterpaper]{article}
-\usepackage[review]{cvpr}
-%\usepackage[final]{cvpr}
-%\usepackage[pagenumbers]{cvpr} % To force page numbers, e.g. for an arXiv version
+% \usepackage[review]{cvpr}
+\usepackage[final]{cvpr}
+% \usepackage[pagenumbers]{cvpr} % To force page numbers, e.g. for an arXiv version
 
 
 \usepackage[utf8]{inputenc} % allow utf-8 input
@@ -20,7 +20,6 @@
 \usepackage{tabularx}
 \usepackage{multirow}
 \usepackage{makecell}
-
 
 %
 % --- inline annotations
@@ -99,8 +98,9 @@ University of Miami\\
 	We investigate the use of polynomial moments ranging from 1st through 4th order hyper-covariance matrices.
 	Furthermore, we use this embedding constraint to train an Axis-Aligned Gaussian Mixture Model (AAGMM) final layer, which learns not only the conditional, but also the joint distribution of the latent space.
 	We apply this method to the domain of semi-supervised image classification by extending FlexMatch with our technique.
-	We find our MoM constraint with the AAGMM layer is able to match the reported FlexMatch accuracy, while also modeling the joint distribution, thereby reducing outlier sensitivity.  We also present a preliminary outlier detection strategy based on Mahalanobis distance and discuss future improvements to this strategy.  Future work explores potential applications for the AAGMM layer and MoM embedding constraint, and how/why this MoM technique can overcome theoretical limitations of other existing methods including the approximate KL-divergence constraint of variational autoencoders.
-	Code is available at: \url{https://github.com/*******} % \url{https://github.com/mmajurski/ssl-gmm}
+	We find our MoM constraint with the AAGMM layer is able to match the reported FlexMatch accuracy, while also modeling the joint distribution, thereby reducing outlier sensitivity.  We also present a preliminary outlier detection strategy based on Mahalanobis distance and discuss future improvements to this strategy.  
+	%Future work explores potential applications for the AAGMM layer and MoM embedding constraint, and how/why this MoM technique can overcome theoretical limitations of other existing methods including the approximate KL-divergence constraint of variational autoencoders.
+	Code is available at: \url{https://github.com/mmajurski/ssl-gmm}
 \end{abstract}
 
 
@@ -116,54 +116,52 @@ University of Miami\\
 \begin{figure*}[ht]
 	\centering
 	\begin{subfigure}[t]{.24\textwidth}
-		\includegraphics[width=\textwidth]{figures/id-00000001-tsne.jpg}
+		%\includegraphics[width=\textwidth]{figures/id-00000001-tsne.jpg}
+		\includegraphics[width=\textwidth]{figures/id-00000132-tsne.jpg}
 		\subcaption{}
 	\end{subfigure}
 	\begin{subfigure}[t]{.24\textwidth}
-		\includegraphics[width=\textwidth]{figures/id-00000013-tsne.jpg}
+		%\includegraphics[width=\textwidth]{figures/id-00000013-tsne.jpg}
+		\includegraphics[width=\textwidth]{figures/id-00000020-tsne.jpg}
 		\subcaption{}
 	\end{subfigure}
 	\begin{subfigure}[t]{.24\textwidth}
 		\includegraphics[width=\textwidth]{figures/id-00000054-tsne.jpg}
+		%		\includegraphics[width=\textwidth]{figures/id-00000120-tsne.jpg}
 		\subcaption{}
 	\end{subfigure}
 	\begin{subfigure}[t]{.24\textwidth}
 		\includegraphics[width=\textwidth]{figures/id-00000021-tsne.jpg}
 		\subcaption{}
 	\end{subfigure}
-	%	\subfloat{\includegraphics[width=.25\textwidth]{figures/id-00000001-tsne.jpg}}
-	%	\subfloat{\includegraphics[width=.25\textwidth]{figures/id-00000013-tsne.jpg}}
-	%	\subfloat{\includegraphics[width=.25\textwidth]{figures/id-00000054-tsne.jpg}}
-	%	\subfloat{\includegraphics[width=.25\textwidth]{figures/id-00000021-tsne.jpg}}
-	\caption{t-SNE\cite{tsne} plot of the latent embedding space for various final layers with different MoM embedding constraints.} 
+	\caption{t-SNE\cite{tsne} plot of the latent embedding space for various final layers with different MoM embedding constraints. AAGMM results include the explicitly modeled cluster centered marked with "X"s. Depending on the run, AAGMM cluster centers can be degenerate (a), non-degenerate but still mis-aligned with the clusters (b), acceptably aligned (c), or well aligned with the underlying clusters (d).} 
 	\label{fig:cifar10tsne}
 \end{figure*}
 
 The majority of deep classifiers rely on a softmax final activation layer which predicts the conditional probability $p(Y|X)$.
 When that layer receives input $X$, the model predicts a soft pseudo-distribution of labels $Y$ which argmax can convert into a hard label.
-If $X$ is far from the decision boundary, then by definition, softmax assigns a prediction $Y$ with high confidence.
+If $X$ is distant from the decision boundary, then by definition, softmax assigns a prediction $Y$ with high confidence.
 This works well for inlier samples, well represented by the training distribution.
-However, when presented with an outlier $X$, it is likely $X$ will be far from the decision boundary (Figure \ref{fig:schema}, top).
+However, when presented with an outlier $X$, it is likely $X$ will not be near the decision boundary (Figure \ref{fig:schema}, top).
 Therefore, softmax perceptrons, by definition, over-confidently hallucinate when given unexpected inputs \cite{wei2022mitigating}. 
 Most deep classifiers use softmax without a safety net and as such over-confidently predict $Y$.
-Ideally, when input $X$ is far from the decision boundary and training exemplars, the model should not be confident about the output class label $Y$.
+Ideally, when input $X$ is distant from the decision boundary and training exemplars, the model should not be confident about the output class label $Y$.
 
 Replacing softmax with a generative method that models the joint probability $p(Y,X)$ can improve the capability of deep classifiers. 
 Models using a final layer capable of learning the joint probability $p(Y,X)$ can infer the conditional $p(Y|X)$.
 More importantly, such a layer can also infer the prior probability $p(X)$.
-Thus, if $X$ is an unexpected input, then such a layer can flag the input as a low-probability outlier, rather than confidently predicting a label.
+Thus, if $X$ is an unexpected input, then such a layer can flag the input as a low-probability sample (equivalently a high-probability outlier), rather than simply confidently predicting a label.
 
 Prior work has explored generative modeling for image classification \cite{li2019disentangled,kingma2013auto,kingma2019introduction}.
 How to best train and utilize generative modeling within a deep learning context remains an open question.
 % Open questions remain: how to best train and utilize generative modeling within a deep learning context.
-The naive approach of minimizing cross entropy between $Y$ and $Y\_pred$ will not work.
-Figure \ref{fig:cifar10tsne} (b) shows t-SNE plots for semi-supervised CIFAR-10 \cite{cifar10} image classification which illustrate why the naive approach will not work as intended. 
-The t-SNE \cite{tsne} Figure \ref{fig:cifar10tsne}(b) plot shows the latent space of a $93\%$ accurate CIFAR-10 classification model. 
+The naive approach of minimizing cross entropy between $Y$ and $\hat{Y}$ will not work.
+Figure \ref{fig:cifar10tsne} (a \& b) shows t-SNE plots of the model latent embedding space for $94\%$ accurate semi-supervised CIFAR-10 \cite{cifar10} image classification models, demonstrating why the naive approach will not work as intended. 
 However, the explicitly modeled cluster centers (shown as X's) do not align with the underlying data.
 While that model has acceptable predictive performance, it does not accurately learn and represent the underlying training data.
 To construct a robust model, one cannot simply fit a decision boundary.
 The model needs to learn the full joint distribution of the latent space. 
-Figure \ref{fig:cifar10tsne} (d) demonstrates that with our proposed AAGMM final layer with 4th order MoM embedding constraints, the exact same model can achieve comparable (if not better) accuracy, but with the added benefit of modeling the underlying data clusters in the latent space.
+Figure \ref{fig:cifar10tsne} (c \& d) demonstrates that with our proposed AAGMM final layer with either 2nd or 4th order MoM embedding constraints, the exact same model can achieve comparable (if not better) accuracy, but with the added benefit of modeling the underlying data clusters in the latent space.
 
 
 We apply this work to the domain of Semi-Supervised Learning (SSL), because over-confident label predictions can cause confounding issues with pseudo-labeling methods \cite{arazo2020pseudo}.
@@ -189,6 +187,7 @@ This work contributes:
 %This paper explores the impacts of replacing the final linear layer of a network with a generative model and embedding space constraints.
 %This combination demonstrates improvements in final model accuracy when using pseudo-labeling methods where very few annotations are available.
 We apply this methodology to the task of semi-supervised image-classification using CIFAR-10 \cite{cifar10} and STL-10 \cite{coates2011analysis} with 40 training labels. 
+Only 40 labels were used to provide a sufficiently difficult SSL problem, as SOTA results with higher numbers of labeled samples are approaching fully supervised performance \cite{zheng2023simmatchv2}.
 %) and CIFAR-100 (400 and 2500 label) benchmarks \cite{cifar10}. 
 %Additionally, we explore the impact high level prescriptive constraints on the embedding space have on the resulting trained model. 
 The embedding constraint penalties are applied to all unlabeled data and not just the valid pseudo-labels.  
@@ -212,7 +211,7 @@ A notable approach to pseudo-labeling is the Mean Teacher algorithm \cite{tarvai
 This refinement substantially enhances the convergence of the algorithm.
 
 Several papers have attempted to enhance the quality of pseudo-labels to either improve the final model accuracy, improve the rate of convergence, or avoid confirmation bias \cite{arazo2020pseudo}.
-Rizve et al. \cite{rizve2021defense} explores how uncertainty aware pseudo-label selection/filtering can be used to reduce the label noise.
+Rizve et al. \cite{rizve2021defense} explore how uncertainty aware pseudo-label selection/filtering can be used to reduce the label noise.
 Incorrect pseudo-labels can be viewed as a network calibration issue \cite{rizve2021defense} where better network logit calibration might improve results \cite{Xing2020DistanceBased}.
 Improvements to the pseudo-labeling process have been demonstrated by imposing curriculum \cite{zhang2021flexmatch} or by including a class-aware contrastive term \cite{yang2022class}.
 Leveraging the concept of explicit class cluster centers for conditioning semantic similarity improves final model accuracy \cite{zheng2022simmatch}.
@@ -231,12 +230,12 @@ Consistency Regularization is a branch of techniques that have been instrumental
 
 \subsection{Latent Embedding Constraints}
 
-A notable latent embedding constraint that is related, yet substantially different from our approach is the Evidence Lower Bound (ELBO).
+A notable latent embedding constraint that is related, yet substantially different from our approach is the Evidence Lower Bound (ELBO) \cite{kingma2013auto}.
 ELBO approximates a latent sample with a variational distribution and constrains the KL-divergence between the variational distribution and a target shape which is typically a multivariate standard normal distribution \cite{kingma2013auto}. 
 The main drawback of this approach is that the true KL-divergence is intractable to calculate.  
 As such, the posterior must take on a simplified form. 
 Most practical implementations use a diagonal posterior which can only penalize simple differences in shape such as mean and standard deviation.  
-Arbitrarily complex posteriors are nevertheless possible using the method of Normalizing flows, which provides an iterative framework based on change of variables although this method is quite involved \cite{rezende2015variational,kingma2016improved,caterini2021variational}.  
+Arbitrarily complex posteriors are nevertheless possible using the method of Normalizing flows \cite{rezende2015variational,kingma2016improved,caterini2021variational}, which provides an iterative framework based on change of variables although this method is quite involved.  
 Our MoM constraint is relatively simple but can also penalize complex differences in shape by constraining 2nd, 3rd, and 4th order hyper-covariance matrices, although we do so by comparing the moments directly.  
 This greatly simplifies implementation as we do not need to explicitly construct a posterior distribution.
 
@@ -465,7 +464,7 @@ In order to implement \textit{outlier removal}, in the context of pseudolabeling
 %
 %The second strategy is to define outlier removal based on the Mahalanobis distance, that a point 
 
-Mathematically, we consider an unlabeled sample $x$ to be an outlier if it is far from all cluster centers $\mu_1 \dots \mu_K$ in terms of Mahalanobis distance based on the cluster covariances $\Sigma_1 \dots \Sigma_K$.  Mahalanobis distance of a given point $x$ to cluster $k$ is defined as follows,
+Mathematically, we consider an unlabeled sample $x$ to be an outlier if it is distance from all cluster centers $\mu_1 \dots \mu_K$ in terms of Mahalanobis distance based on the cluster covariances $\Sigma_1 \dots \Sigma_K$.  Mahalanobis distance of a given point $x$ to cluster $k$ is defined as follows,
 
 \begin{equation}
 	d_{M,k}(x) = \sqrt{ \left(x - \mu_k\right)^T \Sigma_k^{-1} \left(x - \mu_k\right)  }
@@ -520,8 +519,8 @@ All data not in this labeled subset are used as unlabeled data (i.e., the labels
 		\hline
 		Embedding Constraint  &  & None & $1st$ Order & $2nd$ Order\\ 
 		\hline
-		Linear & 128  & $95.03$ \scriptsize{$\pm 0.06$}   &  &  \\
-		(i.e. FullyConnected) & 8  & $90.89$ \scriptsize{$\pm 3.24$}      &  & \\
+		Linear (unmodified FlexMatch) & 128  & $95.03$ \scriptsize{$\pm 0.06$}   &  &  \\
+		Linear (FlexMatch w/ Reduced Emb Dim) & 8  & $90.89$ \scriptsize{$\pm 3.24$}      &  & \\
 		\hline
 		AAGMM & 8  & $94.98$ \scriptsize{$\pm 0.07$}    & $94.64$ \scriptsize{$\pm 0.27$} & $93.58$ \scriptsize{$\pm 2.74$}  \\
 		\hline
@@ -532,7 +531,7 @@ All data not in this labeled subset are used as unlabeled data (i.e., the labels
 		\hline
 		\multicolumn{1}{c|}{Embedding Constraint} &  & None & $1st$ Order & $2nd$ Order  \\ 
 		\hline
-		Linear & 128  & $70.85$ \scriptsize{$\pm 4.16$}   &  &   \\
+		Linear (unmodified FlexMatch) & 128  & $70.85$ \scriptsize{$\pm 4.16$}   &  &   \\
 		\hline
 		AAGMM & 8  & $58.79$ \scriptsize{$\pm 11.00$}    & $71.11$ \scriptsize{$\pm 7.60$} & $70.40$ \scriptsize{$\pm 6.39$}  \\
 	\end{tabularx}
@@ -551,8 +550,8 @@ All data not in this labeled subset are used as unlabeled data (i.e., the labels
 \subsection{Hyper-Parameters}
 \label{hyperparams}
 
-All CIFAR-10 models were trained with the standard benchmark WideResNet28-2 architecture.
-All STL-10 models were trained with the standard benchmark WideResNet37-2 architecture.
+All CIFAR-10 models were trained with the standard benchmark WideResNet28-2 architecture \cite{zagoruyko2016wide}.
+All STL-10 models were trained with the standard benchmark WideResNet37-2 architecture \cite{zagoruyko2016wide}.
 This work leverages the published FlexMatch \cite{zhang2021flexmatch} code, hyper-parameters, and training configurations within the USB Framework \cite{wang2022usb}.
 % ; using SGD with Nesterov momentum,  $\lambda_u = 1$, $\beta = 0.9$, $\tau = 0.95$, $\mu = 7$, $B = 64$, and epoch size = $1024$ batches regardless of the number of images in the labeled dataset.
 % Model weights were updated as the moving average of the training weights with an exponential moving average (EMA) decay of $0.999$.
@@ -565,10 +564,10 @@ However, due to the higher training instability of the AAGMM layers compared to 
 Despite specific attention to computing the AAGMM and embedding constraints in a numerically stable manner, they are still less stable during backprop than a simple linear layer.  
 Gradient clipping was especially important when there were latent points that were multiple standard deviations away from the cluster centers.  
 In this case, the gradient of the Gaussian probability density function converges rapidly toward zero, which can affect the division step of equation \ref{eq_conditional}.  
-We have almost entirely overcome this issue in the code by using laws of exponents in order to normalize the denominator to be greater or equal to 1 prior to division, but in extreme cases of latent points far from cluster centers, the gradient clipping is still necessary to achieve stable gradient descent.
+We have almost entirely overcome this issue in the code by using laws of exponents in order to normalize the denominator to be greater or equal to 1 prior to division, but in extreme cases of latent points distant from cluster centers, the gradient clipping is still necessary to achieve stable gradient descent.
 
-We believe that the rapid decrease in slope of the Gaussian distribution PDF for points that are multiple standard deviations away from the mean.  
-As the conditional distribution involves calculating a division step, it is very likely that such a division may become less stable for points that are far from the mean.  
+We believe that the rapid decrease in slope of the Gaussian distribution pdf for points that are multiple standard deviations away from the mean.  
+As the conditional distribution involves calculating a division step, it is very likely that such a division may become less stable for points that are not near the mean.  
 % We have included a correction term to ensure that  % TODO finish this sentence?
 
 This work includes an exploration of how various latent embedding dimensionalities affect the generative linear layer replacement.
@@ -608,10 +607,14 @@ While current SOTA on CIFAR-10 at 250 labels is close to fully supervised accura
 % Though recent results have demonstrated accuracies that nearly match fully-supervised performance on CIFAR-10 (similar to 250 label CIFAR-10).
 Table \ref{table1} summarizes the relative performance of our various configurations.
 As we simply extended FlexMatch, our hyper-parameter selection is likely sub-optimal, and further experimentation might yield improvements.
-The 'Linear (i.e. FullyConnected)' rows in table \ref{table1} represent the baseline fully connected linear last layer with and without additional embedding dimensionality projection.
+The 'Linear (unmodified FlexMatch)' row in Table \ref{table1} represents the baseline fully connected linear last layer exactly as FlexMatch published. 
+The 'Linear (FlexMatch w/ Reduced Emb Dim)' row in Table \ref{table1} represents FlexMatch performance where its final Linear layer produced a latent embedding dimensionality of 8 (instead of the stock model latent dimensionality of 128).
+Its worth noting that the significantly smaller embedding dimensionality reduced average model accuracy by $5\%$.
+That accuracy is restored by replacing the Linear layer with an AAGMM layer; despite keeping the reduced latent embedding dimensionality.
+That trend is mirrored with STL-10, where the $70.85\%$ FlexMatch accuracy drops to $58.79\%$ using a latent embedding dimensionality of 8 (and the unconstrained AAGMM layer), which the 1st order embedding constrained version of AAGMM restores to $71.11\%$ accuracy.
 
 % For CIFAR-10 with 250 labels, all last layers perform reasonably close to semi-supervised SOTA, which itself is almost identical to the fully supervised CIFAR-10 test accuracy of $95.38\%$ \cite{wang2022freematch}.  
-For CIFAR-10 at 40 labels, the highest mean-accuracy configuration that we have achieved was $94.98\%$ which was obtained using the AAGMM technique with no embedding constraints and an 8 dimensional embedding.
+%For CIFAR-10 at 40 labels, the highest mean-accuracy configuration that we have achieved was $94.98\%$ which was obtained using the AAGMM technique with no embedding constraints and an 8 dimensional embedding.
 
 We see that the AAGMM final layer consistently out performs the KMeans final layer for the CIFAR-10 Test Accuracy with 40 labels.  
 We furthermore see that the KMeans layer performs significantly better with the 1st and 2nd order MoM constraint, as compared with no constraints.  
@@ -623,43 +626,83 @@ Additionally, both 1st and 2nd order MoM constraints significantly improved the 
 % Table \ref{tablemaxcf10} demonstrates that, in the best case, the AAGMM can get within $1\%$ of SOTA \cite{zheng2023simmatchv2} performance.  We observe moreover, that the highest performance configuration with 40 labels was achieved by AAGMM with 128 dimensional embedding with no embedding constraints.  The second highest performance configuration was achieved by KMeans with 8 dimensional embedding with no embedding constraints.  It is notable that with the AAGMM, higher maximum performance was achieved in the 128 dimensional space without embedding constraints, whereas the KMeans requires the MoM constraints to achieve high accuracy in 128 dimensional space.  We believe this is because KMeans assumes spherical clusters, which may be unlikely to occur in 128-dimensional space without additional constraints to the shape of the distribution.  The AAGMM however is able to fit the cluster centers as well as diagonal covariances in order to model the latent space more accurately, as well as fit a more complex decision boundary than KMeans.
 
 The modeled cluster centers vary in quality between individual model runs of the AAGMM layer due to the stochasticity of the training process.
-Figure \ref{fig:cifar10tsneaagmmnone} (a \& b) showcases degenerate cluster centers.
-The Figure \ref{fig:cifar10tsneaagmmnone} (c) AAGMM model learned cluster centers that are an adequate approximation of the underlying data.
-However, the embedding constraints encourage cluster centers which are better aligned with the underlying data, Figure \ref{fig:cifar10tsneaagmmnone} (d).
+% can use fig cifar10tsne to save space over including cifar10tsneaagmmnone
+Figure \ref{fig:cifar10tsne} (a \& b) showcases degenerate cluster centers.
+The Figure \ref{fig:cifar10tsne} (c \& d) AAGMM model learned cluster centers that are an adequate approximation of the underlying data, where the embedding constraints encourage cluster centers which are better aligned with the underlying data.
 It is worth noting that we did not observe the KMeans layer learning non-degenerate cluster centers without an embedding constraint.
 In contrast, the AAGMM layer can, under some circumstances, learn viable cluster centers.
+To quantify the modeled cluster compactness, we measure the average L2 distance from each test data point to its assigned cluster as shown in Table \ref{compactness}.
 
-\begin{figure}[h]
-	\centering
-	%	\subfloat{\includegraphics[width=.5\columnwidth]{figures/id-00000132-tsne.jpg}}
-	%	\subfloat{\includegraphics[width=.5\columnwidth]{figures/id-00000020-tsne.jpg}}
-	%	\\
-	%	\subfloat{\includegraphics[width=.5\columnwidth]{figures/id-00000120-tsne.jpg}}
-	%	\subfloat{\includegraphics[width=.5\columnwidth]{figures/id-00000054-tsne.jpg}}
-	\begin{subfigure}[t]{.49\columnwidth}
-		\includegraphics[width=\textwidth]{figures/id-00000132-tsne.jpg}
-		\subcaption{}
-	\end{subfigure}
-	\begin{subfigure}[t]{.49\columnwidth}
-		\includegraphics[width=\textwidth]{figures/id-00000020-tsne.jpg}
-		\subcaption{}
-	\end{subfigure}
-	\begin{subfigure}[t]{.49\columnwidth}
-		\includegraphics[width=\textwidth]{figures/id-00000120-tsne.jpg}
-		\subcaption{}
-	\end{subfigure}
-	\begin{subfigure}[t]{.49\columnwidth}
-		\includegraphics[width=\textwidth]{figures/id-00000054-tsne.jpg}
-		\subcaption{}
-	\end{subfigure}
-	
-	%	\includegraphics[width=0.9\linewidth]{example-image-a}
-	\caption{t-SNE plot of fully trained and reasonably accurate AAGMM model's latent embedding space (with the learned cluster centers marked with X's). Depending on the run, the AAGMM cluster centers will be degenerate (top left), non-degenerate but still mis-aligned with the clusters (top right), acceptably aligned (bottom left), or well aligned with the underlying clusters when a 2nd order constraint is employed (bottom right).} 
-	\label{fig:cifar10tsneaagmmnone}
-\end{figure}
+\begin{table}[h!]
+	\begin{tabular}{c|c|c|c|c}
+		
+		\multicolumn{5}{c}{Latent Embedding Space Cluster Compactness} \\
+		\hline\hline
+		Dataset & Last Layer & None & 1st MoM & 2nd MoM \\
+		\hline
+		CIFAR-10 & AAGMM & $1.03$ & $0.58$ & $0.53$ \\
+		CIFAR-10 & KMeans & $18.41$ & $0.96$ & $1.06$\\
+		\hline
+		STL-10 & AAGMM & $2.32$ & $0.79$ & $0.76$ \\
+	\end{tabular}
+	\caption{Average L2 distance from each test data point to its assigned cluster center.}
+	\label{compactness}
+\end{table}
+
+%\begin{table}[h!]
+%	\begin{tabular}{c|c|c|c|c}
+	%		
+	%		\multicolumn{5}{c}{Latent Embedding Space Cluster Compactness} \\
+	%		\hline\hline
+	%		 \multicolumn{4}{c}{CIFAR-10} \\
+	%		\hline
+	%		& None & 1st MoM & 2nd MoM \\
+	%		\hline
+	%		AAGMM & $1.03$ & $0.58$ & $0.53$ \\
+	%		KMeans & $18.41$ & $0.96$ & $1.06$\\
+	%		\hline
+	%		\multicolumn{4}{c}{STL-10} \\
+	%		\hline
+	%		& None & 1st MoM & 2nd MoM \\
+	%		\hline
+	%		AAGMM & $2.32$ & $0.79$ & $0.76$ \\
+	%		\hline
+	%	\end{tabular}
+%	\caption{Average L2 distance from each test data point to its assigned cluster center.}
+%	\label{compactness}
+%\end{table}
+
+%\begin{figure}[h]
+%	\centering
+%	%	\subfloat{\includegraphics[width=.5\columnwidth]{figures/id-00000132-tsne.jpg}}
+%	%	\subfloat{\includegraphics[width=.5\columnwidth]{figures/id-00000020-tsne.jpg}}
+%	%	\\
+%	%	\subfloat{\includegraphics[width=.5\columnwidth]{figures/id-00000120-tsne.jpg}}
+%	%	\subfloat{\includegraphics[width=.5\columnwidth]{figures/id-00000054-tsne.jpg}}
+%	\begin{subfigure}[t]{.49\columnwidth}
+	%		\includegraphics[width=\textwidth]{figures/id-00000132-tsne.jpg}
+	%		\subcaption{}
+	%	\end{subfigure}
+%	\begin{subfigure}[t]{.49\columnwidth}
+	%		\includegraphics[width=\textwidth]{figures/id-00000020-tsne.jpg}
+	%		\subcaption{}
+	%	\end{subfigure}
+%	\begin{subfigure}[t]{.49\columnwidth}
+	%		\includegraphics[width=\textwidth]{figures/id-00000120-tsne.jpg}
+	%		\subcaption{}
+	%	\end{subfigure}
+%	\begin{subfigure}[t]{.49\columnwidth}
+	%		\includegraphics[width=\textwidth]{figures/id-00000054-tsne.jpg}
+	%		\subcaption{}
+	%	\end{subfigure}
+%	
+%	%	\includegraphics[width=0.9\linewidth]{example-image-a}
+%	\caption{t-SNE plot of fully trained and reasonably accurate AAGMM model's latent embedding space (with the learned cluster centers marked with X's). Depending on the run, the AAGMM cluster centers will be degenerate (top left), non-degenerate but still mis-aligned with the clusters (top right), acceptably aligned (bottom left), or well aligned with the underlying clusters when a 2nd order constraint is employed (bottom right).} 
+%	\label{fig:cifar10tsneaagmmnone}
+%\end{figure}
 
 
-Table \ref{sslcifar10} puts these results in context with the current SSL SOTA for CIFAR-10 and STL-10 at 40 labels and demonstrates that this methodology is almost competitive with for CIFAR-10, but still requires improvement for STL-10. 
+To place our results in context with the current SSL SOTA for CIFAR-10 and STL-10 at 40 labels Table \ref{sslcifar10} compares against the current best methods, demonstrating that this methodology is nearly competitive with for CIFAR-10, but still requires improvement and tuning for STL-10. 
 
 \begin{table}[htbp]
 	\begin{tabular}{c|cc}
@@ -686,7 +729,7 @@ Table \ref{sslcifar10} puts these results in context with the current SSL SOTA f
 
 \section{Discussion}
 
-Although our preliminary results with the proposed AAGMM and MoM achieve high accuracy relative to SOTA, this was achieved without Mahalanobis outlier detection as documented in table \ref{outlierRemoval}. 
+Although our preliminary results with the proposed AAGMM and MoM achieve high accuracy relative to SOTA, this was achieved without Mahalanobis outlier detection as documented in Table \ref{outlierRemoval}. 
 When the outlier detection was enabled, we believe the reduced accuracy is due to: 1. the 90th percentile distance threshold being too aggressive and filtering too much signal relative to noise, and 2. the need for an adaptive outlier detection threshold. 
 In early epochs, an aggressive outlier detection threshold is viable because the model will not adequately fit many of the unlabeled samples, but as the model converges the fit improves reducing the need for outlier removal.  As such, we believe that the aggressive outlier filtering is removing too many inliers, particularly in later epochs. 
 % We are presently working to develop an adaptive thresholding strategy to resolve this issue, along with further evaluation of the outlier detection step.
@@ -738,7 +781,24 @@ In early epochs, an aggressive outlier detection threshold is viable because the
 	\label{outlierRemoval}
 \end{table}
 
-The proposed MoM embedding constraint has at least one significant downside, by requiring exponentially increasing amounts of GPU memory for each successive moment penalty included.
+The proposed MoM embedding constraint has at least one significant downside, by requiring exponentially increasing amounts of GPU memory for each successive moment penalty included as shown in Table \ref{gpuRam}.
+
+\begin{table}[h!]
+	\begin{tabular}{c|c|c|c|c|c}
+		
+		\multicolumn{6}{c}{AAGMM Training GPU Memory Requirements (in GiB)} \\
+		\hline\hline
+		Emb Dim & None & 1st & 2nd & 3rd & 4th \\
+		\hline
+		$8$ & $7.72$ & $7.71$ & $7.70$ & $7.76$ & $8.76$ \\
+		%16 & 7.71 & 7.70 & 7.72 & 8.38 & \>20 \\
+		$32$ & $7.71$ & $7.71$ & $7.79$ & $13.15$ & $>20.47$ \\
+		
+	\end{tabular}
+	\caption{GPU RAM utilization in GiB on Nvidia RTX A4500 with 20.47GiB of VRAM evaluated on CIFAR10 using WRN28-2 with a batch size of 64. Each row shows the results for a given embedding dimensionality, and each row a MoM embedding constraint order, where "None" indicates a stock linear layer.}
+	\label{gpuRam}
+\end{table}
+
 This limits the current practicality of these MoM constraints. 
 Additional optimization and/or avoiding the explicit creation of both the $n^{th}$ order moment and its target value on GPUs would likely improve the usability.
 
@@ -771,9 +831,9 @@ Semi-supervised learning is highly sensitive to both which samples are selected 
 
 
 
-Future work in this area will explore alternate outlier removal strategies, including thresholding the unlabeled samples based on their latent sample probability $p(x)$ as opposed to latent Mahalanobis distance.  
+Future work in this area will explore alternate outlier removal strategies, including thresholding the unlabeled samples based on their latent sample probability $p(X)$ as opposed to latent Mahalanobis distance.  
 The Mahalanobis distance is part of the exponential term in the calculation of the multivariate Gaussian PDF. 
-As such, we expect that a removing outliers based on low $p(X)$ is likely to perform perform comparably to removing samples based on far Mahalanobis distance, in the special case that all clusters share a similar determinant $det\left(\Sigma_k \right)$.  
+As such, we expect that a removing outliers based on low $p(X)$ is likely to perform comparably to removing samples based on far Mahalanobis distance, in the special case that all clusters share a similar determinant $det\left(\Sigma_k \right)$.  
 % In our inspection of t-SNE plots (Figure \ref{fig:cifar10tsne}), it appears that all clusters are of similar latent size suggesting that the determinents are likely comparable.  
 % As such we expect that a low-probality outlier detection strategy may perform comparably to a far Mahalnobis outlier detection strategy, but this remains to be evaluated as Future work.
 Additionally, we plan to explore how to best take advantage of the better behaved latent embedding space to improve data efficiency for model training. 
@@ -781,6 +841,9 @@ Additionally, we plan to explore how to best take advantage of the better behave
 We demonstrate a novel fully differentiable Axis-Aligned Gaussian Mixture Model with Method of Moments based latent embedding space constraints can be applied to semi-supervised learning.  
 The combination of these techniques enables outlier detection strategies that would otherwise not be possible with a traditional softmax discriminator approach.
 This preliminary work constructs these novel layers with the associated constraints and demonstrates reasonable performance on challenging benchmark semi-supervised learning tasks, while opening the door for future outlier detection strategies that can make semi-supervised learning more robust to large and diverse unlabeled sample distributions.
+
+\textbf{Acknowledgements.} We would like to thank the Frost Institute for Data Science and Computing for their support.
+
 
 
 
