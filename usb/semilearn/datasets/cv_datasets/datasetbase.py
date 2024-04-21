@@ -84,6 +84,7 @@ class BasicDataset(Dataset):
             if isinstance(img, np.ndarray):
                 img = Image.fromarray(img)
             img_w = self.transform(img)
+
             if not self.is_ulb:
                 if self.alg == 'defixmatch' and self.strong_transform is not None:
                     # NOTE Strong augmentation on the labelled for DeFixMatch
@@ -106,7 +107,9 @@ class BasicDataset(Dataset):
                     img_s2 = self.strong_transform(img)
                     return {'idx_ulb': idx, 'x_ulb_w': img_w, 'x_ulb_s_0': img_s1, 'x_ulb_s_1':img_s2, 'x_ulb_s_0_rot':img_s1_rot, 'rot_v':rotate_v_list.index(rotate_v1)}
                 elif self.alg == 'comatch':
-                    return {'idx_ulb': idx, 'x_ulb_w': img_w, 'x_ulb_s_0': self.strong_transform(img), 'x_ulb_s_1':self.strong_transform(img)} 
+                    return {'idx_ulb': idx, 'x_ulb_w': img_w, 'x_ulb_s_0': self.strong_transform(img), 'x_ulb_s_1':self.strong_transform(img)}
+                elif self.alg == 'aagmm':
+                    return {'idx_ulb': idx, 'x_ulb_w': img_w, 'y_ulb_w': target, 'x_ulb_s': self.strong_transform(img)}
                 else:
                     return {'idx_ulb': idx, 'x_ulb_w': img_w, 'x_ulb_s': self.strong_transform(img)}
 

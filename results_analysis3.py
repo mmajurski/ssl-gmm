@@ -7,6 +7,8 @@ import os
 import tbparse
 
 
+# TODO capture the model eval_f1 at 15k..5k..40k steps to understand init convergence
+
 # folder to read files from
 ifp = '/home/mmajurski/github/ssl-gmm/usb/saved_models/classic_cv'
 
@@ -33,12 +35,13 @@ for fldr in fldrs:
     dataset = toks[1]
     num_labeled_datapoints = int(toks[2])
     run_num = int(toks[3])
-    grad_clip = float(toks[4])
-    embedding_dim = int(toks[5])
-    if toks[6] == 'none':
-        outlier_thres = 'none'
+    grad_clip = 1.0
+    embedding_dim = 8
+    outlier_detection_method = str(toks[4])
+    if len(toks) > 5:
+        outlier_filter_method = str(toks[5])
     else:
-        outlier_thres = float(toks[6])
+        outlier_filter_method = 'none'
 
     if num_labeled_datapoints == 250:
         continue
@@ -76,7 +79,8 @@ for fldr in fldrs:
     a['embedding_dim'] = embedding_dim
     a['grad_clip'] = grad_clip
     a['eval_f1'] = eval_f1['value'].max()
-    a['outlier_thres'] = outlier_thres
+    a['outlier_detection_method'] = outlier_detection_method
+    a['outlier_filter_method'] = outlier_filter_method
 
     cd = pd.json_normalize(a)
     df_list.append(cd)
@@ -92,7 +96,8 @@ final_layers = results_df['final_layer'].unique()
 embedding_constraints = results_df['embedding_constraint'].unique()
 grad_clips = results_df['grad_clip'].unique()
 embedding_dims = results_df['embedding_dim'].unique()
-outlier_thresholds = results_df['outlier_thres'].unique()
+outlier_detection_methods = results_df['outlier_detection_method'].unique()
+outlier_filter_methods = results_df['outlier_filter_method'].unique()
 
 df_list = list()
 for dataset in datasets:
@@ -101,18 +106,19 @@ for dataset in datasets:
             for embedding_constraint in embedding_constraints:
                 for embedding_dim in embedding_dims:
                     for grad_clip in grad_clips:
-                        for outlier_thres in outlier_thresholds:
-                            df = results_df[(results_df['dataset'] == dataset) & (results_df['num_labeled_datapoints'] == num_labeled_datapoint) & (results_df['final_layer'] == final_layer) & (results_df['embedding_constraint'] == embedding_constraint) & (results_df['grad_clip'] == grad_clip) & (results_df['embedding_dim'] == embedding_dim) & (results_df['outlier_thres'] == outlier_thres)]
-                            if len(df) > 0:
-                                # copy out the first row of the dataframe
-                                df2 = df.iloc[[0]]
-                                df2 = df2.drop(columns=['eval_f1', 'run_num'])
-                                df2['eval_f1_mean'] = 100.0 * df['eval_f1'].mean()
-                                df2['eval_f1_err_mean'] = 100.0 * (1.0 - df['eval_f1'].mean())
-                                df2['eval_f1_err_std'] = 100.0 * df['eval_f1'].std()
-                                df2['n'] = np.max(df['run_num']) + 1
+                        for outlier_detection in outlier_detection_methods:
+                            for outlier_filter in outlier_filter_methods:
+                                df = results_df[(results_df['dataset'] == dataset) & (results_df['num_labeled_datapoints'] == num_labeled_datapoint) & (results_df['final_layer'] == final_layer) & (results_df['embedding_constraint'] == embedding_constraint) & (results_df['grad_clip'] == grad_clip) & (results_df['embedding_dim'] == embedding_dim) & (results_df['outlier_detection_method'] == outlier_detection) & (results_df['outlier_filter_method'] == outlier_filter)]
+                                if len(df) > 0:
+                                    # copy out the first row of the dataframe
+                                    df2 = df.iloc[[0]]
+                                    df2 = df2.drop(columns=['eval_f1', 'run_num'])
+                                    df2['eval_f1_mean'] = 100.0 * df['eval_f1'].mean()
+                                    df2['eval_f1_err_mean'] = 100.0 * (1.0 - df['eval_f1'].mean())
+                                    df2['eval_f1_err_std'] = 100.0 * df['eval_f1'].std()
+                                    df2['n'] = np.max(df['run_num']) + 1
 
-                                df_list.append(df2)
+                                    df_list.append(df2)
 
 stats_df = pd.concat(df_list, axis=0)
 

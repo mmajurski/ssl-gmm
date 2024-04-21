@@ -1,7 +1,7 @@
 T: 0.5
 algorithm: aagmm
 amp: false
-batch_size: 64
+batch_size: 8 #64
 clip: 0.0
 clip_grad: 1.0
 crop_ratio: 0.875
@@ -13,7 +13,7 @@ ema_m: 0.999
 embedding_constraint: 2
 embedding_dim: 8
 outlier_thres: 0.9
-epoch: 1024
+epoch: 8 #1024
 eval_batch_size: 256
 gpu: None
 hard_label: true
@@ -29,8 +29,8 @@ num_classes: 10
 num_eval_iter: 5120
 num_labels: 40
 num_log_iter: 256
-num_train_iter: 1048576
-num_workers: 8
+num_train_iter: 256 #1048576
+num_workers: 0
 optim: SGD
 overwrite: true
 p_cutoff: 0.95

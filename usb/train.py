@@ -128,6 +128,7 @@ def get_config():
         help="use mixed precision training or not",
     )
     parser.add_argument("--clip_grad", type=float, default=0)
+    parser.add_argument("--neg_pl_threshold", type=float, default=0)
 
     ## imbalance algorithm setting
     parser.add_argument(
@@ -264,13 +265,47 @@ def main(args):
         args.num_train_iter % args.epoch == 0
     ), f"# total training iter. {args.num_train_iter} is not divisible by # epochs {args.epoch}"  # noqa: E501
 
-    save_path = os.path.join(args.save_dir, args.save_name)
-    if os.path.exists(os.path.join(save_path)):
-        print("model output already exists, exiting")
-        return
-    if os.path.exists(os.path.join(save_path, 'success.txt')):
-        print("successful model already exists, exiting")
-        return
+    # idx = 0
+    # args.save_name = "id-{:04d}".format(idx)
+    # save_path = os.path.join(args.save_dir, args.save_name)
+    # while os.path.exists(save_path):
+    #     idx += 1
+    #     args.save_name = "id-{:04d}".format(idx)
+    #     save_path = os.path.join(args.save_dir, args.save_name)
+
+    # aagmm2_cifar10_40_1_1.0_8_0.9
+    SEED_LIST = [3474173998, 273230791, 3586106167, 1325645050, 2564231920]
+
+    if 'debug' in args.save_name:
+        save_path = os.path.join(args.save_dir, args.save_name)
+        # always overwrite debug runs
+        args.overwrite = True
+        args.resume = False
+    else:
+        seed_idx = np.argwhere(args.seed == np.asarray(SEED_LIST))[0][0]
+        if 'outlier_thres' not in args:
+            args.outlier_thres = "none"
+        if 'outlier_method' not in args:
+            args.outlier_method = "none"
+        # if is number
+        if isinstance(args.outlier_thres, (int, float)):
+            oth = int(args.outlier_thres * 100)
+            oth = "{}p".format(oth)
+        else:
+            oth = str(args.outlier_thres).lower()
+        if oth == 'none':
+            args.outlier_method = 'none'
+        if args.outlier_method == 'none':
+            args.save_name = "{}{}_{}_{}_{}_{}".format(args.algorithm, args.embedding_constraint, args.dataset, args.num_labels, seed_idx, args.outlier_method)
+        else:
+            args.save_name = "{}{}_{}_{}_{}_{}_{}".format(args.algorithm, args.embedding_constraint, args.dataset, args.num_labels, seed_idx, args.outlier_method, oth)
+
+        save_path = os.path.join(args.save_dir, args.save_name)
+
+        if os.path.exists(os.path.join(save_path)):
+            raise RuntimeError("model output already exists, exiting")
+        if os.path.exists(os.path.join(save_path, 'success.txt')):
+            raise RuntimeError("successful model already exists, exiting")
 
     if os.path.exists(save_path) and args.overwrite and args.resume is False:
         import shutil
@@ -391,6 +426,11 @@ def main_worker(gpu, ngpus_per_node, args):
     except RuntimeError:
         pass
 
+    # write the args to disk as a config
+    import json
+    with open(os.path.join(save_path, 'config.json'), 'w') as fh:
+        json.dump(vars(args), fh, ensure_ascii=True, indent=2)
+
     _net_builder = get_net_builder(args.net, args.net_from_name)
     # optimizer, scheduler, datasets, dataloaders with be set in algorithms
     if args.imb_algorithm is not None:
@@ -403,6 +443,12 @@ def main_worker(gpu, ngpus_per_node, args):
     model.model = send_model_cuda(args, model.model)
     model.ema_model = send_model_cuda(args, model.ema_model, clip_batch=False)
     logger.info(f"Arguments: {model.args}")
+
+    logger.info("Compiling model")
+    torch.set_float32_matmul_precision('high')
+    model.model = torch.compile(model.model)
+    import copy
+    model.ema_model = copy.deepcopy(model.model)
 
     # If args.resume, load checkpoints from args.load_path
     if args.resume and os.path.exists(args.load_path):

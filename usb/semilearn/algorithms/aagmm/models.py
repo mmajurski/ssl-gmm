@@ -5,11 +5,12 @@ import torch
 
 
 class aagmm_layer(torch.nn.Module):
-    def __init__(self, embedding_dim: int, num_classes: int):
+    def __init__(self, embedding_dim: int, num_classes: int, outlier_method:str = "denom"):
         super().__init__()
 
         self.dim = embedding_dim
         self.num_classes = num_classes
+        self.outlier_method = outlier_method
         self.centers = torch.nn.Parameter(torch.rand(size=(self.num_classes, self.dim), requires_grad=True))
         # this is roughly equivalent to init to identity (i.e. kmeans)
         a = torch.rand(size=(self.num_classes, self.dim), requires_grad=True)
@@ -47,7 +48,7 @@ class aagmm_layer(torch.nn.Module):
         det_scale_factor = -0.5 * log_det
         det_scale_factor_safe = det_scale_factor - torch.max(det_scale_factor)
         det_scale_safe = torch.exp(det_scale_factor_safe)
-        # det_scale_unsafe = torch.exp(det_scale_factor)
+        det_scale_unsafe = torch.exp(det_scale_factor)
 
         # ---
         # Calculate distance to cluster centers
@@ -91,7 +92,7 @@ class aagmm_layer(torch.nn.Module):
 
         # Safe version
         det_scale_rep_safe = det_scale_safe.unsqueeze(0).repeat(batch, 1)
-        # det_scale_rep_unsafe = det_scale_unsafe.unsqueeze(0).repeat(batch, 1)
+        det_scale_rep_unsafe = det_scale_unsafe.unsqueeze(0).repeat(batch, 1)
 
 
         # Obtain the "safe" (numerically stable) versions of the
@@ -101,8 +102,8 @@ class aagmm_layer(torch.nn.Module):
         expo_safe_off_gmm, _ = torch.max(expo_gmm, dim=-1, keepdim=True)
         expo_safe_gmm = expo_gmm - expo_safe_off_gmm  # use broadcast instead of the repeat
 
-        # numer_unsafe_gmm = det_scale_rep_unsafe * torch.exp(expo_gmm)
-        # denom_unsafe_gmm = torch.sum(numer_unsafe_gmm, 1, keepdim=True)
+        numer_unsafe_gmm = det_scale_rep_unsafe * torch.exp(expo_gmm)
+        denom_unsafe_gmm = torch.sum(numer_unsafe_gmm, 1, keepdim=True)
 
 
         # Calculate the responsibilities
@@ -125,19 +126,28 @@ class aagmm_layer(torch.nn.Module):
         # cross_entropy_embed *= assign_gmm_onehot
         # cross_entropy_embed = (-1.0 / batch) * torch.sum(assign_gmm_onehot * cross_entropy_embed)
 
-        cluster_assignment = torch.argmax(resp_gmm, dim=1)
-        cluster_dist = cluster_dist_mat[range(cluster_dist_mat.shape[0]), cluster_assignment]
-        #cluster_dist2 = torch.min(cluster_dist_mat, dim=1).values
+        if self.outlier_method == 'sigma':
+            cluster_assignment = torch.argmax(resp_gmm, dim=1)
+            cluster_dist = cluster_dist_mat[range(cluster_dist_mat.shape[0]), cluster_assignment]
+            denom = cluster_dist
+        elif self.outlier_method == 'denom':
+            denom = denom_unsafe_gmm
+        elif str(self.outlier_method).lower() == 'none':
+            # placeholder data to make the plumbing work
+            denom = denom_unsafe_gmm
+        else:
+            raise RuntimeError("Invalid outlier detection method: {}".format(self.outlier_method))
 
-        return resp_gmm, cluster_dist  #denom_unsafe_gmm  #, cross_entropy_embed
+        return resp_gmm, denom  #denom_unsafe_gmm  #, cross_entropy_embed
 
 
 class kmeans_layer(torch.nn.Module):
-    def __init__(self, embedding_dim: int, num_classes: int):
+    def __init__(self, embedding_dim: int, num_classes: int, outlier_method:str = "denom"):
         super().__init__()
 
         self.dim = embedding_dim
         self.num_classes = num_classes
+        self.outlier_method = outlier_method
         self.centers = torch.nn.Parameter(torch.rand(size=(self.num_classes, self.dim), requires_grad=True))
 
     def forward(self, x):
@@ -181,13 +191,28 @@ class kmeans_layer(torch.nn.Module):
         resp_kmeans = torch.clip(resp_kmeans, min=1e-8)
         resp_kmeans = torch.log(resp_kmeans)
 
-        return resp_kmeans, denom_safe_kmeans  #, 0.0
+        if self.outlier_method == 'sigma':
+            raise RuntimeError("Invalid outlier detection method for KMeans: {}".format(self.outlier_method))
+        elif self.outlier_method == 'denom':
+            numer_unsafe_kmeans = torch.exp(expo_kmeans)
+            denom_unsafe_kmeans = torch.sum(numer_unsafe_kmeans, 1, keepdim=True)
+            denom = denom_unsafe_kmeans
+        elif str(self.outlier_method).lower() == 'none':
+            # placeholder data to make the plumbing work
+            numer_unsafe_kmeans = torch.exp(expo_kmeans)
+            denom_unsafe_kmeans = torch.sum(numer_unsafe_kmeans, 1, keepdim=True)
+            denom = denom_unsafe_kmeans
+        else:
+            raise RuntimeError("Invalid outlier detection method for KMeans: {}".format(self.outlier_method))
+
+        return resp_kmeans, denom  #, 0.0
 
 
 class AagmmModelWrapper(torch.nn.Module):
-    def __init__(self, model: torch.nn.Module, num_classes: int, last_layer: str = 'aa_gmm', embedding_dim: int = None):
+    def __init__(self, model: torch.nn.Module, num_classes: int, last_layer: str = 'aa_gmm', embedding_dim: int = None, outlier_method:str = "denom"):
         super(AagmmModelWrapper, self).__init__()
         self.num_classes = num_classes
+        self.outlier_method = outlier_method
 
         self.emb_linear = None
         if embedding_dim is None or embedding_dim == 0:
@@ -204,9 +229,9 @@ class AagmmModelWrapper(torch.nn.Module):
         if self.last_layer_name == 'linear':
             self.last_layer = torch.nn.Linear(self.embedding_dim, self.num_classes)
         elif self.last_layer_name == 'aa_gmm':
-            self.last_layer = aagmm_layer(self.embedding_dim, self.num_classes)
+            self.last_layer = aagmm_layer(self.embedding_dim, self.num_classes, self.outlier_method)
         elif self.last_layer_name == 'kmeans':
-            self.last_layer = kmeans_layer(self.embedding_dim, self.num_classes)
+            self.last_layer = kmeans_layer(self.embedding_dim, self.num_classes, self.outlier_method)
         else:
             raise RuntimeError("Invalid last layer type: {}".format(self.last_layer_name))
 

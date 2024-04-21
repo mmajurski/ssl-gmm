@@ -1,3 +1,4 @@
+import copy
 import os
 import torch
 import numpy as np
@@ -97,7 +98,7 @@ class AAGMM(AlgorithmBase):
         )
 
         # wrap the model with aagmm_layer
-        model = AagmmModelWrapper(model, num_classes=self.num_classes, last_layer=self.args.last_layer, embedding_dim=self.args.embedding_dim)
+        model = AagmmModelWrapper(model, num_classes=self.num_classes, last_layer=self.args.last_layer, embedding_dim=self.args.embedding_dim, outlier_method=self.args.outlier_method)
 
         return model
 
@@ -109,7 +110,7 @@ class AAGMM(AlgorithmBase):
         ema_model.load_state_dict(self.model.state_dict())
         return ema_model
 
-    def train_step(self, x_lb, y_lb, idx_ulb, x_ulb_w, x_ulb_s):
+    def train_step(self, x_lb, y_lb, idx_ulb, x_ulb_w, x_ulb_s, y_ulb_w):
         num_lb = y_lb.shape[0]
         GENERATE_CSV = False
 
@@ -142,21 +143,48 @@ class AAGMM(AlgorithmBase):
             denom_lb = outputs['denom'][:num_lb]
             denom_ulb_w, denom_ulb_s = outputs['denom'][num_lb:].chunk(2)
 
-            mask = self.call_hook("masking", "MaskingHook", logits_x_ulb=probs_x_ulb_w, softmax_x_ulb=False, idx_ulb=idx_ulb) #, denom_lb=denom_lb, denom_ulb=denom_ulb_w)
+            mask = self.call_hook("masking", "MaskingHook", logits_x_ulb=probs_x_ulb_w, softmax_x_ulb=False, idx_ulb=idx_ulb)
 
-            # remove outliers
-            # denom_thres = torch.min(denom_lb)
-            # denom_thres = torch.quantile(denom_lb, 0.25)  # 5th percentile
-            # dthres_rate = torch.sum((denom_ulb_w <= denom_thres).float()) / denom_ulb_w.shape[0]
+            denom_thres = torch.tensor(torch.nan)
+            dthres_rate = torch.tensor(torch.nan)
 
-            if isinstance(self.args.outlier_thres, (int, float)):
-                # denom_thres = torch.tensor(self.args.outlier_thres, device=denom_ulb_w.device, dtype=denom_ulb_w.dtype, requires_grad=False)
-                denom_thres = torch.quantile(denom_lb, self.args.outlier_thres)
-                dthres_rate = torch.sum((denom_ulb_w >= denom_thres).float()) / denom_ulb_w.shape[0]
-                mask[denom_ulb_w > denom_thres] = 0
+            # If sigma, need to remove high values. Use IQR
+            # If denom, need to remove low values, use 0.5 * 90th percentile
+
+            if self.args.outlier_method == 'sigma':
+                # threshold out the high sigma values, as they are distance from clusters
+                if isinstance(self.args.outlier_thres, (int, float)):
+                    # threshold at 2x the 90th percentile of the labeled data
+                    denom_thres = 2.0 * torch.quantile(denom_lb, self.args.outlier_thres)
+
+                    dthres_rate = torch.sum((denom_ulb_w > denom_thres).float()) / denom_ulb_w.shape[0]
+                    mask[denom_ulb_w > denom_thres] = 0
+
+                elif self.args.outlier_thres == 'iqr':
+                    # use standard IQR outlier test
+                    q1 = torch.quantile(denom_lb, 0.25)
+                    q3 = torch.quantile(denom_lb, 0.75)
+                    iqr = q3 - q1
+                    denom_thres = q3 + 1.5 * iqr
+
+                    dthres_rate = torch.sum((denom_ulb_w > denom_thres).float()) / denom_ulb_w.shape[0]
+                    mask[denom_ulb_w > denom_thres] = 0
+            elif self.args.outlier_method == 'denom':
+                # threshold out low denom values, which represent low confidence samples
+                if isinstance(self.args.outlier_thres, (int, float)):
+                    denom_thres = 0.5 * torch.quantile(denom_lb, self.args.outlier_thres)
+
+                    dthres_rate = torch.sum((denom_ulb_w < denom_thres).float()) / denom_ulb_w.shape[0]
+                    mask[denom_ulb_w < denom_thres] = 0
+
+                elif self.args.outlier_thres == 'iqr':
+                    # this does not work, so error out if selected
+                    raise RuntimeError("Invalid outlier removal method: {}".format(self.args.outlier_method))
+            elif str(self.args.outlier_method).lower() == 'none':
+                pass
             else:
-                denom_thres = torch.tensor(torch.nan)
-                dthres_rate = torch.tensor(torch.nan)
+                raise RuntimeError("Invalid outlier removal method: {}".format(self.args.outlier_method))
+
 
             if GENERATE_CSV:
                 bins = np.linspace(0, 10, 50)
@@ -199,6 +227,14 @@ class AAGMM(AlgorithmBase):
 
             total_loss = sup_loss + self.lambda_u * unsup_loss
 
+            if self.args.neg_pl_threshold > 0.0:
+                invalid_pl_logits_mask = probs_x_ulb_w < torch.tensor(self.args.neg_pl_threshold)
+                y_ulb_w_onehot = torch.nn.functional.one_hot(y_ulb_w, self.args.num_classes).type(torch.float32)
+                elementwise_ce = torch.nn.functional.binary_cross_entropy(probs_x_ulb_w, y_ulb_w_onehot, reduction='none')
+                loss_invalid_pl = torch.mean(elementwise_ce[invalid_pl_logits_mask])
+
+                total_loss += loss_invalid_pl
+
             if self.emb_constraint is not None:
                 # labeled data embedding constraint
                 if hasattr(self.model, 'module'):
@@ -224,9 +260,24 @@ class AAGMM(AlgorithmBase):
                 emb_constraint_loss_ul_strong = None
                 emb_constraint_loss_ul_weak = None
 
-        lb_acc_elementwise = (torch.argmax(logits_x_lb, dim=-1) == y_lb).float()
+        # Code to capture (and quickly exit) the GPU memory usage
+        # import utils
+        # import logging
+        # gpu_mem_percent_used, memory_total_info = utils.get_gpu_memory()
+        # gpu_mem_MB_used = (gpu_mem_percent_used / 100.0) * memory_total_info
+        # gpu_mem_percent_used = [np.round(100 * x, 1) for x in gpu_mem_percent_used]
+        # gpu_mem_MB_used = [np.round(100 * x, 1) / 1000.0 for x in gpu_mem_MB_used]
+        # logging.info('  gpu_mem: {}% of {}MiB = {}GiB'.format(gpu_mem_percent_used, memory_total_info, gpu_mem_MB_used))
+        # exit(1)
 
+        lb_acc_elementwise = (torch.argmax(logits_x_lb, dim=-1) == y_lb).float()
         lb_acc = torch.mean(lb_acc_elementwise).detach()
+
+        if torch.any(y_ulb_w != -1):
+            p_lb_acc_elementwise = (pseudo_label == y_ulb_w).float()
+            p_lb_acc = torch.mean(p_lb_acc_elementwise).detach()
+        else:
+            p_lb_acc = torch.tensor(torch.nan)
 
         if GENERATE_CSV:
             lb_D = denom_lb.detach().cpu().numpy()
@@ -284,6 +335,7 @@ class AAGMM(AlgorithmBase):
                                              denom_thres=denom_thres.item(),
                                              dthres_rate=dthres_rate.item(),
                                              lb_acc=lb_acc.item(),
+                                             p_lb_acc=p_lb_acc.item(),
                                              emb_x_lb_loss=emb_constraint_loss_l.item(),
                                              emb_x_ulb_s_loss=emb_constraint_loss_ul_strong.item(),
                                              emb_x_ulb_w_loss=emb_constraint_loss_ul_weak.item())
@@ -294,7 +346,8 @@ class AAGMM(AlgorithmBase):
                                              util_ratio=mask.float().mean().item(),
                                              denom_thres=denom_thres.item(),
                                              dthres_rate=dthres_rate.item(),
-                                             lb_acc=lb_acc.item())
+                                             lb_acc=lb_acc.item(),
+                                             p_lb_acc=p_lb_acc.item())
         return out_dict, log_dict
 
     def get_save_dict(self):
@@ -342,6 +395,7 @@ class AAGMM(AlgorithmBase):
                 fd.write(csv_row)
 
         eval_loader = self.loader_dict[eval_dest]
+
         total_loss = 0.0
         total_num = 0.0
         y_true = []
@@ -401,16 +455,16 @@ class AAGMM(AlgorithmBase):
 
 
         # embedding_output_test = utils.multiconcat_numpy(embedding_output_test)
-        embedding_output_test = np.concatenate(embedding_output_test, axis=0)
-        save_path = os.path.join(self.args.save_dir, self.args.save_name, 'test_embedding.npy')
-        np.save(save_path, embedding_output_test)
-
-        # labels_output_test = utils.multiconcat_numpy(labels_output_test)
-        labels_output_test = np.concatenate(labels_output_test, axis=0)
-        save_path = os.path.join(self.args.save_dir, self.args.save_name, 'test_labels.npy')
-        np.save(save_path, labels_output_test)
-
-        torch.save(self.model.cpu(), os.path.join(self.args.save_dir, self.args.save_name, "model.pt"))
+        # embedding_output_test = np.concatenate(embedding_output_test, axis=0)
+        # save_path = os.path.join(self.args.save_dir, self.args.save_name, 'test_embedding.npy')
+        # np.save(save_path, embedding_output_test)
+        #
+        # # labels_output_test = utils.multiconcat_numpy(labels_output_test)
+        # labels_output_test = np.concatenate(labels_output_test, axis=0)
+        # save_path = os.path.join(self.args.save_dir, self.args.save_name, 'test_labels.npy')
+        # np.save(save_path, labels_output_test)
+        #
+        # torch.save(self.model.cpu(), os.path.join(self.args.save_dir, self.args.save_name, "model.pt"))
 
         self.print_fn("confusion matrix:\n" + np.array_str(cf_mat))
         self.ema.restore()
