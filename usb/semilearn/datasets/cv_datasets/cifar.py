@@ -109,3 +109,91 @@ def get_cifar(args, alg, name, num_labels, num_classes, data_dir='./data', inclu
     eval_dset = BasicDataset(alg, test_data, test_targets, num_classes, transform_val, False, None, False)
 
     return lb_dset, ulb_dset, eval_dset
+
+
+def get_cifar10_with_cifar100(args, alg, num_labels, data_dir='./data', include_lb_to_ulb=True, ood_fraction=0.1):
+    crop_size = args.img_size
+    crop_ratio = args.crop_ratio
+    num_classes = 10
+
+    transform_weak = transforms.Compose([
+        transforms.Resize(crop_size),
+        transforms.RandomCrop(crop_size, padding=int(crop_size * (1 - crop_ratio)), padding_mode='reflect'),
+        transforms.RandomHorizontalFlip(),
+        transforms.ToTensor(),
+        transforms.Normalize(mean['cifar10'], std['cifar10'])
+    ])
+
+    transform_strong = transforms.Compose([
+        transforms.Resize(crop_size),
+        transforms.RandomCrop(crop_size, padding=int(crop_size * (1 - crop_ratio)), padding_mode='reflect'),
+        transforms.RandomHorizontalFlip(),
+        RandAugment(3, 5),
+        transforms.ToTensor(),
+        transforms.Normalize(mean['cifar10'], std['cifar10'])
+    ])
+
+    transform_val = transforms.Compose([
+        transforms.Resize(crop_size),
+        transforms.ToTensor(),
+        transforms.Normalize(mean['cifar10'], std['cifar10'], )
+    ])
+
+
+
+    dset = getattr(torchvision.datasets, 'CIFAR10')
+    dset = dset(os.path.join(data_dir, 'cifar10'), train=True, download=True)
+    data, targets = dset.data, dset.targets
+
+    lb_data, lb_targets, ulb_data, ulb_targets = split_ssl_data(args, data, targets, num_classes,
+                                                                lb_num_labels=num_labels,
+                                                                ulb_num_labels=args.ulb_num_labels,
+                                                                lb_imbalance_ratio=args.lb_imb_ratio,
+                                                                ulb_imbalance_ratio=args.ulb_imb_ratio,
+                                                                include_lb_to_ulb=include_lb_to_ulb)
+
+    dset2 = getattr(torchvision.datasets, 'CIFAR100')
+    dset2 = dset2(os.path.join(data_dir, 'cifar100'), train=True, download=True)
+    data2, targets2 = dset2.data, dset2.targets
+    targets2 = np.asarray(targets2)
+
+    n = int(ood_fraction * float(len(ulb_targets)))
+    idx = np.random.permutation(len(targets2))[:n]
+    data2 = data2[idx, :]
+    targets2 = -100 * np.ones_like(targets2[idx])
+
+    ulb_data = np.concatenate((ulb_data, data2), axis=0)
+    ulb_targets = np.concatenate((ulb_targets, targets2), axis=0)
+
+    lb_count = dict()
+    for c in np.unique(lb_targets):
+        lb_count[c] = np.sum(lb_targets == c)
+
+    ulb_count = dict()
+    for c in np.unique(ulb_targets):
+        ulb_count[c] = np.sum(ulb_targets == c)
+
+    # lb_count = [0 for _ in range(num_classes)]
+    # for c in lb_targets:
+    #     lb_count[c] += 1
+    # ulb_count = [0 for _ in range(num_classes)]
+    # for c in ulb_targets:
+    #     ulb_count[c] += 1
+    print("lb count: {}".format(lb_count))
+    print("ulb count: {}".format(ulb_count))
+
+    if alg == 'fullysupervised':
+        lb_data = data
+        lb_targets = targets
+
+
+    lb_dset = BasicDataset(alg, lb_data, lb_targets, num_classes, transform_weak, False, transform_strong, False)
+
+    ulb_dset = BasicDataset(alg, ulb_data, ulb_targets, num_classes, transform_weak, True, transform_strong, False)
+
+    dset = getattr(torchvision.datasets, 'CIFAR10')
+    dset = dset(data_dir, train=False, download=True)
+    test_data, test_targets = dset.data, dset.targets
+    eval_dset = BasicDataset(alg, test_data, test_targets, num_classes, transform_val, False, None, False)
+
+    return lb_dset, ulb_dset, eval_dset

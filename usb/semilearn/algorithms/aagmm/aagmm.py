@@ -59,7 +59,6 @@ class AAGMM(AlgorithmBase):
         self.init(T=args.T, p_cutoff=args.p_cutoff, hard_label=args.hard_label, thresh_warmup=args.thresh_warmup)
         self.embedding_criterion = torch.nn.MSELoss()
         self.args = args
-        self.lcl_stats = dict()
 
         if args.embedding_constraint is None:
             self.emb_constraint = None
@@ -112,7 +111,6 @@ class AAGMM(AlgorithmBase):
 
     def train_step(self, x_lb, y_lb, idx_ulb, x_ulb_w, x_ulb_s, y_ulb_w):
         num_lb = y_lb.shape[0]
-        GENERATE_CSV = False
 
         # inference and calculate sup/unsup losses
         with (self.amp_cm()):
@@ -185,34 +183,6 @@ class AAGMM(AlgorithmBase):
             else:
                 raise RuntimeError("Invalid outlier removal method: {}".format(self.args.outlier_method))
 
-
-            if GENERATE_CSV:
-                bins = np.linspace(0, 10, 50)
-                denom_lb_hist_c, denom_lb_hist_x = np.histogram(denom_lb.detach().cpu().numpy(), bins=bins)
-                denom_ulb_w_hist_c, denom_ulb_w_hist_x = np.histogram(denom_ulb_w.detach().cpu().numpy(), bins=bins)
-                denom_ulb_s_hist_c, denom_ulb_s_hist_x = np.histogram(denom_ulb_s.detach().cpu().numpy(), bins=bins)
-
-                if 'denom_lb_hist_c' not in self.lcl_stats.keys():
-                    self.lcl_stats['denom_lb_hist_c'] = []
-                self.lcl_stats['denom_lb_hist_c'].append(denom_lb_hist_c)
-                if 'denom_lb_hist_x' not in self.lcl_stats.keys():
-                    self.lcl_stats['denom_lb_hist_x'] = []
-                self.lcl_stats['denom_lb_hist_x'].append(denom_lb_hist_x)
-
-                if 'denom_ulb_w_hist_c' not in self.lcl_stats.keys():
-                    self.lcl_stats['denom_ulb_w_hist_c'] = []
-                self.lcl_stats['denom_ulb_w_hist_c'].append(denom_ulb_w_hist_c)
-                if 'denom_ulb_w_hist_x' not in self.lcl_stats.keys():
-                    self.lcl_stats['denom_ulb_w_hist_x'] = []
-                self.lcl_stats['denom_ulb_w_hist_x'].append(denom_ulb_w_hist_x)
-
-                if 'denom_ulb_s_hist_c' not in self.lcl_stats.keys():
-                    self.lcl_stats['denom_ulb_s_hist_c'] = []
-                self.lcl_stats['denom_ulb_s_hist_c'].append(denom_ulb_s_hist_c)
-                if 'denom_ulb_s_hist_x' not in self.lcl_stats.keys():
-                    self.lcl_stats['denom_ulb_s_hist_x'] = []
-                self.lcl_stats['denom_ulb_s_hist_x'].append(denom_ulb_s_hist_x)
-
             # generate unlabeled targets using pseudo label hook
             pseudo_label = self.call_hook("gen_ulb_targets", "PseudoLabelingHook",
                                           logits=probs_x_ulb_w,
@@ -229,9 +199,16 @@ class AAGMM(AlgorithmBase):
 
             if self.args.neg_pl_threshold > 0.0:
                 invalid_pl_logits_mask = probs_x_ulb_w < torch.tensor(self.args.neg_pl_threshold)
-                y_ulb_w_onehot = torch.nn.functional.one_hot(y_ulb_w, self.args.num_classes).type(torch.float32)
+                ood_idx = y_ulb_w == -100
+                y_ulb_w_copy = y_ulb_w.clone()
+                y_ulb_w_copy[ood_idx] = 0
+                y_ulb_w_onehot = torch.nn.functional.one_hot(y_ulb_w_copy, self.args.num_classes).type(torch.float32)
+                y_ulb_w_onehot[ood_idx, :] = 0  # zero out all elements of the ood samples
                 elementwise_ce = torch.nn.functional.binary_cross_entropy(probs_x_ulb_w, y_ulb_w_onehot, reduction='none')
-                loss_invalid_pl = torch.mean(elementwise_ce[invalid_pl_logits_mask])
+                if torch.sum(invalid_pl_logits_mask) > 0:
+                    loss_invalid_pl = torch.mean(elementwise_ce[invalid_pl_logits_mask])
+                else:
+                    loss_invalid_pl = 0.0
 
                 total_loss += loss_invalid_pl
 
@@ -275,56 +252,14 @@ class AAGMM(AlgorithmBase):
 
         if torch.any(y_ulb_w != -1):
             p_lb_acc_elementwise = (pseudo_label == y_ulb_w).float()
+            p_lb_acc_elementwise = p_lb_acc_elementwise[mask > 0]
             p_lb_acc = torch.mean(p_lb_acc_elementwise).detach()
+
+            idx = torch.logical_and(y_ulb_w == -100, mask > 0)
+            p_lb_ood_rate = torch.mean(idx.float()).detach()
         else:
             p_lb_acc = torch.tensor(torch.nan)
-
-        if GENERATE_CSV:
-            lb_D = denom_lb.detach().cpu().numpy()
-            ulb_w_D = denom_ulb_w.detach().cpu().numpy()
-            ulb_s_D = denom_ulb_s.detach().cpu().numpy()
-
-            if 'denom_lb_vals' not in self.lcl_stats.keys():
-                self.lcl_stats['denom_lb_vals'] = []
-            self.lcl_stats['denom_lb_vals'].append(lb_D)
-            if 'pl_acc' not in self.lcl_stats.keys():
-                self.lcl_stats['pl_acc'] = []
-            self.lcl_stats['pl_acc'].append(lb_acc_elementwise.detach().cpu().numpy())
-
-            for c in range(self.num_classes):
-                idx = y_lb.detach().cpu().numpy() == c
-                cur_lb_D = lb_D[idx]
-                cur_lb_acc_elementwise = lb_acc_elementwise[idx]
-                k = 'denom_lb_c{}_vals'.format(c)
-                if k not in self.lcl_stats.keys():
-                    self.lcl_stats[k] = []
-                self.lcl_stats[k].append(cur_lb_D)
-                k = 'pl_acc_c{}_vals'.format(c)
-                if k not in self.lcl_stats.keys():
-                    self.lcl_stats[k] = []
-                self.lcl_stats[k].append(cur_lb_acc_elementwise)
-
-            k = 'denom_ulb_w_vals'
-            if k not in self.lcl_stats.keys():
-                self.lcl_stats[k] = []
-            self.lcl_stats[k].append(ulb_w_D)
-            k = 'denom_ulb_s_vals'
-            if k not in self.lcl_stats.keys():
-                self.lcl_stats[k] = []
-            self.lcl_stats[k].append(ulb_s_D)
-
-            for c in range(self.num_classes):
-                idx = pseudo_label.detach().cpu().numpy() == c
-                cur_ulb_w_D = ulb_w_D[idx]
-                cur_ulb_s_D = ulb_s_D[idx]
-                k = 'denom_ulb_w_c{}_vals'.format(c)
-                if k not in self.lcl_stats.keys():
-                    self.lcl_stats[k] = []
-                self.lcl_stats[k].append(cur_ulb_w_D)
-                k = 'denom_ulb_s_c{}_vals'.format(c)
-                if k not in self.lcl_stats.keys():
-                    self.lcl_stats[k] = []
-                self.lcl_stats[k].append(cur_ulb_s_D)
+            p_lb_ood_rate = torch.tensor(torch.nan)
 
         out_dict = self.process_out_dict(loss=total_loss, feat=feat_dict)
         if self.emb_constraint is not None:
@@ -336,6 +271,7 @@ class AAGMM(AlgorithmBase):
                                              dthres_rate=dthres_rate.item(),
                                              lb_acc=lb_acc.item(),
                                              p_lb_acc=p_lb_acc.item(),
+                                             p_lb_ood_rate=p_lb_ood_rate.item(),
                                              emb_x_lb_loss=emb_constraint_loss_l.item(),
                                              emb_x_ulb_s_loss=emb_constraint_loss_ul_strong.item(),
                                              emb_x_ulb_w_loss=emb_constraint_loss_ul_weak.item())
@@ -347,7 +283,8 @@ class AAGMM(AlgorithmBase):
                                              denom_thres=denom_thres.item(),
                                              dthres_rate=dthres_rate.item(),
                                              lb_acc=lb_acc.item(),
-                                             p_lb_acc=p_lb_acc.item())
+                                             p_lb_acc=p_lb_acc.item(),
+                                             p_lb_ood_rate=p_lb_ood_rate.item())
         return out_dict, log_dict
 
     def get_save_dict(self):
@@ -380,19 +317,6 @@ class AAGMM(AlgorithmBase):
         self.model.eval()
         self.ema.apply_shadow()
         print("running evaluate")
-
-        for key in self.lcl_stats.keys():
-            save_path = os.path.join(self.args.save_dir, self.args.save_name, '{}.csv'.format(key))
-            csv_row = ''
-            for k in range(len(self.lcl_stats[key])):
-                for v_idx in range(len(self.lcl_stats[key][k])):
-                    v = self.lcl_stats[key][k][v_idx]
-                    if v_idx > 0:
-                        csv_row += ','
-                    csv_row += str(v)
-                csv_row += '\n'
-            with open(save_path, 'w') as fd:
-                fd.write(csv_row)
 
         eval_loader = self.loader_dict[eval_dest]
 

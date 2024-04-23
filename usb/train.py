@@ -265,15 +265,6 @@ def main(args):
         args.num_train_iter % args.epoch == 0
     ), f"# total training iter. {args.num_train_iter} is not divisible by # epochs {args.epoch}"  # noqa: E501
 
-    # idx = 0
-    # args.save_name = "id-{:04d}".format(idx)
-    # save_path = os.path.join(args.save_dir, args.save_name)
-    # while os.path.exists(save_path):
-    #     idx += 1
-    #     args.save_name = "id-{:04d}".format(idx)
-    #     save_path = os.path.join(args.save_dir, args.save_name)
-
-    # aagmm2_cifar10_40_1_1.0_8_0.9
     SEED_LIST = [3474173998, 273230791, 3586106167, 1325645050, 2564231920]
 
     if 'debug' in args.save_name:
