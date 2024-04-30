@@ -286,15 +286,19 @@ def main(args):
             oth = str(args.outlier_thres).lower()
         if oth == 'none':
             args.outlier_method = 'none'
-        if args.outlier_method == 'none':
-            args.save_name = "{}{}_{}_{}_{}_{}".format(args.algorithm, args.embedding_constraint, args.dataset, args.num_labels, seed_idx, args.outlier_method)
-        else:
-            args.save_name = "{}{}_{}_{}_{}_{}_{}".format(args.algorithm, args.embedding_constraint, args.dataset, args.num_labels, seed_idx, args.outlier_method, oth)
+        if 'last_layer' not in args:
+            args.last_layer = 'linear'
 
+        if args.outlier_method == 'none':
+            args.save_name = "{}{}_{}_{}_{}_{}".format(args.last_layer, args.embedding_constraint, args.dataset, args.num_labels, seed_idx, args.outlier_method)
+        else:
+            args.save_name = "{}{}_{}_{}_{}_{}_{}".format(args.last_layer, args.embedding_constraint, args.dataset, args.num_labels, seed_idx, args.outlier_method, oth)
+
+        print("Saving model to '{}'".format(args.save_name))
         save_path = os.path.join(args.save_dir, args.save_name)
 
         if os.path.exists(os.path.join(save_path)):
-            raise RuntimeError("model output already exists, exiting")
+            raise RuntimeError("model output folder '{}' already exists, exiting".format(args.save_name))
         if os.path.exists(os.path.join(save_path, 'success.txt')):
             raise RuntimeError("successful model already exists, exiting")
 
@@ -435,11 +439,11 @@ def main_worker(gpu, ngpus_per_node, args):
     model.ema_model = send_model_cuda(args, model.ema_model, clip_batch=False)
     logger.info(f"Arguments: {model.args}")
 
-    logger.info("Compiling model")
-    torch.set_float32_matmul_precision('high')
-    model.model = torch.compile(model.model)
-    import copy
-    model.ema_model = copy.deepcopy(model.model)
+    # logger.info("Compiling model")
+    # torch.set_float32_matmul_precision('high')
+    # model.model = torch.compile(model.model)
+    # import copy
+    # model.ema_model = copy.deepcopy(model.model)
 
     # If args.resume, load checkpoints from args.load_path
     if args.resume and os.path.exists(args.load_path):

@@ -209,7 +209,7 @@ class kmeans_layer(torch.nn.Module):
 
 
 class AagmmModelWrapper(torch.nn.Module):
-    def __init__(self, model: torch.nn.Module, num_classes: int, last_layer: str = 'aa_gmm', embedding_dim: int = None, outlier_method:str = "denom"):
+    def __init__(self, model: torch.nn.Module, num_classes: int, last_layer: str = 'aagmm', embedding_dim: int = None, outlier_method:str = "denom"):
         super(AagmmModelWrapper, self).__init__()
         self.num_classes = num_classes
         self.outlier_method = outlier_method
@@ -228,7 +228,7 @@ class AagmmModelWrapper(torch.nn.Module):
         self.last_layer_name = last_layer
         if self.last_layer_name == 'linear':
             self.last_layer = torch.nn.Linear(self.embedding_dim, self.num_classes)
-        elif self.last_layer_name == 'aa_gmm':
+        elif self.last_layer_name == 'aagmm' or self.last_layer_name == 'aa_gmm':
             self.last_layer = aagmm_layer(self.embedding_dim, self.num_classes, self.outlier_method)
         elif self.last_layer_name == 'kmeans':
             self.last_layer = kmeans_layer(self.embedding_dim, self.num_classes, self.outlier_method)

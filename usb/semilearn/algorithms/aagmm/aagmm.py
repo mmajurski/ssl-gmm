@@ -144,10 +144,12 @@ class AAGMM(AlgorithmBase):
             mask = self.call_hook("masking", "MaskingHook", logits_x_ulb=probs_x_ulb_w, softmax_x_ulb=False, idx_ulb=idx_ulb)
 
             denom_thres = torch.tensor(torch.nan)
-            dthres_rate = torch.tensor(torch.nan)
+            # dthres_rate = torch.tensor(torch.nan)
 
             # If sigma, need to remove high values. Use IQR
             # If denom, need to remove low values, use 0.5 * 90th percentile
+            pre_outlier_mask = torch.clone(mask)
+            outlier_mask = torch.zeros_like(mask, requires_grad=False)
 
             if self.args.outlier_method == 'sigma':
                 # threshold out the high sigma values, as they are distance from clusters
@@ -155,8 +157,9 @@ class AAGMM(AlgorithmBase):
                     # threshold at 2x the 90th percentile of the labeled data
                     denom_thres = 2.0 * torch.quantile(denom_lb, self.args.outlier_thres)
 
-                    dthres_rate = torch.sum((denom_ulb_w > denom_thres).float()) / denom_ulb_w.shape[0]
+                    # dthres_rate = torch.sum((denom_ulb_w > denom_thres).float()) / denom_ulb_w.shape[0]
                     mask[denom_ulb_w > denom_thres] = 0
+                    outlier_mask[denom_ulb_w > denom_thres] = 1
 
                 elif self.args.outlier_thres == 'iqr':
                     # use standard IQR outlier test
@@ -165,15 +168,17 @@ class AAGMM(AlgorithmBase):
                     iqr = q3 - q1
                     denom_thres = q3 + 1.5 * iqr
 
-                    dthres_rate = torch.sum((denom_ulb_w > denom_thres).float()) / denom_ulb_w.shape[0]
+                    # dthres_rate = torch.sum((denom_ulb_w > denom_thres).float()) / denom_ulb_w.shape[0]
                     mask[denom_ulb_w > denom_thres] = 0
+                    outlier_mask[denom_ulb_w > denom_thres] = 1
             elif self.args.outlier_method == 'denom':
                 # threshold out low denom values, which represent low confidence samples
                 if isinstance(self.args.outlier_thres, (int, float)):
                     denom_thres = 0.5 * torch.quantile(denom_lb, self.args.outlier_thres)
 
-                    dthres_rate = torch.sum((denom_ulb_w < denom_thres).float()) / denom_ulb_w.shape[0]
+                    # dthres_rate = torch.sum((denom_ulb_w < denom_thres).float()) / denom_ulb_w.shape[0]
                     mask[denom_ulb_w < denom_thres] = 0
+                    outlier_mask[denom_ulb_w < denom_thres] = 1
 
                 elif self.args.outlier_thres == 'iqr':
                     # this does not work, so error out if selected
@@ -222,11 +227,11 @@ class AAGMM(AlgorithmBase):
 
                 # unlabeled data embedding constraint
                 if hasattr(self.model, 'module'):
-                    emb_constraint_ul_strong = self.emb_constraint(emb_ulb_s, self.model.module.last_layer.centers, logits_x_ulb_w)
-                    emb_constraint_ul_weak = self.emb_constraint(emb_ulb_w, self.model.module.last_layer.centers, logits_x_ulb_w)
+                    emb_constraint_ul_strong = self.emb_constraint(emb_ulb_s[mask > 0, :], self.model.module.last_layer.centers, logits_x_ulb_w[mask > 0, :])
+                    emb_constraint_ul_weak = self.emb_constraint(emb_ulb_w[mask > 0, :], self.model.module.last_layer.centers, logits_x_ulb_w[mask > 0, :])
                 else:
-                    emb_constraint_ul_strong = self.emb_constraint(emb_ulb_s, self.model.last_layer.centers, logits_x_ulb_w)
-                    emb_constraint_ul_weak = self.emb_constraint(emb_ulb_w, self.model.last_layer.centers, logits_x_ulb_w)
+                    emb_constraint_ul_strong = self.emb_constraint(emb_ulb_s[mask > 0, :], self.model.last_layer.centers, logits_x_ulb_w[mask > 0, :])
+                    emb_constraint_ul_weak = self.emb_constraint(emb_ulb_w[mask > 0, :], self.model.last_layer.centers, logits_x_ulb_w[mask > 0, :])
 
                 emb_constraint_loss_ul_strong = self.embedding_criterion(emb_constraint_ul_strong, torch.zeros_like(emb_constraint_ul_strong))
                 emb_constraint_loss_ul_weak = self.embedding_criterion(emb_constraint_ul_weak, torch.zeros_like(emb_constraint_ul_weak))
@@ -237,7 +242,7 @@ class AAGMM(AlgorithmBase):
                 emb_constraint_loss_ul_strong = None
                 emb_constraint_loss_ul_weak = None
 
-        # Code to capture (and quickly exit) the GPU memory usage
+        # Code to capture the GPU memory usage (and then quickly exit)
         # import utils
         # import logging
         # gpu_mem_percent_used, memory_total_info = utils.get_gpu_memory()
@@ -250,16 +255,27 @@ class AAGMM(AlgorithmBase):
         lb_acc_elementwise = (torch.argmax(logits_x_lb, dim=-1) == y_lb).float()
         lb_acc = torch.mean(lb_acc_elementwise).detach()
 
-        if torch.any(y_ulb_w != -1):
+        dthres_rate = torch.mean(outlier_mask.float()).detach()
+
+        if torch.any(y_ulb_w >= 0):
             p_lb_acc_elementwise = (pseudo_label == y_ulb_w).float()
             p_lb_acc_elementwise = p_lb_acc_elementwise[mask > 0]
             p_lb_acc = torch.mean(p_lb_acc_elementwise).detach()
 
-            idx = torch.logical_and(y_ulb_w == -100, mask > 0)
-            p_lb_ood_rate = torch.mean(idx.float()).detach()
+            ood_m = (y_ulb_w == -100)
+            incl_ood_m = torch.logical_and(ood_m, mask > 0)
+            n = torch.sum(ood_m.float())
+            p_lb_ood_rate = (torch.sum(incl_ood_m.float()) / n).detach()  # The rate of ood data in each batch that was included as PL
+
+            ood_m = (y_ulb_w == -100)
+            removed_ood_m = torch.logical_and(ood_m, outlier_mask > 0)
+            n = torch.sum(ood_m.float())
+            p_lb_ood_rate_outlier_filter = (torch.sum(removed_ood_m.float()) / n).detach()  # The rate of ood data in each batch that was removed as outlier
+
         else:
             p_lb_acc = torch.tensor(torch.nan)
             p_lb_ood_rate = torch.tensor(torch.nan)
+            p_lb_ood_rate_outlier_filter = torch.tensor(torch.nan)
 
         out_dict = self.process_out_dict(loss=total_loss, feat=feat_dict)
         if self.emb_constraint is not None:
@@ -272,6 +288,7 @@ class AAGMM(AlgorithmBase):
                                              lb_acc=lb_acc.item(),
                                              p_lb_acc=p_lb_acc.item(),
                                              p_lb_ood_rate=p_lb_ood_rate.item(),
+                                             p_lb_ood_rate_outlier_filter=p_lb_ood_rate_outlier_filter.item(),
                                              emb_x_lb_loss=emb_constraint_loss_l.item(),
                                              emb_x_ulb_s_loss=emb_constraint_loss_ul_strong.item(),
                                              emb_x_ulb_w_loss=emb_constraint_loss_ul_weak.item())
@@ -284,7 +301,8 @@ class AAGMM(AlgorithmBase):
                                              dthres_rate=dthres_rate.item(),
                                              lb_acc=lb_acc.item(),
                                              p_lb_acc=p_lb_acc.item(),
-                                             p_lb_ood_rate=p_lb_ood_rate.item())
+                                             p_lb_ood_rate=p_lb_ood_rate.item(),
+                                             p_lb_ood_rate_outlier_filter=p_lb_ood_rate_outlier_filter.item())
         return out_dict, log_dict
 
     def get_save_dict(self):
