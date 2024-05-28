@@ -56,9 +56,17 @@ class AAGMM(AlgorithmBase):
     def __init__(self, args, net_builder, tb_log=None, logger=None):
         super().__init__(args, net_builder, tb_log, logger)
         # flexmatch specified arguments
-        self.init(T=args.T, p_cutoff=args.p_cutoff, hard_label=args.hard_label, thresh_warmup=args.thresh_warmup)
+        # self.init(T=args.T, p_cutoff=args.p_cutoff, hard_label=args.hard_label, thresh_warmup=args.thresh_warmup)
+        self.T = args.T
+        self.p_cutoff = args.p_cutoff
+        self.use_hard_label = args.hard_label
+        self.thresh_warmup = args.thresh_warmup
+
         self.embedding_criterion = torch.nn.MSELoss()
         self.args = args
+
+        if args.last_layer == 'aagmm_kl':
+            args.embedding_constraint = None
 
         if args.embedding_constraint is None:
             self.emb_constraint = None
@@ -75,11 +83,11 @@ class AAGMM(AlgorithmBase):
         else:
             raise RuntimeError("Invalid embedding constraint type: {}".format(args.embedding_constraint))
 
-    def init(self, T, p_cutoff, hard_label=True, thresh_warmup=True):
-        self.T = T
-        self.p_cutoff = p_cutoff
-        self.use_hard_label = hard_label
-        self.thresh_warmup = thresh_warmup
+    # def init(self, T, p_cutoff, hard_label=True, thresh_warmup=True):
+    #     self.T = T
+    #     self.p_cutoff = p_cutoff
+    #     self.use_hard_label = hard_label
+    #     self.thresh_warmup = thresh_warmup
 
     def set_hooks(self):
         self.register_hook(PseudoLabelingHook(), "PseudoLabelingHook")
@@ -97,7 +105,7 @@ class AAGMM(AlgorithmBase):
         )
 
         # wrap the model with aagmm_layer
-        model = AagmmModelWrapper(model, num_classes=self.num_classes, last_layer=self.args.last_layer, embedding_dim=self.args.embedding_dim, outlier_method=self.args.outlier_method)
+        model = AagmmModelWrapper(model, num_classes=self.num_classes, last_layer=self.args.last_layer, embedding_dim=self.args.embedding_dim, embedding_constraint=self.args.embedding_constraint)
 
         return model
 
@@ -111,6 +119,8 @@ class AAGMM(AlgorithmBase):
 
     def train_step(self, x_lb, y_lb, idx_ulb, x_ulb_w, x_ulb_s, y_ulb_w):
         num_lb = y_lb.shape[0]
+
+
 
         # inference and calculate sup/unsup losses
         with (self.amp_cm()):
@@ -137,56 +147,7 @@ class AAGMM(AlgorithmBase):
             if self.registered_hook("DistAlignHook"):
                 probs_x_ulb_w = self.call_hook("dist_align", "DistAlignHook", probs_x_ulb=probs_x_ulb_w.detach())
 
-            # compute mask
-            denom_lb = outputs['denom'][:num_lb]
-            denom_ulb_w, denom_ulb_s = outputs['denom'][num_lb:].chunk(2)
-
             mask = self.call_hook("masking", "MaskingHook", logits_x_ulb=probs_x_ulb_w, softmax_x_ulb=False, idx_ulb=idx_ulb)
-
-            denom_thres = torch.tensor(torch.nan)
-            # dthres_rate = torch.tensor(torch.nan)
-
-            # If sigma, need to remove high values. Use IQR
-            # If denom, need to remove low values, use 0.5 * 90th percentile
-            pre_outlier_mask = torch.clone(mask)
-            outlier_mask = torch.zeros_like(mask, requires_grad=False)
-
-            if self.args.outlier_method == 'sigma':
-                # threshold out the high sigma values, as they are distance from clusters
-                if isinstance(self.args.outlier_thres, (int, float)):
-                    # threshold at 2x the 90th percentile of the labeled data
-                    denom_thres = 2.0 * torch.quantile(denom_lb, self.args.outlier_thres)
-
-                    # dthres_rate = torch.sum((denom_ulb_w > denom_thres).float()) / denom_ulb_w.shape[0]
-                    mask[denom_ulb_w > denom_thres] = 0
-                    outlier_mask[denom_ulb_w > denom_thres] = 1
-
-                elif self.args.outlier_thres == 'iqr':
-                    # use standard IQR outlier test
-                    q1 = torch.quantile(denom_lb, 0.25)
-                    q3 = torch.quantile(denom_lb, 0.75)
-                    iqr = q3 - q1
-                    denom_thres = q3 + 1.5 * iqr
-
-                    # dthres_rate = torch.sum((denom_ulb_w > denom_thres).float()) / denom_ulb_w.shape[0]
-                    mask[denom_ulb_w > denom_thres] = 0
-                    outlier_mask[denom_ulb_w > denom_thres] = 1
-            elif self.args.outlier_method == 'denom':
-                # threshold out low denom values, which represent low confidence samples
-                if isinstance(self.args.outlier_thres, (int, float)):
-                    denom_thres = 0.5 * torch.quantile(denom_lb, self.args.outlier_thres)
-
-                    # dthres_rate = torch.sum((denom_ulb_w < denom_thres).float()) / denom_ulb_w.shape[0]
-                    mask[denom_ulb_w < denom_thres] = 0
-                    outlier_mask[denom_ulb_w < denom_thres] = 1
-
-                elif self.args.outlier_thres == 'iqr':
-                    # this does not work, so error out if selected
-                    raise RuntimeError("Invalid outlier removal method: {}".format(self.args.outlier_method))
-            elif str(self.args.outlier_method).lower() == 'none':
-                pass
-            else:
-                raise RuntimeError("Invalid outlier removal method: {}".format(self.args.outlier_method))
 
             # generate unlabeled targets using pseudo label hook
             pseudo_label = self.call_hook("gen_ulb_targets", "PseudoLabelingHook",
@@ -202,20 +163,16 @@ class AAGMM(AlgorithmBase):
 
             total_loss = sup_loss + self.lambda_u * unsup_loss
 
-            if self.args.neg_pl_threshold > 0.0:
-                invalid_pl_logits_mask = probs_x_ulb_w < torch.tensor(self.args.neg_pl_threshold)
-                ood_idx = y_ulb_w == -100
-                y_ulb_w_copy = y_ulb_w.clone()
-                y_ulb_w_copy[ood_idx] = 0
-                y_ulb_w_onehot = torch.nn.functional.one_hot(y_ulb_w_copy, self.args.num_classes).type(torch.float32)
-                y_ulb_w_onehot[ood_idx, :] = 0  # zero out all elements of the ood samples
-                elementwise_ce = torch.nn.functional.binary_cross_entropy(probs_x_ulb_w, y_ulb_w_onehot, reduction='none')
-                if torch.sum(invalid_pl_logits_mask) > 0:
-                    loss_invalid_pl = torch.mean(elementwise_ce[invalid_pl_logits_mask])
-                else:
-                    loss_invalid_pl = 0.0
-
-                total_loss += loss_invalid_pl
+            # if self.args.neg_pl_threshold > 0.0:
+            #     invalid_pl_logits_mask = probs_x_ulb_w < torch.tensor(self.args.neg_pl_threshold)
+            #     fake_y_ulb_w = torch.zeros_like(probs_x_ulb_w)
+            #     elementwise_ce = torch.nn.functional.binary_cross_entropy(probs_x_ulb_w, fake_y_ulb_w, reduction='none')  # TODO compare to using MSE
+            #     if torch.sum(invalid_pl_logits_mask) > 0:
+            #         loss_invalid_pl = torch.mean(elementwise_ce[invalid_pl_logits_mask])
+            #     else:
+            #         loss_invalid_pl = 0.0
+            #
+            #     total_loss += loss_invalid_pl
 
             if self.emb_constraint is not None:
                 # labeled data embedding constraint
@@ -237,6 +194,19 @@ class AAGMM(AlgorithmBase):
                 emb_constraint_loss_ul_weak = self.embedding_criterion(emb_constraint_ul_weak, torch.zeros_like(emb_constraint_ul_weak))
 
                 total_loss = total_loss + emb_constraint_loss_l + emb_constraint_loss_ul_strong + emb_constraint_loss_ul_weak
+            elif self.args.last_layer == 'aagmm_kl':
+                if hasattr(self.model, 'module'):
+                    emb_constraint_loss_l = self.model.module.last_layer.kl_penalty(emb_lb, logits_x_lb)
+
+                    emb_constraint_loss_ul_strong = self.model.module.last_layer.kl_penalty(emb_ulb_s[mask > 0, :], logits_x_ulb_w[mask > 0, :])
+                    emb_constraint_loss_ul_weak = self.model.module.last_layer.kl_penalty(emb_ulb_w[mask > 0, :], logits_x_ulb_w[mask > 0, :])
+                else:
+                    emb_constraint_loss_l = self.model.last_layer.kl_penalty(emb_lb, logits_x_lb)
+
+                    emb_constraint_loss_ul_strong = self.model.last_layer.kl_penalty(emb_ulb_s[mask > 0, :], logits_x_ulb_w[mask > 0, :])
+                    emb_constraint_loss_ul_weak = self.model.last_layer.kl_penalty(emb_ulb_w[mask > 0, :], logits_x_ulb_w[mask > 0, :])
+
+                total_loss = total_loss + ((emb_constraint_loss_l + emb_constraint_loss_ul_strong + emb_constraint_loss_ul_weak) / 3.0)
             else:
                 emb_constraint_loss_l = None
                 emb_constraint_loss_ul_strong = None
@@ -255,8 +225,6 @@ class AAGMM(AlgorithmBase):
         lb_acc_elementwise = (torch.argmax(logits_x_lb, dim=-1) == y_lb).float()
         lb_acc = torch.mean(lb_acc_elementwise).detach()
 
-        dthres_rate = torch.mean(outlier_mask.float()).detach()
-
         if torch.any(y_ulb_w >= 0):
             p_lb_acc_elementwise = (pseudo_label == y_ulb_w).float()
             p_lb_acc_elementwise = p_lb_acc_elementwise[mask > 0]
@@ -266,16 +234,9 @@ class AAGMM(AlgorithmBase):
             incl_ood_m = torch.logical_and(ood_m, mask > 0)
             n = torch.sum(ood_m.float())
             p_lb_ood_rate = (torch.sum(incl_ood_m.float()) / n).detach()  # The rate of ood data in each batch that was included as PL
-
-            ood_m = (y_ulb_w == -100)
-            removed_ood_m = torch.logical_and(ood_m, outlier_mask > 0)
-            n = torch.sum(ood_m.float())
-            p_lb_ood_rate_outlier_filter = (torch.sum(removed_ood_m.float()) / n).detach()  # The rate of ood data in each batch that was removed as outlier
-
         else:
             p_lb_acc = torch.tensor(torch.nan)
             p_lb_ood_rate = torch.tensor(torch.nan)
-            p_lb_ood_rate_outlier_filter = torch.tensor(torch.nan)
 
         out_dict = self.process_out_dict(loss=total_loss, feat=feat_dict)
         if self.emb_constraint is not None:
@@ -283,12 +244,9 @@ class AAGMM(AlgorithmBase):
                                              unsup_loss=unsup_loss.item(),
                                              total_loss=total_loss.item(),
                                              util_ratio=mask.float().mean().item(),
-                                             denom_thres=denom_thres.item(),
-                                             dthres_rate=dthres_rate.item(),
                                              lb_acc=lb_acc.item(),
                                              p_lb_acc=p_lb_acc.item(),
                                              p_lb_ood_rate=p_lb_ood_rate.item(),
-                                             p_lb_ood_rate_outlier_filter=p_lb_ood_rate_outlier_filter.item(),
                                              emb_x_lb_loss=emb_constraint_loss_l.item(),
                                              emb_x_ulb_s_loss=emb_constraint_loss_ul_strong.item(),
                                              emb_x_ulb_w_loss=emb_constraint_loss_ul_weak.item())
@@ -297,12 +255,9 @@ class AAGMM(AlgorithmBase):
                                              unsup_loss=unsup_loss.item(),
                                              total_loss=total_loss.item(),
                                              util_ratio=mask.float().mean().item(),
-                                             denom_thres=denom_thres.item(),
-                                             dthres_rate=dthres_rate.item(),
                                              lb_acc=lb_acc.item(),
                                              p_lb_acc=p_lb_acc.item(),
-                                             p_lb_ood_rate=p_lb_ood_rate.item(),
-                                             p_lb_ood_rate_outlier_filter=p_lb_ood_rate_outlier_filter.item())
+                                             p_lb_ood_rate=p_lb_ood_rate.item())
         return out_dict, log_dict
 
     def get_save_dict(self):

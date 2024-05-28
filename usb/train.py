@@ -274,25 +274,13 @@ def main(args):
         args.resume = False
     else:
         seed_idx = np.argwhere(args.seed == np.asarray(SEED_LIST))[0][0]
-        if 'outlier_thres' not in args:
-            args.outlier_thres = "none"
-        if 'outlier_method' not in args:
-            args.outlier_method = "none"
-        # if is number
-        if isinstance(args.outlier_thres, (int, float)):
-            oth = int(args.outlier_thres * 100)
-            oth = "{}p".format(oth)
-        else:
-            oth = str(args.outlier_thres).lower()
-        if oth == 'none':
-            args.outlier_method = 'none'
         if 'last_layer' not in args:
             args.last_layer = 'linear'
 
-        if args.outlier_method == 'none':
-            args.save_name = "{}{}_{}_{}_{}_{}".format(args.last_layer, args.embedding_constraint, args.dataset, args.num_labels, seed_idx, args.outlier_method)
+        if hasattr(args, 'embedding_constraint'):
+            args.save_name = "{}{}_{}_{}_{}".format(args.last_layer, args.embedding_constraint, args.dataset, args.num_labels, seed_idx)
         else:
-            args.save_name = "{}{}_{}_{}_{}_{}_{}".format(args.last_layer, args.embedding_constraint, args.dataset, args.num_labels, seed_idx, args.outlier_method, oth)
+            args.save_name = "{}{}_{}_{}".format(args.last_layer, args.dataset, args.num_labels, seed_idx)
 
         print("Saving model to '{}'".format(args.save_name))
         save_path = os.path.join(args.save_dir, args.save_name)

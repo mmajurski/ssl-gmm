@@ -1,16 +1,163 @@
 import torch
 
 
+class aagmm_kl_layer(torch.nn.Module):
+    def __init__(self, nDim: int, nClass:int, embedding_constraint:int=0):
+        super(aagmm_kl_layer, self).__init__()
+        self.n_dim = nDim
+        self.n_class = nClass
+        self.mu = torch.nn.Parameter(torch.randn((self.n_class, self.n_dim)))
+        self.sigma = torch.nn.Parameter(torch.ones((self.n_class, self.n_dim)))
+        self.embedding_constraint = embedding_constraint
 
+        # Note 0.00010211761 = (2*pi)^(-dim/2) where dim=10
+        self.numer_const = (2*torch.pi)**(-self.n_dim/2)
+
+    def forward(self, x):
+        delta = 1e-8
+        # extract batch size and dimensions
+        B = x.shape[0]  # B is batch size
+        D = x.shape[1]  # D is encoded dimension
+        C = self.n_class  # C is num classes
+        if (D != self.n_dim):
+            raise Exception('number of dimension D' + str(D) + 'is not expected' + str(self.n_dim))
+
+        # extract parameters for AAGMM layer
+        mu = self.mu  # cluster centers [C D]
+        sigma = torch.abs(self.sigma)  # cluster stdev   [C D]
+        inv_sigma = torch.reciprocal(sigma + delta)  # [C D]
+
+        # calculate the determinent
+        det = torch.prod(inv_sigma, dim=1)  # [C]
+
+        # upscale all tensors to the same dimensions
+        x = torch.reshape(x, (B, 1, D)).repeat((1, C, 1))  # shape [B C D]
+        mu_rep = torch.reshape(mu, (1, C, D)).repeat((B, 1, 1))  # shape [B C D]
+        inv_sigma = torch.reshape(inv_sigma, (1, C, D)).repeat((B, 1, 1))  # shape [B C D]
+        det = torch.reshape(det, (1, C)).repeat((B, 1))  # shape [B C]
+
+        # subtract mu and multiply by inv_sigma
+        diff = (x - mu_rep) * inv_sigma  # [B C D]
+
+        # obtain Mahalanobis distance
+        dist_sq = torch.sum(diff * diff, dim=2)  # [B C]
+
+        # Obtain the exponents
+        expo = -0.5 * dist_sq  # [B C]
+
+        # # Calculate the true numerators and denominators
+        # #  (we don't use this directly for responsibility calculation
+        # #   we actually use the "safe" versions that are shifted
+        # #   for stability)
+        # numer = self.numer_const * det * torch.exp(expo)  # [B C]
+        # denom = torch.sum(numer, 1)  # [B]
+        # denom = torch.reshape(denom, (B, 1)).repeat((1, C))  # [B C]
+        # # resp = numer / (denom + delta)
+        #
+        # log('numer', numer)
+        # log('denom', denom)
+
+        # Obtain the "safe" (numerically stable) versions of the
+        #  exponents.  These "safe" exponents produce fake numer and denom
+        #  but guarantee that resp = fake_numer / fake_denom = numer / denom
+        #  where fake_numer and fake_denom are numerically stable
+        expo_safe_off = torch.max(expo, dim=1)[0]
+        expo_safe_off = torch.reshape(expo_safe_off, (B, 1)).repeat((1, C))
+        expo_safe = expo - expo_safe_off
+
+        # Calculate the responsibilities
+        numer_safe = self.numer_const * det * torch.exp(expo_safe)  # [B C]
+        denom_safe = torch.sum(numer_safe, 1)  # [B]
+        denom_safe = torch.reshape(denom_safe, (B, 1)).repeat((1, C))  # [B C]
+        resp = numer_safe / denom_safe
+
+        return resp
+
+    def kl_penalty(self, embedding, logits):
+        kl_penalty = 0.0
+        if self.embedding_constraint == 0:
+            return kl_penalty
+
+        mu = self.mu  # cluster centers [C D]
+        sigma = torch.abs(self.sigma)  # cluster stdev   [C D]
+
+        delta = 1e-8
+        # extract batch size and dimensions
+        B = embedding.shape[0]  # B is batch size
+        D = embedding.shape[1]  # D is encoded dimension
+        C = self.n_class  # C is num classes
+        if (D != self.n_dim):
+            raise Exception('number of dimension D' + str(D) + 'is not expected' + str(self.n_dim))
+
+        # upscale all tensors to the same dimensions
+        embedding = torch.reshape(embedding, (B, 1, D)).repeat((1, C, 1))  # shape [B C D]
+
+        if self.embedding_constraint == 1:
+            cluster_assignment = torch.argmax(logits, dim=1)  # [B]
+            cluster_assignment = torch.nn.functional.one_hot(cluster_assignment, C)  # [B C]
+
+            # Calculate cluster weight (how many samples per cluster)
+            cluster_weight = torch.sum(cluster_assignment, dim=0)  # [C]
+            cluster_weight_CD = torch.reshape(cluster_weight, (C, 1)).repeat((1, D))  # [C D]
+
+            # Calculate the empirical mean
+            cluster_mask = torch.reshape(cluster_assignment, (B, C, 1)).repeat((1, 1, D))  # [B C D]
+            mu_Bc = torch.sum(embedding * cluster_mask, dim=0)  # [C D]
+            mu_Bc = mu_Bc * torch.reciprocal(cluster_weight_CD + delta)  # [C D]
+
+            diff = self.mu - mu_Bc
+            mean_penalty = torch.linalg.norm(diff, ord=2, dim=1)
+            kl_penalty = torch.sum(mean_penalty)
+
+        if self.embedding_constraint == 2:
+            # What is the cluster assignment  (one_hot)
+            cluster_assignment = torch.argmax(logits, dim=1)  # [B]
+            cluster_assignment = torch.nn.functional.one_hot(cluster_assignment, C)  # [B C]
+
+            # Calculate cluster weight (how many samples per cluster)
+            cluster_weight = torch.sum(cluster_assignment, dim=0)  # [C]
+            cluster_weight_CD = torch.reshape(cluster_weight, (C, 1)).repeat((1, D))  # [C D]
+
+            # Calculate corrected cluster weight (N-1) because variance requires at least two samples
+            cluster_weight_corr = torch.clamp(cluster_weight - 1.0, min=0.0)  # [C]
+            cluster_weight_corr_CD = torch.reshape(cluster_weight_corr, (C, 1)).repeat((1, D))  # [C D]
+
+            # Corrected batch size
+            batch_size_corr = torch.sum(cluster_weight_corr)
+
+            # Calculate the empirical mean
+            cluster_mask = torch.reshape(cluster_assignment, (B, C, 1)).repeat((1, 1, D))  # [B C D]
+            mu_Bc = torch.sum(embedding * cluster_mask, dim=0)  # [C D]
+            mu_Bc = mu_Bc * torch.reciprocal(cluster_weight_CD + delta)  # [C D]
+
+            # Calculate the empirical standard deviation
+            sigma_Bc = torch.reshape(mu_Bc, (1, C, D)).repeat((B, 1, 1))  # [B C D]
+            sigma_Bc = (embedding - sigma_Bc) * cluster_mask  # [B C D]
+            sigma_Bc = sigma_Bc * sigma_Bc  # [B C D]
+            sigma_Bc = torch.sum(sigma_Bc, dim=0)  # [C D]
+            sigma_Bc = sigma_Bc * torch.reciprocal(cluster_weight_corr_CD + delta)  # [C D]
+
+            # Calculate the kl-divergence
+            sigma_Bc = sigma_Bc + 1e-8  # [C D]
+
+            # sigma of target distribution
+            kl_div = 0.5 * (  # [C D]
+                    torch.log(sigma.pow(2) / sigma_Bc.pow(2)) - 1 +
+                    (1 / sigma.pow(2)) * (sigma_Bc.pow(2) + (mu_Bc - mu).pow(2)))
+            kl_div = (kl_div * cluster_weight_corr_CD) / (batch_size_corr + delta)
+            kl_penalty = kl_div  # [C D]
+
+            # add it up to get a full kl-divergence penalty
+            kl_penalty = torch.sum(kl_penalty)
+        return kl_penalty
 
 
 class aagmm_layer(torch.nn.Module):
-    def __init__(self, embedding_dim: int, num_classes: int, outlier_method:str = "denom"):
+    def __init__(self, embedding_dim: int, num_classes: int):
         super().__init__()
 
         self.dim = embedding_dim
         self.num_classes = num_classes
-        self.outlier_method = outlier_method
         self.centers = torch.nn.Parameter(torch.rand(size=(self.num_classes, self.dim), requires_grad=True))
         # this is roughly equivalent to init to identity (i.e. kmeans)
         a = torch.rand(size=(self.num_classes, self.dim), requires_grad=True)
@@ -126,28 +273,15 @@ class aagmm_layer(torch.nn.Module):
         # cross_entropy_embed *= assign_gmm_onehot
         # cross_entropy_embed = (-1.0 / batch) * torch.sum(assign_gmm_onehot * cross_entropy_embed)
 
-        if self.outlier_method == 'sigma':
-            cluster_assignment = torch.argmax(resp_gmm, dim=1)
-            cluster_dist = cluster_dist_mat[range(cluster_dist_mat.shape[0]), cluster_assignment]
-            denom = cluster_dist
-        elif self.outlier_method == 'denom':
-            denom = denom_unsafe_gmm
-        elif str(self.outlier_method).lower() == 'none':
-            # placeholder data to make the plumbing work
-            denom = denom_unsafe_gmm
-        else:
-            raise RuntimeError("Invalid outlier detection method: {}".format(self.outlier_method))
-
-        return resp_gmm, denom  #denom_unsafe_gmm  #, cross_entropy_embed
+        return resp_gmm
 
 
 class kmeans_layer(torch.nn.Module):
-    def __init__(self, embedding_dim: int, num_classes: int, outlier_method:str = "denom"):
+    def __init__(self, embedding_dim: int, num_classes: int):
         super().__init__()
 
         self.dim = embedding_dim
         self.num_classes = num_classes
-        self.outlier_method = outlier_method
         self.centers = torch.nn.Parameter(torch.rand(size=(self.num_classes, self.dim), requires_grad=True))
 
     def forward(self, x):
@@ -191,28 +325,13 @@ class kmeans_layer(torch.nn.Module):
         resp_kmeans = torch.clip(resp_kmeans, min=1e-8)
         resp_kmeans = torch.log(resp_kmeans)
 
-        if self.outlier_method == 'sigma':
-            raise RuntimeError("Invalid outlier detection method for KMeans: {}".format(self.outlier_method))
-        elif self.outlier_method == 'denom':
-            numer_unsafe_kmeans = torch.exp(expo_kmeans)
-            denom_unsafe_kmeans = torch.sum(numer_unsafe_kmeans, 1, keepdim=True)
-            denom = denom_unsafe_kmeans
-        elif str(self.outlier_method).lower() == 'none':
-            # placeholder data to make the plumbing work
-            numer_unsafe_kmeans = torch.exp(expo_kmeans)
-            denom_unsafe_kmeans = torch.sum(numer_unsafe_kmeans, 1, keepdim=True)
-            denom = denom_unsafe_kmeans
-        else:
-            raise RuntimeError("Invalid outlier detection method for KMeans: {}".format(self.outlier_method))
-
-        return resp_kmeans, denom  #, 0.0
+        return resp_kmeans
 
 
 class AagmmModelWrapper(torch.nn.Module):
-    def __init__(self, model: torch.nn.Module, num_classes: int, last_layer: str = 'aagmm', embedding_dim: int = None, outlier_method:str = "denom"):
+    def __init__(self, model: torch.nn.Module, num_classes: int, last_layer: str = 'aagmm', embedding_dim: int = None, embedding_constraint:int = 0):
         super(AagmmModelWrapper, self).__init__()
         self.num_classes = num_classes
-        self.outlier_method = outlier_method
 
         self.emb_linear = None
         if embedding_dim is None or embedding_dim == 0:
@@ -223,31 +342,31 @@ class AagmmModelWrapper(torch.nn.Module):
             self.emb_linear = torch.nn.Linear(model.classifier.in_features, self.embedding_dim)
 
         self.model = model
-        self.outlier_threshold = torch.nn.Parameter(5.0 * torch.ones(size=(1,), requires_grad=True))
 
         self.last_layer_name = last_layer
         if self.last_layer_name == 'linear':
             self.last_layer = torch.nn.Linear(self.embedding_dim, self.num_classes)
         elif self.last_layer_name == 'aagmm' or self.last_layer_name == 'aa_gmm':
-            self.last_layer = aagmm_layer(self.embedding_dim, self.num_classes, self.outlier_method)
+            self.last_layer = aagmm_layer(self.embedding_dim, self.num_classes)
+        elif self.last_layer_name == 'aagmm_kl':
+            self.last_layer = aagmm_kl_layer(nDim=self.embedding_dim, nClass=self.num_classes, embedding_constraint=embedding_constraint)
         elif self.last_layer_name == 'kmeans':
-            self.last_layer = kmeans_layer(self.embedding_dim, self.num_classes, self.outlier_method)
+            self.last_layer = kmeans_layer(self.embedding_dim, self.num_classes)
         else:
             raise RuntimeError("Invalid last layer type: {}".format(self.last_layer_name))
 
     def forward(self, x):
         embedding = self.model(x, only_feat=True)
 
+        kl_loss = 0.0
         if self.emb_linear is not None:
             embedding = self.emb_linear(embedding)
         if self.last_layer_name == 'linear':
             logits = self.last_layer(embedding)
-            denom = torch.ones((logits.shape[0]))
         else:
-            logits, denom = self.last_layer(embedding)
-            denom = denom.squeeze()  # get rid of singleton second dimension, is originally [batch_size,1]
+            logits = self.last_layer(embedding)
 
-        outputs = {'logits': logits, 'feat': embedding, 'denom': denom}
+        outputs = {'logits': logits, 'feat': embedding}
         return outputs
 
 

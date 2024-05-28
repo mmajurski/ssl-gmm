@@ -6,12 +6,11 @@ clip: 0.0
 clip_grad: 1.0
 crop_ratio: 0.875
 data_dir: ./data
-dataset: cifar10_w100
-ood_fraction: 0.1
+dataset: cifar10
 dist_backend: nccl
 dist_url: tcp://127.0.0.1:10004
 ema_m: 0.999
-embedding_constraint: 0
+embedding_constraint: 2
 embedding_dim: 8
 epoch: 1024
 eval_batch_size: 256
@@ -29,16 +28,16 @@ num_classes: 10
 num_eval_iter: 5120
 num_labels: 40
 num_log_iter: 256
-num_train_iter: 8192  #1048576
-num_workers: 4
+num_train_iter: 1048576
+num_workers: 8
 optim: SGD
 overwrite: true
 p_cutoff: 0.95
 rank: 0
 resume: false
-save_dir: ./saved_models/classic_cv
-save_name: debug_cifar10_w100
-seed: 3474173998
+save_dir: ./saved_models/classic_cv/aagmm_kl
+save_name: aagmm2_cifar10_40_2_1.0_8_none
+seed: 1325645050
 thresh_warmup: true
 train_sampler: RandomSampler
 ulb_loss_ratio: 1.0
@@ -48,4 +47,5 @@ use_tensorboard: true
 use_wandb: false
 weight_decay: 0.0005
 world_size: 1
+outlier_method: sigma
 neg_pl_threshold: 0.0
