@@ -95,9 +95,7 @@ class AAGMM(AlgorithmBase):
         super().set_hooks()
 
     def set_model(self):
-        """
-        initialize model
-        """
+        # initialize model
         model = self.net_builder(
             num_classes=self.num_classes,
             pretrained=self.args.use_pretrain,
@@ -119,8 +117,6 @@ class AAGMM(AlgorithmBase):
 
     def train_step(self, x_lb, y_lb, idx_ulb, x_ulb_w, x_ulb_s, y_ulb_w):
         num_lb = y_lb.shape[0]
-
-
 
         # inference and calculate sup/unsup losses
         with (self.amp_cm()):

@@ -10,7 +10,7 @@ dataset: cifar10
 dist_backend: nccl
 dist_url: tcp://127.0.0.1:10004
 ema_m: 0.999
-embedding_constraint: 2
+embedding_constraint: 1
 embedding_dim: 128
 epoch: 1024
 eval_batch_size: 256
@@ -36,8 +36,8 @@ p_cutoff: 0.95
 rank: 0
 resume: false
 save_dir: ./saved_models/aagmm_128D
-save_name: aagmm2_cifar10_40_0_1.0_8_none
-seed: 3474173998
+save_name: aagmm1_cifar10_40_1_1.0_8_none
+seed: 273230791
 thresh_warmup: true
 train_sampler: RandomSampler
 ulb_loss_ratio: 1.0

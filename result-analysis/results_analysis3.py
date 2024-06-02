@@ -11,6 +11,7 @@ import tbparse
 
 # folder to read files from
 ifp = '/home/mmajurski/github/ssl-gmm/usb/saved_models/classic_cv'
+ifp = '/home/mmajurski/github/ssl-gmm/usb/saved_models/aagmm_128D'
 
 fldrs = [fn for fn in os.listdir(ifp) if os.path.isdir(os.path.join(ifp, fn))]
 fldrs = [fn for fn in fldrs if 'debug' not in fn]
@@ -36,8 +37,11 @@ for fldr in fldrs:
     num_labeled_datapoints = int(toks[2])
     run_num = int(toks[3])
     grad_clip = 1.0
-    embedding_dim = 8
-    outlier_detection_method = str(toks[4])
+    embedding_dim = 128
+    if len(toks) > 4:
+        outlier_detection_method = str(toks[4])
+    else:
+        outlier_detection_method = 'none'
     if len(toks) > 5:
         outlier_filter_method = str(toks[5])
     else:
@@ -124,5 +128,5 @@ stats_df = pd.concat(df_list, axis=0)
 
 
 # exporting to cvs file
-results_df.to_csv('results-usb.csv', index=False)
-stats_df.to_csv('results-usb-stats.csv', index=False)
+results_df.to_csv('results-usb128.csv', index=False)
+stats_df.to_csv('results-usb128-stats.csv', index=False)
