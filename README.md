@@ -17,13 +17,7 @@
 *** https://www.markdownguide.org/basic-syntax/#reference-style-links
 -->
 
-[![Contributors][contributors-shield]][contributors-url]
-[![Forks][forks-shield]][forks-url]
-[![Stargazers][stars-shield]][stars-url]
-[![Issues][issues-shield]][issues-url]
-<!-- 
-***[![MIT License][license-shield]][license-url]
--->
+
 
 <p align="center">
     <a href="https://arxiv.org/abs/2404.17978">A Method of Moments Embedding Constraint and its Application to Semi-Supervised Learning</a>
@@ -43,4 +37,3 @@
 ## License
 
 Distributed under the MIT License. See `LICENSE.txt` for more information.
-
