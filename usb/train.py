@@ -273,15 +273,6 @@ def main(args):
         args.overwrite = True
         args.resume = False
     else:
-        seed_idx = np.argwhere(args.seed == np.asarray(SEED_LIST))[0][0]
-        if 'last_layer' not in args:
-            args.last_layer = 'linear'
-
-        if hasattr(args, 'embedding_constraint'):
-            args.save_name = "{}{}_{}_{}_{}".format(args.last_layer, args.embedding_constraint, args.dataset, args.num_labels, seed_idx)
-        else:
-            args.save_name = "{}{}_{}_{}".format(args.last_layer, args.dataset, args.num_labels, seed_idx)
-
         print("Saving model to '{}'".format(args.save_name))
         save_path = os.path.join(args.save_dir, args.save_name)
 
@@ -366,7 +357,7 @@ def main_worker(gpu, ngpus_per_node, args):
     torch.manual_seed(args.seed)
     np.random.seed(args.seed)
     cudnn.deterministic = False #True
-    cudnn.benchmark = True
+    cudnn.benchmark = False
 
     # SET UP FOR DISTRIBUTED TRAINING
     if args.distributed:
@@ -397,7 +388,7 @@ def main_worker(gpu, ngpus_per_node, args):
 
     try:
         # attempt to get the slurm job id and log it
-        logging.info("Slurm JobId: {}".format(os.environ['SLURM_JOB_ID']))
+        logger.info("Slurm JobId: {}".format(os.environ['SLURM_JOB_ID']))
     except KeyError:
         pass
 
@@ -405,7 +396,7 @@ def main_worker(gpu, ngpus_per_node, args):
         # attempt to get the hostname and log it
         import socket
         hn = socket.gethostname()
-        logging.info("Job running on host: {}".format(hn))
+        logger.info("Job running on host: {}".format(hn))
     except RuntimeError:
         pass
 

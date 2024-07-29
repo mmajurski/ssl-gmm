@@ -23,6 +23,8 @@ from semilearn.algorithms.utils import SSL_Argument, str2bool
 
 from .embedding_constraints import GaussianMoments
 
+# SEED_LIST = [3474173998, 273230791, 3586106167, 1325645050, 2564231920]
+
 
 @ALGORITHMS.register('aagmm')
 class AAGMM(AlgorithmBase):

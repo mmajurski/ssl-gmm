@@ -97,11 +97,27 @@ class FixMatch(AlgorithmBase):
 
             total_loss = sup_loss + self.lambda_u * unsup_loss
 
+            loss_invalid_pl = None
+            if self.args.neg_pl_thresh is not None and self.args.neg_pl_thresh != 'None' and self.args.neg_pl_thresh > 0.0:
+                invalid_pl_logits_mask = probs_x_ulb_w < torch.tensor(self.args.neg_pl_thresh)
+                fake_y_ulb_w = torch.zeros_like(probs_x_ulb_w)
+                elementwise_ce = torch.nn.functional.binary_cross_entropy(probs_x_ulb_w, fake_y_ulb_w, reduction='none')
+                if torch.sum(invalid_pl_logits_mask) > 0:
+                    loss_invalid_pl = torch.mean(elementwise_ce[invalid_pl_logits_mask])
+                    total_loss += loss_invalid_pl
+
         out_dict = self.process_out_dict(loss=total_loss, feat=feat_dict)
-        log_dict = self.process_log_dict(sup_loss=sup_loss.item(), 
-                                         unsup_loss=unsup_loss.item(), 
-                                         total_loss=total_loss.item(), 
-                                         util_ratio=mask.float().mean().item())
+        if loss_invalid_pl is not None:
+            log_dict = self.process_log_dict(sup_loss=sup_loss.item(),
+                                             unsup_loss=unsup_loss.item(),
+                                             total_loss=total_loss.item(),
+                                             util_ratio=mask.float().mean().item(),
+                                             loss_invalid_pl=loss_invalid_pl.item())
+        else:
+            log_dict = self.process_log_dict(sup_loss=sup_loss.item(),
+                                             unsup_loss=unsup_loss.item(),
+                                             total_loss=total_loss.item(),
+                                             util_ratio=mask.float().mean().item())
         return out_dict, log_dict
         
 

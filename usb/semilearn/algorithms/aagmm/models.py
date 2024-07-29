@@ -92,14 +92,15 @@ class aagmm_kl_layer(torch.nn.Module):
         # upscale all tensors to the same dimensions
         embedding = torch.reshape(embedding, (B, 1, D)).repeat((1, C, 1))  # shape [B C D]
 
+        # What is the cluster assignment  (one_hot)
+        cluster_assignment = torch.argmax(logits, dim=1)  # [B]
+        cluster_assignment = torch.nn.functional.one_hot(cluster_assignment, C)  # [B C]
+
+        # Calculate cluster weight (how many samples per cluster)
+        cluster_weight = torch.sum(cluster_assignment, dim=0)  # [C]
+        cluster_weight_CD = torch.reshape(cluster_weight, (C, 1)).repeat((1, D))  # [C D]
+
         if self.embedding_constraint == 1:
-            cluster_assignment = torch.argmax(logits, dim=1)  # [B]
-            cluster_assignment = torch.nn.functional.one_hot(cluster_assignment, C)  # [B C]
-
-            # Calculate cluster weight (how many samples per cluster)
-            cluster_weight = torch.sum(cluster_assignment, dim=0)  # [C]
-            cluster_weight_CD = torch.reshape(cluster_weight, (C, 1)).repeat((1, D))  # [C D]
-
             # Calculate the empirical mean
             cluster_mask = torch.reshape(cluster_assignment, (B, C, 1)).repeat((1, 1, D))  # [B C D]
             mu_Bc = torch.sum(embedding * cluster_mask, dim=0)  # [C D]
@@ -110,14 +111,6 @@ class aagmm_kl_layer(torch.nn.Module):
             kl_penalty = torch.sum(mean_penalty)
 
         if self.embedding_constraint == 2:
-            # What is the cluster assignment  (one_hot)
-            cluster_assignment = torch.argmax(logits, dim=1)  # [B]
-            cluster_assignment = torch.nn.functional.one_hot(cluster_assignment, C)  # [B C]
-
-            # Calculate cluster weight (how many samples per cluster)
-            cluster_weight = torch.sum(cluster_assignment, dim=0)  # [C]
-            cluster_weight_CD = torch.reshape(cluster_weight, (C, 1)).repeat((1, D))  # [C D]
-
             # Calculate corrected cluster weight (N-1) because variance requires at least two samples
             cluster_weight_corr = torch.clamp(cluster_weight - 1.0, min=0.0)  # [C]
             cluster_weight_corr_CD = torch.reshape(cluster_weight_corr, (C, 1)).repeat((1, D))  # [C D]

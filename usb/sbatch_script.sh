@@ -3,13 +3,13 @@
 # MODIFY THESE OPTIONS
 
 #SBATCH --partition=isg,heimdall
-#SBATCH --exclude=p100,charlie,pn120395,quebec,hotel
+#SBATCH --exclude=p100,charlie,pn120395,quebec,sierra
 #SBATCH --nodes=1
 #SBATCH --cpus-per-task=10
 #SBATCH --gres=gpu:1
-#SBATCH --job-name=cf10
+#SBATCH --job-name=comp_pl
 #SBATCH -o log-%N.%j.out
-#SBATCH --time=128:0:0
+#SBATCH --time=72:0:0
 
 # NIST-developed software is provided by NIST as a public service. You may use, copy and distribute copies of the software in any medium, provided that you keep intact this entire notice. You may improve, modify and create derivative works of the software or any portion of the software, and you may copy and distribute such modifications or works. Modified works should carry a notice stating that you changed the software and should note the date and nature of any such change. Please explicitly acknowledge the National Institute of Standards and Technology as the source of the software.
 
